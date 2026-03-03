@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import gplay from "google-play-scraper";
 import type { AppData } from "./aso-rules";
 
 interface SearchResult {
@@ -92,57 +93,27 @@ export async function fetchAppStoreData(appId: string, country = "us"): Promise<
 }
 
 // ============================================================
-// GOOGLE PLAY STORE (scraping)
+// GOOGLE PLAY STORE (google-play-scraper package)
 // ============================================================
 
 export async function searchGooglePlay(query: string, country = "us"): Promise<SearchResult[]> {
-  const url = `https://play.google.com/store/search?q=${encodeURIComponent(query)}&c=apps&hl=en&gl=${country}`;
-
   try {
-    const resp = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9",
-      },
-    });
-    if (!resp.ok) throw new Error(`Google Play search failed: ${resp.status}`);
-
-    const html = await resp.text();
-    const $ = cheerio.load(html);
-    const results: SearchResult[] = [];
-
-    $("a[href*='/store/apps/details']").each((_, el) => {
-      const href = $(el).attr("href") || "";
-      const idMatch = href.match(/id=([^&]+)/);
-      if (!idMatch) return;
-
-      const id = idMatch[1];
-      if (results.some(r => r.id === id)) return;
-
-      const parentCard = $(el).closest("div[class]");
-      const name = parentCard.find("span.DdYX5").first().text().trim()
-        || parentCard.find("[class*='title']").first().text().trim()
-        || $(el).text().trim();
-      const developer = parentCard.find("span.wMUdtb").first().text().trim()
-        || parentCard.find("[class*='developer']").first().text().trim();
-      const img = parentCard.find("img").first().attr("src") || "";
-      const ratingText = parentCard.find("[aria-label*='star']").first().attr("aria-label") || "";
-      const ratingMatch = ratingText.match(/([\d.]+)/);
-
-      if (name && id) {
-        results.push({
-          id,
-          name: name.substring(0, 80),
-          developer: developer.substring(0, 80),
-          icon: img,
-          rating: ratingMatch ? parseFloat(ratingMatch[1]) : 0,
-          platform: "android",
-          url: `https://play.google.com/store/apps/details?id=${id}`,
-        });
-      }
+    const apps = await gplay.search({
+      term: query,
+      num: 10,
+      lang: "en",
+      country,
     });
 
-    return results.slice(0, 10);
+    return apps.map((app) => ({
+      id: app.appId,
+      name: app.title.substring(0, 80),
+      developer: (app.developer || "").substring(0, 80),
+      icon: app.icon || "",
+      rating: app.score || 0,
+      platform: "android" as const,
+      url: app.url,
+    }));
   } catch (error) {
     console.error("Google Play search error:", error);
     return [];
@@ -150,94 +121,32 @@ export async function searchGooglePlay(query: string, country = "us"): Promise<S
 }
 
 export async function fetchGooglePlayData(appId: string, country = "us"): Promise<AppData> {
-  const url = `https://play.google.com/store/apps/details?id=${appId}&hl=en&gl=${country}`;
-  const resp = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      "Accept-Language": "en-US,en;q=0.9",
-    },
-  });
+  const app = await gplay.app({ appId, lang: "en", country });
 
-  if (!resp.ok) throw new Error(`Google Play fetch failed: ${resp.status}`);
-  const html = await resp.text();
-  const $ = cheerio.load(html);
-
-  const title = $('h1[itemprop="name"]').text().trim()
-    || $("h1").first().text().trim()
-    || "";
-
-  const descriptionEl = $('div[data-g-id="description"]').first();
-  const description = descriptionEl.length
-    ? descriptionEl.text().trim()
-    : $('meta[name="description"]').attr("content") || "";
-
-  const developerName = $('a[href*="/store/apps/developer"]').first().text().trim()
-    || $('span:contains("Offered by")').next().text().trim()
-    || "";
-
-  const ratingText = $('div[itemprop="starRating"]').find('[aria-label*="star"]').attr("aria-label")
-    || $('[class*="rating"] [aria-label]').first().attr("aria-label")
-    || "";
-  const ratingMatch = ratingText.match(/([\d.]+)/);
-  const rating = ratingMatch ? parseFloat(ratingMatch[1]) : 0;
-
-  const ratingsCountText = $('[class*="rating"] span:contains("review")').text()
-    || $('span:contains("reviews")').first().text()
-    || "";
-  const ratingsCountMatch = ratingsCountText.replace(/[,.\s]/g, "").match(/(\d+)/);
-  const ratingsCount = ratingsCountMatch ? parseInt(ratingsCountMatch[1]) : 0;
-
-  const category = $('a[itemprop="genre"]').text().trim()
-    || $('span:contains("Category")').next().text().trim()
-    || "";
-
-  const lastUpdatedText = $('div:contains("Updated on")').last().text()
-    || "";
-  const dateMatch = lastUpdatedText.match(/(\w+ \d+, \d{4})/);
-  const lastUpdated = dateMatch ? dateMatch[1] : "";
-
-  const screenshotImgs = $('img[srcset*="screenshot"], img[alt*="screenshot"], div[data-g-id="screenshots"] img');
-  const screenshotCount = Math.max(screenshotImgs.length, 0);
-  const screenshots: string[] = [];
-  screenshotImgs.each((_, el) => {
-    const src = $(el).attr("src") || $(el).attr("data-src") || "";
-    if (src) screenshots.push(src);
-  });
-
-  const hasVideo = $('button[aria-label*="video"], div[data-trailer]').length > 0
-    || html.includes("youtube.com/embed")
-    || html.includes("play.google.com/video");
-
-  const priceText = $('meta[itemprop="price"]').attr("content")
-    || $('span:contains("$")').first().text()
-    || "Free";
-
-  const installsText = $('div:contains("Downloads")').last().text()
-    || "";
-  const installsMatch = installsText.match(/([\d,]+\+?)\s*downloads/i);
-
-  const shortDescription = $('meta[name="description"]').attr("content") || "";
+  const updatedDate = app.updated
+    ? new Date(app.updated).toISOString()
+    : "";
 
   return {
     platform: "android",
-    title,
-    shortDescription: shortDescription.substring(0, 80),
-    description,
-    developerName,
-    category,
-    rating,
-    ratingsCount,
-    version: "",
-    lastUpdated,
-    screenshotCount: screenshotCount || 3, // Google Play always has at least some
-    hasVideo,
-    price: priceText.includes("0") || priceText.toLowerCase().includes("free") ? "Free" : priceText,
-    size: undefined,
-    contentRating: undefined,
-    installs: installsMatch ? installsMatch[1] : undefined,
-    url,
-    iconUrl: $('img[itemprop="image"]').attr("src") || "",
-    screenshots,
+    title: app.title || "",
+    shortDescription: (app.summary || "").substring(0, 80),
+    description: app.description || "",
+    developerName: app.developer || "",
+    category: app.genre || "",
+    rating: app.score || 0,
+    ratingsCount: app.ratings || 0,
+    version: app.version || "",
+    lastUpdated: updatedDate,
+    screenshotCount: (app.screenshots || []).length || 3,
+    hasVideo: !!app.video,
+    price: app.free ? "Free" : (app.priceText || "Paid"),
+    size: app.size || undefined,
+    contentRating: app.contentRating || undefined,
+    installs: app.installs || undefined,
+    url: app.url || `https://play.google.com/store/apps/details?id=${appId}`,
+    iconUrl: app.icon || "",
+    screenshots: app.screenshots || [],
   };
 }
 
