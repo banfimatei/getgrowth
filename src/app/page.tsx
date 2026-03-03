@@ -300,7 +300,7 @@ export default function Home() {
                     <div className="flex items-center gap-3 shrink-0">
                       {app.rating > 0 && (
                         <span className="text-xs font-mono tabular-nums" style={{ color: "var(--text-secondary)" }}>
-                          {app.rating.toFixed(1)}&thinsp;&starf;
+                          {app.rating.toFixed(1)} {"\u2605"}
                         </span>
                       )}
                       <span
@@ -371,7 +371,7 @@ export default function Home() {
                   <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
                     {report.app.developer} &middot; {report.app.platform === "ios" ? "App Store" : "Google Play"}
                     {report.app.rating > 0 && (
-                      <> &middot; {report.app.rating.toFixed(1)}&thinsp;&starf; ({report.app.ratingsCount.toLocaleString()})</>
+                      <> {"\u00B7"} {report.app.rating.toFixed(1)} {"\u2605"} ({report.app.ratingsCount.toLocaleString()})</>
                     )}
                   </p>
                 </div>
