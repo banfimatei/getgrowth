@@ -164,63 +164,65 @@ function ActionCard({ action }: { action: ActionItem }) {
   );
 }
 
+function RichText({ text }: { text: string }) {
+  if (!text.includes("**")) return <>{text}</>;
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, j) =>
+        part.startsWith("**") && part.endsWith("**") ? (
+          <span key={j} className="font-semibold" style={{ color: "var(--text-primary)" }}>
+            {part.replace(/\*\*/g, "")}
+          </span>
+        ) : (
+          <span key={j}>{part}</span>
+        )
+      )}
+    </>
+  );
+}
+
 function BriefContent({ text }: { text: string }) {
   const lines = text.split("\n");
 
   return (
-    <div className="text-sm space-y-1" style={{ color: "var(--text-secondary)" }}>
+    <div className="text-sm space-y-0.5" style={{ color: "var(--text-secondary)" }}>
       {lines.map((line, i) => {
         const trimmed = line.trimStart();
         const indent = line.length - trimmed.length;
+        const pl = indent > 0 ? `${Math.min(indent * 4, 32)}px` : undefined;
 
         if (trimmed.startsWith("**") && trimmed.endsWith("**")) {
           return (
-            <p key={i} className="font-semibold text-xs mt-2" style={{ color: "var(--text-primary)" }}>
+            <p key={i} className="font-semibold text-xs mt-3 mb-0.5" style={{ color: "var(--text-primary)" }}>
               {trimmed.replace(/\*\*/g, "")}
-            </p>
-          );
-        }
-
-        if (trimmed.match(/^\*\*[^*]+\*\*/)) {
-          const parts = trimmed.split(/(\*\*[^*]+\*\*)/g);
-          return (
-            <p key={i} className="text-xs" style={{ paddingLeft: indent > 0 ? `${Math.min(indent * 4, 24)}px` : undefined }}>
-              {parts.map((part, j) =>
-                part.startsWith("**") && part.endsWith("**") ? (
-                  <span key={j} className="font-semibold" style={{ color: "var(--text-primary)" }}>
-                    {part.replace(/\*\*/g, "")}
-                  </span>
-                ) : (
-                  <span key={j}>{part}</span>
-                )
-              )}
             </p>
           );
         }
 
         if (trimmed.startsWith("\u2022") || trimmed.startsWith("-") || trimmed.startsWith("\u2705") || trimmed.startsWith("\u274C") || trimmed.startsWith("\u25A2")) {
           return (
-            <p key={i} className="text-xs" style={{ paddingLeft: `${Math.max(indent * 4, 8)}px` }}>
-              {trimmed}
+            <p key={i} className="text-xs leading-relaxed" style={{ paddingLeft: `${Math.max(indent * 4, 12)}px` }}>
+              <RichText text={trimmed} />
             </p>
           );
         }
 
         if (trimmed.match(/^\d+\.\s/)) {
           return (
-            <p key={i} className="text-xs font-medium mt-1" style={{ paddingLeft: indent > 0 ? `${indent * 4}px` : undefined, color: "var(--text-primary)" }}>
-              {trimmed}
+            <p key={i} className="text-xs font-medium mt-2 leading-relaxed" style={{ paddingLeft: pl, color: "var(--text-primary)" }}>
+              <RichText text={trimmed} />
             </p>
           );
         }
 
         if (trimmed === "") {
-          return <div key={i} className="h-1" />;
+          return <div key={i} className="h-2" />;
         }
 
         return (
-          <p key={i} className="text-xs" style={{ paddingLeft: indent > 0 ? `${Math.min(indent * 4, 24)}px` : undefined }}>
-            {trimmed}
+          <p key={i} className="text-xs leading-relaxed" style={{ paddingLeft: pl }}>
+            <RichText text={trimmed} />
           </p>
         );
       })}

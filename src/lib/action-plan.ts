@@ -159,6 +159,66 @@ function tc(s: string): string {
   return s.split(/\s+/).map((w, i) => i === 0 || !minor.has(w.toLowerCase()) ? cap(w.toLowerCase()) : w.toLowerCase()).join(" ");
 }
 
+const CAPTION_STOP = new Set([
+  "a", "an", "the", "of", "in", "for", "to", "that", "with", "from",
+  "and", "or", "but", "is", "are", "you", "your", "our", "all", "its",
+  "some", "many", "different", "various", "new", "best", "great", "way",
+  "brings", "bring", "allows", "within", "can", "their", "has", "have",
+  "been", "being", "will", "would", "so", "at", "on", "by", "up",
+  "it", "do", "does", "just", "also", "very", "really", "every",
+  "listen", "get", "use", "set", "let",
+]);
+
+function condenseCaption(raw: string, maxWords = 4, maxLen = 28): string {
+  let text = raw
+    .replace(/\bover\s+(\d+)/gi, "$1+")
+    .replace(/\bmore than\s+(\d+)/gi, "$1+")
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/[^a-zA-Z0-9+\s'-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const tokens = text
+    .split(/\s+/)
+    .filter(t => t.length > 1 && !CAPTION_STOP.has(t.toLowerCase()));
+
+  let result = "";
+  let count = 0;
+  for (const t of tokens) {
+    if (count >= maxWords) break;
+    const word = count === 0 ? cap(t) : t;
+    const next = result ? `${result} ${word}` : word;
+    if (next.length > maxLen) break;
+    result = next;
+    count++;
+  }
+
+  if (!result && tokens.length > 0) {
+    result = tokens.slice(0, 3).map((t, i) => i === 0 ? cap(t) : t).join(" ");
+    if (result.length > maxLen) {
+      result = tokens.slice(0, 2).map((t, i) => i === 0 ? cap(t) : t).join(" ");
+    }
+  }
+
+  return result || cap(raw.split(/\s+/)[0] || "Feature");
+}
+
+function sceneDirection(feature: string | undefined, fallback: string): string {
+  if (!feature) return fallback;
+  let text = feature;
+  const period = text.indexOf(".");
+  if (period > 10 && period < 70) text = text.substring(0, period);
+  if (text.length > 70) {
+    const words = text.split(/\s+/);
+    text = "";
+    for (const w of words) {
+      if ((text + " " + w).trim().length > 70) break;
+      text = (text + " " + w).trim();
+    }
+  }
+  return text;
+}
+
 // ---------------------------------------------------------------------------
 // TITLE BRIEF
 // Sources: ASO skill §2 metadata, book Ch.2
@@ -308,18 +368,26 @@ function subtitleBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): Act
 // Sources: ASO skill §2 metadata — "Apple keyword field: no plurals, no duplicates, no spaces between commas"
 // ---------------------------------------------------------------------------
 
-function keywordFieldBrief(data: AppData, p: AppProfile): ActionItem[] {
+function keywordFieldBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): ActionItem[] {
   if (data.platform !== "ios") return [];
+
+  // Only surface this brief when other metadata signals suggest the developer
+  // hasn't done thorough ASO work. If title and subtitle are well-optimized,
+  // the developer likely already knows about the keyword field.
+  const titleCat = cats.find(c => c.id === "title");
+  const subtitleCat = cats.find(c => c.id === "subtitle");
+  const titleScore = titleCat?.score ?? 100;
+  const subtitleScore = subtitleCat?.score ?? 100;
+  if (titleScore >= 75 && subtitleScore >= 75) return [];
 
   const titleWords = new Set(data.title.toLowerCase().split(/[\s\-:,|–—]+/).filter(w => w.length > 2));
   const subtitleWords = new Set((data.subtitle || "").toLowerCase().split(/[\s\-:,|–—]+/).filter(w => w.length > 2));
   const usedWords = new Set([...titleWords, ...subtitleWords]);
-  const available = p.keywords.filter(w => !usedWords.has(w)).slice(0, 15);
 
-  let b = `**Field:** 100 characters, comma-separated, invisible to users\n`;
+  let b = `**Note:** We cannot see your keyword field contents (private to App Store Connect). This guidance assumes it may need optimization based on other metadata gaps detected in your title and subtitle.\n\n`;
+  b += `**Field:** 100 characters, comma-separated, invisible to users\n`;
   b += `**Budget:** title (30) + subtitle (30) + keyword field (100) = 160 indexable characters total\n`;
-  b += `**Words already used in title/subtitle:** ${[...usedWords].filter(w => w.length > 2).map(w => `"${w}"`).join(", ")}\n`;
-  b += `**Keywords to prioritize for field:** ${available.slice(0, 8).map(w => `"${w}"`).join(", ")}\n\n`;
+  b += `**Words already used in title/subtitle:** ${[...usedWords].filter(w => w.length > 2).map(w => `"${w}"`).join(", ")}\n\n`;
 
   b += `**Apple keyword field rules** (per ASO skill):\n`;
   b += `  \u2022 Comma-separated, **no spaces after commas** (spaces waste characters)\n`;
@@ -338,27 +406,22 @@ function keywordFieldBrief(data: AppData, p: AppProfile): ActionItem[] {
 
   b += `**Research cadence:** Per ASO skill: "Research and update quarterly." Each app update is an opportunity to rotate low-performing keywords.`;
 
-  const draftKw = available.slice(0, 12).join(",");
-  const opts = draftKw ? [`${draftKw}`.substring(0, 100)] : undefined;
-
   return [{
     id: "keyword-field",
-    priority: "high", effort: "quick", category: "Keyword Field (iOS)",
-    title: "Optimize the 100-character keyword field",
-    currentState: "Keyword field contents not visible (private to App Store Connect)",
+    priority: "low", effort: "medium", category: "Keyword Field (iOS)",
+    title: "Audit the 100-character keyword field",
+    currentState: "Field contents not visible \u2014 review in App Store Connect",
     action: b, brief: b,
-    copyOptions: opts,
     deliverables: [
-      "Compile keyword list from competitor research and app data",
-      "Remove any words already in title or subtitle",
-      "Format: single words, comma-separated, no spaces, no plurals",
-      "Fill all 100 characters",
-      "Update in App Store Connect \u203A Keywords",
-      "Requires app update submission",
+      "Open App Store Connect \u203A Keywords and review current contents",
+      "Remove any words duplicated from title or subtitle",
+      "Remove plurals, category name, and competitor brands",
+      "Format: single words, comma-separated, no spaces",
+      "Fill all 100 characters with researched keywords",
       "Rotate underperforming keywords each quarter",
     ],
-    impact: "The keyword field is the third pillar of iOS indexing \u2014 100 invisible characters dedicated purely to search ranking",
-    scoreBoost: "Not directly scored (field is private) but directly impacts search rankings",
+    impact: "The keyword field is the third pillar of iOS indexing \u2014 100 invisible characters dedicated to search ranking. We cannot assess its current state, so review it directly.",
+    scoreBoost: "Not directly scored (field is private)",
   }];
 }
 
@@ -514,33 +577,46 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): Acti
       { role: "CTA / Download Prompt", purpose: "Final push to download" },
     ];
 
-    // Generate app-specific captions
+    // Generate app-specific captions (2-5 words, benefit-focused, never truncated mid-word)
     const captions: string[] = [];
     const ratingStr = data.rating > 0 ? `${data.rating.toFixed(1)}\u2605` : "";
     const countStr = data.ratingsCount >= 1000 ? `${Math.floor(data.ratingsCount / 1000)}K+` : data.ratingsCount > 0 ? `${data.ratingsCount}` : "";
+    const verb2 = p.categoryVerbs[1] || "Explore";
+    const verb3 = p.categoryVerbs[2] || "Try";
 
-    captions.push(`${verb} ${tc(p.coreFunction)}`.substring(0, 35)); // Slot 1
-    captions.push(p.benefits[0] ? tc(p.benefits[0]).substring(0, 35) : `Why ${p.brand}?`); // Slot 2
-    captions.push(p.features[0] ? tc(p.features[0].length > 30 ? p.features[0].split(/[\-–—:,]/).pop()!.trim() : p.features[0]).substring(0, 35) : `${p.categoryVerbs[1] || "Explore"} More`); // Slot 3
-    captions.push(ratingStr && countStr ? `${ratingStr} by ${countStr} ${cap(p.audience)}` : `Loved by ${cap(p.audience)}`); // Slot 4
-
+    // Slot 1: Hero — verb + core function
+    captions.push(condenseCaption(`${verb} ${p.coreFunction}`, 4));
+    // Slot 2: Differentiator — unique benefit
+    captions.push(p.features[1] ? condenseCaption(p.features[1], 4) : p.benefits[0] ? condenseCaption(p.benefits[0], 4) : `Why ${p.brand}?`);
+    // Slot 3: Popular feature
+    captions.push(p.features[0] ? condenseCaption(p.features[0], 4) : `${verb2} More`);
+    // Slot 4: Social proof
+    captions.push(ratingStr && countStr ? `${ratingStr} Loved by ${countStr}` : `Loved by ${cap(p.audience)}`);
+    // Slots 5+: remaining features, last slot = CTA
     for (let i = 4; i < max; i++) {
-      const feat = p.features[i - 3];
-      const benefit = p.benefits[i - 3];
-      if (feat) captions.push(tc(feat.length > 30 ? feat.split(/[\-–—:,]/).pop()!.trim() : feat).substring(0, 35));
-      else if (benefit) captions.push(tc(benefit).substring(0, 35));
-      else captions.push(`More from ${p.brand}`);
+      if (i === max - 1) {
+        captions.push(`${verb3} ${p.brand} Today`);
+      } else {
+        const feat = p.features[i - 3];
+        const benefit = p.benefits[i - 3];
+        if (feat) captions.push(condenseCaption(feat, 4));
+        else if (benefit) captions.push(condenseCaption(benefit, 4));
+        else captions.push(`${verb2} ${p.brand}`);
+      }
     }
 
-    // Generate scene descriptions
+    // Generate scene descriptions (brief designer directions, not raw feature text)
     const scenes: string[] = [];
-    scenes.push(`Main screen in-use with real content \u2014 ${p.features[0] || `the core ${data.category.toLowerCase()} experience`}`);
-    scenes.push(`Show what makes ${p.brand} unique \u2014 ${p.features[1] || p.benefits[0] || "key differentiator"}`);
-    scenes.push(`Demonstrate the most-used feature with populated data`);
-    scenes.push(`Rating badge or testimonial overlay on an active screen`);
+    scenes.push(`Main ${data.category.toLowerCase()} screen with real, populated content`);
+    scenes.push(sceneDirection(p.features[1] || p.benefits[0], `What makes ${p.brand} different from competitors`));
+    scenes.push(sceneDirection(p.features[0], `Most-used feature screen with real data`));
+    scenes.push(`Rating badge or user testimonial overlaid on active screen`);
     for (let i = 4; i < max; i++) {
-      const feat = p.features[i - 3];
-      scenes.push(feat ? `${feat} in action with real data` : `Additional feature or deep-dive screen`);
+      if (i === max - 1) {
+        scenes.push(`${p.brand} app icon + branding, final CTA to download`);
+      } else {
+        scenes.push(sceneDirection(p.features[i - 3], `Supporting feature or deeper capability`));
+      }
     }
 
     let b = `**Current:** ${data.screenshotCount}/${max} slots used\n\n`;
@@ -722,25 +798,24 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): Acti
 
   // --- VIDEO BRIEF ---
   if (videoR && videoR.score < 60) {
-    const scenes = p.features.length > 0 ? p.features.slice(0, 4) : p.benefits.slice(0, 4);
+    const vFeats = p.features.slice(0, 4).map(f => sceneDirection(f, ""));
     let b = `**Current:** No preview video detected\n\n`;
 
-    // Per screenshots skill: Preview Video structure table
     b += `**Video storyboard for ${p.brand}:**\n\n`;
 
     if (data.platform === "ios") {
-      b += `  \u2022 **0-3s \u2014 Hook:** ${scenes[0] || `Core ${p.coreFunction} experience`} \u2014 the wow moment that stops scrolling\n`;
-      b += `  \u2022 **3-10s \u2014 Feature 1:** ${scenes[1] || "Primary use case"} \u2014 demonstrate with real content\n`;
-      b += `  \u2022 **10-18s \u2014 Feature 2:** ${scenes[2] || "Key differentiator"} \u2014 what makes ${p.brand} unique\n`;
-      b += `  \u2022 **18-25s \u2014 Feature 3:** ${scenes[3] || "Social proof or advanced feature"}\n`;
+      b += `  \u2022 **0-3s \u2014 Hook:** ${vFeats[0] || `Core ${p.coreFunction} experience`} \u2014 the wow moment that stops scrolling\n`;
+      b += `  \u2022 **3-10s \u2014 Feature 1:** ${vFeats[1] || "Primary use case"} \u2014 demonstrate with real content\n`;
+      b += `  \u2022 **10-18s \u2014 Feature 2:** ${vFeats[2] || "Key differentiator"} \u2014 what makes ${p.brand} unique\n`;
+      b += `  \u2022 **18-25s \u2014 Feature 3:** ${vFeats[3] || "Social proof or advanced feature"}\n`;
       b += `  \u2022 **25-30s \u2014 CTA:** ${p.brand} app icon + tagline\n\n`;
       b += `  **Specs:** 15-30s, H.264 .mov or .mp4, no letterboxing\n`;
       b += `  **Sizes:** 1320x2868 (6.9"), 1290x2796 (6.7"), 1284x2778 (6.5"), 1242x2208 (5.5")\n`;
       b += `  **Rules:** Real app footage only (no renders), no people outside the device, loops silently in store, audio optional\n`;
     } else {
       b += `  \u2022 **0-3s \u2014 Hook:** Most compelling ${p.coreFunction} moment\n`;
-      b += `  \u2022 **3-15s \u2014 Core loop:** ${scenes[0] || "Main feature"} in action\n`;
-      b += `  \u2022 **15-25s \u2014 Features:** ${scenes[1] || "Feature 2"} + ${scenes[2] || "Feature 3"}\n`;
+      b += `  \u2022 **3-15s \u2014 Core loop:** ${vFeats[0] || "Main feature"} in action\n`;
+      b += `  \u2022 **15-25s \u2014 Features:** ${vFeats[1] || "Feature 2"} + ${vFeats[2] || "Feature 3"}\n`;
       b += `  \u2022 **25-30s \u2014 CTA:** Download prompt + ${p.brand} branding\n\n`;
       b += `  **Specs:** 30s-2min YouTube video, landscape preferred\n`;
       b += `  **Upload:** YouTube URL in Google Play Console \u203A Promo video\n`;
@@ -1007,7 +1082,7 @@ export function generateActionPlan(
   const actions = [
     ...titleBrief(appData, p, categories),
     ...subtitleBrief(appData, p, categories),
-    ...keywordFieldBrief(appData, p),
+    ...keywordFieldBrief(appData, p, categories),
     ...shortDescBrief(appData, p, categories),
     ...descriptionBrief(appData, p, categories),
     ...visualsBrief(appData, p, categories),
