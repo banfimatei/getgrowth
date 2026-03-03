@@ -3,7 +3,9 @@
 import { useState, useCallback, type FormEvent } from "react";
 import ScoreRing from "@/components/ScoreRing";
 import CategoryCard from "@/components/CategoryCard";
+import ActionPlan from "@/components/ActionPlan";
 import type { AuditCategory } from "@/lib/aso-rules";
+import type { ActionItem } from "@/lib/action-plan";
 
 interface SearchResult {
   id: string;
@@ -27,6 +29,7 @@ interface AuditReport {
   };
   overallScore: number;
   categories: AuditCategory[];
+  actionPlan: ActionItem[];
 }
 
 type ViewState = "search" | "results" | "auditing" | "report";
@@ -424,6 +427,16 @@ export default function Home() {
                 </div>
               ))}
             </div>
+
+            {/* Action Plan */}
+            {report.actionPlan && report.actionPlan.length > 0 && (
+              <div className="mb-8 fade-in fade-in-delay-2">
+                <h3 className="text-lg mb-3" style={{ color: "var(--text-primary)" }}>
+                  Action Plan
+                </h3>
+                <ActionPlan actions={report.actionPlan} />
+              </div>
+            )}
 
             {/* Detailed Results */}
             <div className="space-y-3 fade-in fade-in-delay-2">

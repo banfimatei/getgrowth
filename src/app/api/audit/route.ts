@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchAppStoreData, fetchGooglePlayData } from "@/lib/store-scraper";
 import { runAudit, calculateOverallScore } from "@/lib/aso-rules";
+import { generateActionPlan } from "@/lib/action-plan";
 
 export async function GET(request: NextRequest) {
   const appId = request.nextUrl.searchParams.get("id");
@@ -18,6 +19,7 @@ export async function GET(request: NextRequest) {
 
     const categories = runAudit(appData);
     const overallScore = calculateOverallScore(categories);
+    const actionPlan = generateActionPlan(appData, categories, overallScore);
 
     return NextResponse.json({
       app: {
@@ -31,6 +33,7 @@ export async function GET(request: NextRequest) {
       },
       overallScore,
       categories,
+      actionPlan,
     });
   } catch (error) {
     console.error("Audit error:", error);
