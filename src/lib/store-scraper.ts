@@ -42,16 +42,27 @@ export async function fetchAppStoreData(appId: string, country = "us"): Promise<
   if (!app) throw new Error("App not found");
 
   let subtitle = "";
+  let promotionalText = "";
   let screenshotUrls: string[] = app.screenshotUrls || [];
   try {
-    const pageResp = await fetch(app.trackViewUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" },
+    const storeUrl = app.trackViewUrl || `https://apps.apple.com/${country}/app/id${appId}`;
+    const pageResp = await fetch(storeUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
     });
     if (pageResp.ok) {
       const html = await pageResp.text();
       const $ = cheerio.load(html);
-      const subtitleEl = $(".app-header__subtitle").text().trim();
+      const subtitleEl = $("h2.subtitle").text().trim()
+        || $(".product-header__subtitle").text().trim()
+        || $(".app-header__subtitle").text().trim();
       if (subtitleEl) subtitle = subtitleEl;
+
+      const promoEl = $('[data-test-id="promotional-text"]').text().trim()
+        || $(".section--promotional-text p").text().trim();
+      if (promoEl) promotionalText = promoEl;
     }
   } catch {
     // Scraping is best-effort; API data is primary
@@ -76,6 +87,7 @@ export async function fetchAppStoreData(appId: string, country = "us"): Promise<
     url: app.trackViewUrl || "",
     iconUrl: app.artworkUrl512 || app.artworkUrl100 || "",
     screenshots: screenshotUrls,
+    promotionalText: promotionalText || undefined,
   };
 }
 
