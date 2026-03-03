@@ -318,7 +318,7 @@ function subtitleBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): Act
 
   const opts: string[] = [];
   if (unique.length >= 2) opts.push(`${verb} ${tc(unique[0])} & ${tc(unique[1])}`.substring(0, 30));
-  if (p.benefits[0]) opts.push(tc(p.benefits[0]).substring(0, 30));
+  if (p.benefits[0]) opts.push(condenseCaption(p.benefits[0], 5, 30));
   if (unique.length >= 3) opts.push(`${tc(unique[0])}, ${tc(unique[1])} & More`.substring(0, 30));
   const validOpts = opts.filter(o => o.length > 0 && o.length <= 30);
 
@@ -438,8 +438,9 @@ function shortDescBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): Ac
 
   const verb = p.categoryVerbs[0] || "Discover";
   const opts: string[] = [];
-  if (p.benefits[0]) opts.push(`${verb} ${p.coreFunction.toLowerCase()}: ${p.benefits[0]}.`.substring(0, 80));
-  if (p.features[0]) opts.push(`${p.brand}: ${p.features[0]}.`.substring(0, 80));
+  const condensedFeat = p.features[0] ? condenseCaption(p.features[0], 6, 50) : "";
+  if (condensedFeat) opts.push(`${verb} ${p.coreFunction.toLowerCase()}. ${condensedFeat}.`.substring(0, 80));
+  opts.push(`${p.brand}: ${p.coreFunction} for ${p.audience}.`.substring(0, 80));
 
   let b = `**Current:** ${data.shortDescription ? `"${data.shortDescription}" (${data.shortDescription.length}/80 chars)` : "(empty)"}\n`;
   b += `**Primary keywords:** ${p.keywords.slice(0, 5).map(w => `"${w}"`).join(", ")}\n\n`;
@@ -492,30 +493,43 @@ function descriptionBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): 
   b += `**Features detected:** ${p.features.length > 0 ? p.features.slice(0, 3).map(f => `"${f}"`).join(", ") : "None (lacks structured feature content)"}\n\n`;
 
   // Per book Ch.2: "keywords mentioned frequently and earlier in the long description have been found to be considered more relevant"
+  const verb = p.categoryVerbs[0] || "Discover";
+
   b += `**Recommended 4-section structure:**\n\n`;
   b += `**1. Opening hook** (first 3 lines visible without "Read more"):\n`;
-  b += `   Lead with core value proposition. Front-load primary keywords.\n`;
-  b += `   Draft: "${p.brand} is the ${p.coreFunction.toLowerCase()} that ${p.benefits[0] || "delivers [core benefit]"}. ${p.features[0] ? cap(p.features[0]) + "." : "[Key differentiator]."}"\n`;
+  b += `   Lead with a single compelling sentence. Front-load primary keywords.\n`;
   b += `   \u2022 Avoid: "Welcome to...", "This app is...", "We are..." (weak openers)\n`;
-  b += `   \u2022 Use: action verb + specific benefit + social proof\n\n`;
+  b += `   \u2022 Pattern: "[Action verb] [specific outcome] with [Brand]." or "[Brand] \u2014 [core benefit in one line]."\n`;
+  b += `   \u2022 Example patterns for ${data.category}:\n`;
+  b += `     "${verb} ${p.coreFunction.toLowerCase()} with ${p.brand}." \u2014 action + category + brand\n`;
+  b += `     "${p.brand}: ${condenseCaption(p.features[0] || p.coreFunction, 6, 50)}." \u2014 brand + key feature\n`;
+  if (data.ratingsCount > 100) {
+    b += `     "Loved by ${data.ratingsCount.toLocaleString()}+ ${p.audience}. ${verb} ${p.coreFunction.toLowerCase()} with ${p.brand}." \u2014 social proof + action\n`;
+  }
+  b += `   \u2022 The opening must read naturally as a complete sentence \u2014 never concatenate raw keywords\n\n`;
 
   b += `**2. Feature list** (bullet points \u2014 scannable):\n`;
-  for (const f of p.features.slice(0, 5)) b += `   \u2022 ${f}\n`;
-  if (p.features.length === 0) {
-    b += `   \u2022 [Feature 1] \u2014 [specific benefit to user]\n`;
-    b += `   \u2022 [Feature 2] \u2014 [specific benefit to user]\n`;
-    b += `   \u2022 [Feature 3] \u2014 [specific benefit to user]\n`;
+  b += `   Rewrite each feature as a user benefit, not a technical capability.\n`;
+  if (p.features.length > 0) {
+    b += `   Your app's key features to highlight:\n`;
+    for (const f of p.features.slice(0, 5)) {
+      b += `   \u2022 ${sceneDirection(f, f)}\n`;
+    }
+  } else {
+    b += `   \u2022 [Feature 1] \u2014 [what the user gets, not what the code does]\n`;
+    b += `   \u2022 [Feature 2] \u2014 [outcome, not mechanism]\n`;
+    b += `   \u2022 [Feature 3] \u2014 [benefit, not spec]\n`;
   }
-  b += `   Per ASO skill: write for humans first, SEO second. Feature lists should be benefit-focused ("Never miss a deadline") not feature-focused ("Push notification system").\n\n`;
+  b += `   Per ASO skill: write for humans first, SEO second. "Never miss a beat" > "Push notification system".\n\n`;
 
   b += `**3. Social proof:**\n`;
   if (data.ratingsCount > 100) {
-    b += `   "${data.rating.toFixed(1)}\u2605 rated by ${data.ratingsCount.toLocaleString()}+ ${p.audience}"\n`;
+    b += `   Your data: ${data.rating.toFixed(1)}\u2605 from ${data.ratingsCount.toLocaleString()} ratings \u2014 use this.\n`;
   }
-  b += `   Add: press mentions, awards, download milestones, partnerships\n\n`;
+  b += `   Include: rating, review count, download milestones, press mentions, awards, partnerships\n\n`;
 
   b += `**4. Call to action:**\n`;
-  b += `   "Download ${p.brand} today and ${p.benefits[0] || "[desired outcome]"}."\n`;
+  b += `   End with a direct prompt: "Download ${p.brand} today." or "Start [verb]ing \u2014 it's free."\n`;
 
   if (data.platform === "android") {
     b += `\n**Keyword density** (Google indexes full description):\n`;
@@ -911,7 +925,7 @@ function ratingsBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): Acti
     let b = `**Current:** ${data.ratingsCount.toLocaleString()} ratings\n`;
     b += `**Benchmark:** 1,000+ for social proof, 10,000+ for strong algorithm signal\n\n`;
     b += data.platform === "ios"
-      ? `**Implementation:** SKStoreReviewController.requestReview()\n  \u2022 3 prompts max per device per 365 days\n  \u2022 Trigger after: ${p.features[0] || "completing a key action"}, 3rd session, positive outcome\n  \u2022 Never after errors, purchases, or onboarding`
+      ? `**Implementation:** SKStoreReviewController.requestReview()\n  \u2022 3 prompts max per device per 365 days\n  \u2022 Trigger after: ${p.features[0] ? sceneDirection(p.features[0], "completing a key action") : "completing a key action"}, 3rd session, positive outcome\n  \u2022 Never after errors, purchases, or onboarding`
       : `**Implementation:** Google Play In-App Review API\n  \u2022 Soft pre-prompt: "Enjoying ${p.brand}?"\n  \u2022 "Yes" \u2192 system review dialog | "No" \u2192 feedback form\n  \u2022 Quota managed by Google \u2014 cannot force-show`;
 
     actions.push({
@@ -988,18 +1002,19 @@ function conversionBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): A
   if (!promoR || promoR.score >= 80) return [];
 
   const opts: string[] = [];
-  if (p.features[0]) {
-    opts.push(`\u2B50 ${data.version ? `New in v${data.version}: ` : ""}${p.features[0]}. ${data.ratingsCount > 100 ? `Join ${data.ratingsCount.toLocaleString()}+ ${p.audience}.` : `Try ${p.brand} today.`}`.substring(0, 170));
+  const featSnippet = p.features[0] ? sceneDirection(p.features[0], p.coreFunction) : p.coreFunction;
+  if (data.version) {
+    opts.push(`\u2B50 New in v${data.version}: ${featSnippet}. ${data.ratingsCount > 100 ? `Join ${data.ratingsCount.toLocaleString()}+ ${p.audience}.` : `Try ${p.brand} today.`}`.substring(0, 170));
   }
-  if (p.benefits[0]) {
-    opts.push(`${cap(p.benefits[0])} with ${p.brand}. ${data.rating > 4 ? `${data.rating.toFixed(1)}\u2605 by ${p.audience}.` : `Made for ${p.audience}.`}`.substring(0, 170));
+  if (data.ratingsCount > 100) {
+    opts.push(`${data.rating.toFixed(1)}\u2605 rated by ${data.ratingsCount.toLocaleString()}+ ${p.audience}. ${cap(p.categoryVerbs[0] || "Discover")} ${p.coreFunction.toLowerCase()} with ${p.brand}.`.substring(0, 170));
   }
 
   let b = `**Current:** ${data.promotionalText ? `"${data.promotionalText}"` : "(not set)"}\n`;
   b += `**Limit:** 170 characters\n`;
   b += `**Key advantage:** Can be changed anytime WITHOUT an app update\n\n`;
   b += `Use for:\n`;
-  b += `  \u2022 Feature announcements ("New: ${p.features[0] || "[latest feature]"}")\n`;
+  b += `  \u2022 Feature announcements ("New: ${condenseCaption(featSnippet, 6, 50)}")\n`;
   b += `  \u2022 Social proof ("${data.rating > 0 ? data.rating.toFixed(1) + "\u2605" : "Loved"} by ${data.ratingsCount > 100 ? data.ratingsCount.toLocaleString() + "+" : ""} ${p.audience}")\n`;
   b += `  \u2022 Seasonal campaigns or limited-time offers\n\n`;
   b += `Rotate monthly. Appears above the description \u2014 first text users read.`;
