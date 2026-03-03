@@ -373,6 +373,86 @@ const descriptionStructureRule: AuditRule = {
   },
 };
 
+const descriptionOpeningHookRule: AuditRule = {
+  id: "desc-opening-hook",
+  category: "description",
+  name: "Description Opening Hook",
+  description: "The first 3 lines (visible before 'Read more') must lead with a value proposition, not boilerplate",
+  weight: 7,
+  platform: "both",
+  evaluate: (data) => {
+    const first250 = data.description.substring(0, 250).toLowerCase();
+    const weakOpeners = [
+      "welcome to", "thanks for", "thank you for",
+      "this app is", "this is a", "this is the",
+      "we are", "we're", "our app",
+      "introducing", "presenting",
+    ];
+    const weakOpener = weakOpeners.find(w => first250.startsWith(w));
+
+    const hasSpecificBenefit = /\d+|free|save|track|stream|discover|manage|create|build|learn|earn|play|listen|watch|connect|unlock/i.test(first250);
+    const hasSocialProof = /million|thousand|\d+k|\d+m|award|rated|featured|loved by/i.test(first250);
+    const hasActionVerb = /^(get|start|take|make|find|join|explore|discover|unlock|achieve|master|build|stream|listen|watch|track)/i.test(first250.trim());
+
+    let score = 50;
+    const notes: string[] = [];
+
+    if (weakOpener) {
+      score -= 20;
+      notes.push(`opens with "${weakOpener}..." — weak hook`);
+    }
+    if (hasActionVerb) {
+      score += 20;
+      notes.push("leads with action verb");
+    }
+    if (hasSpecificBenefit) {
+      score += 15;
+      notes.push("mentions specific benefit or capability");
+    }
+    if (hasSocialProof) {
+      score += 10;
+      notes.push("includes social proof");
+    }
+    if (countWords(first250) < 15) {
+      score -= 15;
+      notes.push("opening is very thin — needs more substance");
+    }
+
+    score = Math.max(10, Math.min(score, 100));
+
+    if (score >= 70) {
+      return { score, status: "pass", message: `Strong opening: ${notes.join(", ")}`, details: "The first 3 lines are visible without tapping 'Read more' — they're your highest-leverage conversion copy." };
+    }
+    if (score >= 45) {
+      return { score, status: "warning", message: `Opening could be stronger: ${notes.join(", ")}`, recommendation: "Rewrite the first 3 lines to lead with your core value proposition. Use an action verb, state a specific benefit, and make users want to read more. Avoid generic openers like 'Welcome to...' or 'This app is...'." };
+    }
+    return { score, status: "fail", message: `Weak opening hook: ${notes.join(", ")}`, recommendation: "Your first 3 lines are critical — most users never scroll past them. Lead with what the user gets, not what the app is. Example: '[Verb] [specific outcome] with [app name]. [Social proof or key differentiator].' Avoid starting with 'Welcome to' or 'This app is'." };
+  },
+};
+
+const descriptionCTARule: AuditRule = {
+  id: "desc-cta",
+  category: "description",
+  name: "Description Call-to-Action",
+  description: "Checks if the description ends with a compelling call to action",
+  weight: 4,
+  platform: "both",
+  evaluate: (data) => {
+    const last300 = data.description.substring(data.description.length - 300).toLowerCase();
+    const ctaPatterns = [
+      "download", "try", "get started", "start", "join",
+      "sign up", "subscribe", "install", "free", "today",
+      "now", "don't wait", "what are you waiting",
+    ];
+    const hasCTA = ctaPatterns.some(p => last300.includes(p));
+
+    if (hasCTA) {
+      return { score: 90, status: "pass", message: "Description ends with a call to action", details: "A CTA at the end of your description guides users who've read through to take the final step." };
+    }
+    return { score: 40, status: "warning", message: "No call-to-action at the end of description", recommendation: "End your description with a clear CTA like 'Download [App] today and [desired outcome].' or 'Join [X]+ users — try it free.' This nudges engaged readers toward conversion." };
+  },
+};
+
 const descriptionKeywordDensityRule: AuditRule = {
   id: "desc-keyword-density",
   category: "description",
@@ -722,6 +802,8 @@ export const ALL_RULES: AuditRule[] = [
   shortDescLengthRule,
   descriptionLengthRule,
   descriptionStructureRule,
+  descriptionOpeningHookRule,
+  descriptionCTARule,
   descriptionKeywordDensityRule,
   screenshotCountRule,
   screenshotFirst3Rule,
@@ -740,7 +822,7 @@ export const CATEGORY_CONFIG: Record<string, { name: string; icon: string; descr
   title: { name: "Title Optimization", icon: "Type", description: "App title keyword targeting, front-loading, and character usage" },
   subtitle: { name: "Subtitle (iOS)", icon: "AlignLeft", description: "Subtitle keyword uniqueness and character optimization" },
   "short-description": { name: "Short Description (Android)", icon: "AlignLeft", description: "Google Play short description (80 chars)" },
-  description: { name: "Description", icon: "FileText", description: "Full description structure and keyword density" },
+  description: { name: "Description", icon: "FileText", description: "Full description structure, opening hook, keyword density, and CTA" },
   visuals: { name: "Visual Assets", icon: "Image", description: "Screenshots (First 3 Rule, OCR), video, gallery strategy" },
   ratings: { name: "Ratings & Reviews", icon: "Star", description: "User ratings volume and sentiment" },
   maintenance: { name: "App Maintenance", icon: "RefreshCw", description: "Update frequency and lifecycle health" },
