@@ -16,85 +16,185 @@ export interface ActionItem {
   scoreBoost: string;
 }
 
-interface KeywordProfile {
-  primary: string[];
-  secondary: string[];
-  longTail: string[];
-  fromDescription: string[];
-  fromCategory: string;
+interface AppProfile {
   brand: string;
+  coreFunction: string;
+  features: string[];
+  benefits: string[];
+  keywords: string[];
+  categoryKeywords: string[];
+  audience: string;
 }
 
 // ---------------------------------------------------------------------------
-// Keyword extraction — builds a profile from actual app data
+// App profiling — extracts real features, benefits, and keywords from app data
 // ---------------------------------------------------------------------------
 
-function buildKeywordProfile(data: AppData): KeywordProfile {
-  const stopWords = new Set([
-    "the", "and", "for", "with", "your", "you", "from", "that", "this",
-    "app", "our", "will", "can", "has", "have", "are", "was", "been",
-    "not", "all", "but", "its", "also", "more", "most", "very", "just",
-    "any", "each", "than", "them", "into", "over", "such", "about",
-    "now", "new", "get", "use", "one", "two", "like", "way", "even",
-  ]);
+const NOISE_WORDS = new Set([
+  "the", "and", "for", "with", "your", "you", "from", "that", "this",
+  "app", "our", "will", "can", "has", "have", "are", "was", "been",
+  "not", "all", "but", "its", "also", "more", "most", "very", "just",
+  "any", "each", "than", "them", "into", "over", "such", "about",
+  "now", "new", "get", "use", "one", "two", "like", "way", "even",
+  "make", "take", "need", "let", "may", "try", "keep", "find", "give",
+  "know", "want", "come", "see", "look", "well", "much", "still",
+  "every", "own", "right", "here", "too", "does", "did", "had",
+  "being", "those", "then", "what", "when", "where", "which", "who",
+  "how", "some", "only", "other", "could", "would", "should", "their",
+  "there", "these", "through", "during", "before", "after", "between",
+  "while", "using", "used", "many", "available", "best", "great",
+  "free", "download", "install", "update", "version", "please",
+  "thank", "thanks", "enjoy", "love", "amazing", "awesome", "wonderful",
+  "perfect", "excellent", "features", "feature", "include", "includes",
+  "including", "support", "supports", "supported", "whether",
+  "experience", "designed", "built", "create", "created",
+  "https", "http", "www", "com", "org", "net",
+]);
 
-  const brandParts = data.developerName.toLowerCase().split(/[\s,.\-]+/).filter(w => w.length > 2);
-  const titleParts = data.title.toLowerCase().split(/[\s\-:|\u2013\u2014]+/).filter(w => w.length > 2);
-  const brand = titleParts.find(w => brandParts.some(b => w.includes(b))) || titleParts[0] || data.title.split(/\s/)[0];
+function isGarbage(word: string): boolean {
+  if (word.length < 3) return true;
+  if (NOISE_WORDS.has(word)) return true;
+  if (/^\d+$/.test(word)) return true;
+  if (/[./:@#]/.test(word)) return true;
+  if (/^(ios|android|iphone|ipad|google|apple|play|store|app)$/i.test(word)) return true;
+  return false;
+}
 
-  const descWords = data.description.toLowerCase()
-    .replace(/[^a-z0-9\s\-]/g, " ")
+function extractFeatures(description: string): string[] {
+  const features: string[] = [];
+  const lines = description.split(/\n/);
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Bullet points or list items often describe features
+    const listMatch = trimmed.match(/^[\u2022\-*\u2605\u2713\u2714\u25BA\u25B8•]\s*(.+)/);
+    if (listMatch && listMatch[1].length > 5 && listMatch[1].length < 120) {
+      features.push(listMatch[1].trim());
+      continue;
+    }
+    // Lines starting with emoji often describe features
+    const emojiMatch = trimmed.match(/^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]\s*(.+)/u);
+    if (emojiMatch && emojiMatch[1].length > 5 && emojiMatch[1].length < 120) {
+      features.push(emojiMatch[1].trim());
+      continue;
+    }
+    // Short capitalized lines (feature headings)
+    if (trimmed.length > 5 && trimmed.length < 60 && /^[A-Z]/.test(trimmed) && !trimmed.endsWith(".")) {
+      const wordCount = trimmed.split(/\s+/).length;
+      if (wordCount >= 2 && wordCount <= 8) {
+        features.push(trimmed);
+      }
+    }
+  }
+
+  return features.slice(0, 12);
+}
+
+function extractCoreFunctionFromTitle(title: string, category: string): string {
+  // Try to get the descriptive part after brand separator
+  const parts = title.split(/[\-:|–—]/);
+  if (parts.length > 1) {
+    return parts.slice(1).join(" ").trim();
+  }
+  // Fall back to category
+  return category || "app";
+}
+
+function extractBenefitPhrases(description: string): string[] {
+  const benefits: string[] = [];
+  const sentences = description.split(/[.!?]+/).map(s => s.trim()).filter(s => s.length > 10);
+
+  const benefitPatterns = [
+    /listen to (.{5,40})/i,
+    /stream (.{5,40})/i,
+    /discover (.{5,40})/i,
+    /browse (.{5,40})/i,
+    /enjoy (.{5,40})/i,
+    /access (.{5,40})/i,
+    /explore (.{5,40})/i,
+    /track (.{5,40})/i,
+    /manage (.{5,40})/i,
+    /create (.{5,40})/i,
+    /save (.{5,40})/i,
+    /share (.{5,40})/i,
+    /sync (.{5,40})/i,
+    /customize (.{5,40})/i,
+    /personalize (.{5,40})/i,
+    /(\d+\+?\s+\w[\w\s]{3,30})/i,  // "100+ channels", "50K+ users"
+    /(?:high[- ]?quality|hifi|hi-fi|hd|premium)\s+(\w[\w\s]{3,25})/i,
+    /(?:curated|handpicked|hand-picked)\s+(\w[\w\s]{3,25})/i,
+    /(?:offline|background)\s+(\w[\w\s]{3,25})/i,
+  ];
+
+  for (const sentence of sentences.slice(0, 20)) {
+    for (const pattern of benefitPatterns) {
+      const match = sentence.match(pattern);
+      if (match) {
+        const phrase = (match[1] || match[0]).trim();
+        if (phrase.length > 5 && phrase.length < 60) {
+          benefits.push(phrase);
+        }
+      }
+    }
+  }
+
+  return [...new Set(benefits)].slice(0, 10);
+}
+
+function extractMeaningfulKeywords(description: string, title: string): string[] {
+  const combined = `${title} ${description}`.toLowerCase();
+  const words = combined
+    .replace(/[^a-z0-9\s\-']/g, " ")
     .split(/\s+/)
-    .filter(w => w.length > 3 && !stopWords.has(w));
+    .filter(w => !isGarbage(w));
 
   const freq = new Map<string, number>();
-  for (const w of descWords) {
+  for (const w of words) {
     freq.set(w, (freq.get(w) || 0) + 1);
   }
 
-  const descKeywords = [...freq.entries()]
-    .filter(([w, count]) => count >= 2 && !brandParts.some(b => w.includes(b)))
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 20)
-    .map(([w]) => w);
-
-  const titleKeywords = titleParts.filter(w =>
-    !brandParts.some(b => w.includes(b)) && !stopWords.has(w) && w.length > 2
-  );
-
-  const subtitleKeywords = (data.subtitle || "").toLowerCase()
-    .split(/[\s\-:,|]+/)
-    .filter(w => w.length > 2 && !stopWords.has(w));
-
-  const primary = [...new Set([...titleKeywords, ...subtitleKeywords])];
-  const secondary = descKeywords.filter(w => !primary.includes(w)).slice(0, 10);
-
-  const longTail: string[] = [];
-  const bigrams = extractBigrams(descWords, stopWords);
-  longTail.push(...bigrams.slice(0, 5));
-
-  return {
-    primary,
-    secondary,
-    longTail,
-    fromDescription: descKeywords,
-    fromCategory: data.category || "",
-    brand,
-  };
-}
-
-function extractBigrams(words: string[], stopWords: Set<string>): string[] {
-  const bigrams = new Map<string, number>();
-  for (let i = 0; i < words.length - 1; i++) {
-    if (stopWords.has(words[i]) || stopWords.has(words[i + 1])) continue;
-    if (words[i].length < 3 || words[i + 1].length < 3) continue;
-    const pair = `${words[i]} ${words[i + 1]}`;
-    bigrams.set(pair, (bigrams.get(pair) || 0) + 1);
-  }
-  return [...bigrams.entries()]
+  return [...freq.entries()]
     .filter(([, count]) => count >= 2)
     .sort((a, b) => b[1] - a[1])
-    .map(([pair]) => pair);
+    .map(([w]) => w)
+    .slice(0, 15);
+}
+
+const CATEGORY_CONTEXT: Record<string, { audience: string; verbs: string[]; benefits: string[] }> = {
+  "Music": { audience: "music listeners", verbs: ["Listen", "Stream", "Discover"], benefits: ["high-quality audio", "curated playlists", "offline listening"] },
+  "Music & Audio": { audience: "music listeners", verbs: ["Listen", "Stream", "Discover"], benefits: ["high-quality audio", "curated playlists", "offline listening"] },
+  "Entertainment": { audience: "entertainment seekers", verbs: ["Watch", "Stream", "Discover"], benefits: ["endless content", "personalized picks", "offline viewing"] },
+  "Productivity": { audience: "professionals", verbs: ["Organize", "Track", "Manage"], benefits: ["save time", "stay focused", "work smarter"] },
+  "Health & Fitness": { audience: "health-conscious users", verbs: ["Track", "Monitor", "Improve"], benefits: ["reach goals", "build habits", "stay motivated"] },
+  "Education": { audience: "learners", verbs: ["Learn", "Study", "Master"], benefits: ["learn faster", "retain more", "skill up"] },
+  "Finance": { audience: "financial planners", verbs: ["Track", "Save", "Invest"], benefits: ["save money", "grow wealth", "budget smarter"] },
+  "Photo & Video": { audience: "creators", verbs: ["Edit", "Create", "Share"], benefits: ["stunning results", "pro-quality edits", "instant sharing"] },
+  "Social Networking": { audience: "social users", verbs: ["Connect", "Share", "Discover"], benefits: ["grow your network", "share moments", "stay connected"] },
+  "Travel": { audience: "travelers", verbs: ["Explore", "Book", "Navigate"], benefits: ["save on travel", "discover places", "stress-free trips"] },
+  "Shopping": { audience: "shoppers", verbs: ["Shop", "Save", "Discover"], benefits: ["best deals", "save money", "find anything"] },
+  "Food & Drink": { audience: "food lovers", verbs: ["Discover", "Order", "Cook"], benefits: ["new recipes", "quick delivery", "eat better"] },
+  "Games": { audience: "gamers", verbs: ["Play", "Compete", "Unlock"], benefits: ["endless fun", "challenge friends", "level up"] },
+  "Sports": { audience: "sports fans", verbs: ["Follow", "Track", "Watch"], benefits: ["live scores", "never miss a game", "real-time updates"] },
+  "News": { audience: "informed readers", verbs: ["Read", "Follow", "Stay"], benefits: ["breaking news", "stay informed", "trusted sources"] },
+  "Weather": { audience: "weather watchers", verbs: ["Check", "Track", "Plan"], benefits: ["accurate forecasts", "severe alerts", "plan ahead"] },
+  "Utilities": { audience: "power users", verbs: ["Manage", "Optimize", "Control"], benefits: ["save time", "work faster", "take control"] },
+  "Navigation": { audience: "drivers and commuters", verbs: ["Navigate", "Find", "Avoid"], benefits: ["fastest routes", "real-time traffic", "never get lost"] },
+  "Lifestyle": { audience: "lifestyle enthusiasts", verbs: ["Discover", "Organize", "Improve"], benefits: ["simplify life", "stay organized", "live better"] },
+  "Business": { audience: "business professionals", verbs: ["Manage", "Collaborate", "Analyze"], benefits: ["boost productivity", "team collaboration", "data-driven decisions"] },
+};
+
+function buildAppProfile(data: AppData): AppProfile {
+  const brandParts = data.title.split(/[\-:|–—]/);
+  const brand = brandParts[0].trim();
+  const coreFunction = extractCoreFunctionFromTitle(data.title, data.category);
+  const features = extractFeatures(data.description);
+  const benefits = extractBenefitPhrases(data.description);
+  const keywords = extractMeaningfulKeywords(data.description, data.title);
+  const catCtx = CATEGORY_CONTEXT[data.category] || CATEGORY_CONTEXT["Lifestyle"];
+  const categoryKeywords = catCtx ? catCtx.benefits : [];
+  const audience = catCtx ? catCtx.audience : "users";
+
+  return { brand, coreFunction, features, benefits, keywords, categoryKeywords, audience };
 }
 
 function capitalize(s: string): string {
@@ -102,14 +202,121 @@ function capitalize(s: string): string {
 }
 
 function titleCase(s: string): string {
-  return s.split(/\s+/).map(capitalize).join(" ");
+  const minor = new Set(["a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by"]);
+  return s.split(/\s+/).map((w, i) =>
+    i === 0 || !minor.has(w.toLowerCase()) ? capitalize(w.toLowerCase()) : w.toLowerCase()
+  ).join(" ");
+}
+
+// ---------------------------------------------------------------------------
+// Screenshot caption generator — benefit-focused, 2-5 words per skill rules
+// ---------------------------------------------------------------------------
+
+function generateScreenshotPlan(data: AppData, profile: AppProfile): { slot: number; role: string; caption: string; scene: string }[] {
+  const maxScreenshots = data.platform === "ios" ? 10 : 8;
+  const catCtx = CATEGORY_CONTEXT[data.category] || { verbs: ["Discover", "Explore", "Use"], benefits: [] };
+  const verb = catCtx.verbs[0] || "Discover";
+  const verb2 = catCtx.verbs[1] || "Explore";
+  const verb3 = catCtx.verbs[2] || "Try";
+
+  const featureNames = profile.features.slice(0, 8);
+  const benefitPhrases = profile.benefits.slice(0, 6);
+
+  // Build captions based on gallery order strategy from the screenshots skill:
+  // 1=Hero, 2=Differentiator, 3=Popular Feature, 4=Social Proof, 5+=Additional
+  const plan: { slot: number; role: string; caption: string; scene: string }[] = [];
+
+  // Slot 1: Hero — core value proposition
+  plan.push({
+    slot: 1,
+    role: "Hero — Core Value Proposition",
+    caption: `${verb} ${profile.coreFunction}`.substring(0, 40),
+    scene: `Show the primary screen in-use — ${featureNames[0] || `the core ${data.category.toLowerCase()} experience`} with real content, not empty states`,
+  });
+
+  // Slot 2: Key differentiator
+  if (benefitPhrases[0]) {
+    plan.push({
+      slot: 2,
+      role: "Key Differentiator",
+      caption: titleCase(benefitPhrases[0]).substring(0, 40),
+      scene: `Highlight what makes ${profile.brand} unique — ${featureNames[1] || benefitPhrases[0]}`,
+    });
+  } else {
+    plan.push({
+      slot: 2,
+      role: "Key Differentiator",
+      caption: `${verb2} ${titleCase(profile.keywords[0] || data.category)}`.substring(0, 40),
+      scene: `Show the feature that sets ${profile.brand} apart from competitors`,
+    });
+  }
+
+  // Slot 3: Most popular feature
+  plan.push({
+    slot: 3,
+    role: "Most Popular Feature",
+    caption: featureNames[1]
+      ? `${verb3} ${titleCase(featureNames[1].split(/[–—\-:]/).pop()?.trim() || featureNames[1])}`.substring(0, 40)
+      : `${verb3} ${titleCase(profile.keywords[1] || "More Features")}`.substring(0, 40),
+    scene: `Demonstrate the most-used feature — ${featureNames[1] || "the feature users engage with most"}`,
+  });
+
+  // Slot 4: Social proof
+  const ratingStr = data.rating > 0 ? `${data.rating.toFixed(1)}\u2605` : "";
+  const countStr = data.ratingsCount >= 1000
+    ? `${Math.floor(data.ratingsCount / 1000)}K+`
+    : data.ratingsCount > 0 ? `${data.ratingsCount.toLocaleString()}` : "";
+  const proofCaption = ratingStr && countStr
+    ? `${ratingStr} Rated by ${countStr} ${profile.audience}`
+    : `Loved by ${profile.audience}`;
+
+  plan.push({
+    slot: 4,
+    role: "Social Proof",
+    caption: proofCaption.substring(0, 45),
+    scene: "Overlay rating badge or user testimonial on an in-use screen — show real social proof",
+  });
+
+  // Slot 5+: Additional features
+  const additionalFeatures = featureNames.slice(2);
+  const additionalBenefits = benefitPhrases.slice(1);
+
+  for (let i = 4; i < maxScreenshots; i++) {
+    const featureIdx = i - 4;
+    const feat = additionalFeatures[featureIdx];
+    const benefit = additionalBenefits[featureIdx];
+    const kw = profile.keywords[i] || profile.keywords[featureIdx % profile.keywords.length];
+
+    let caption: string;
+    let scene: string;
+
+    if (feat) {
+      const shortFeat = feat.length > 35 ? feat.split(/[–—\-:,]/).pop()?.trim() || feat : feat;
+      caption = titleCase(shortFeat).substring(0, 40);
+      scene = `Show ${feat} in action with real data`;
+    } else if (benefit) {
+      caption = titleCase(benefit).substring(0, 40);
+      scene = `Demonstrate this benefit with an in-app screen`;
+    } else if (kw) {
+      caption = `${verb2} ${titleCase(kw)}`.substring(0, 40);
+      scene = `Feature deep-dive or secondary capability`;
+    } else {
+      caption = `More from ${profile.brand}`.substring(0, 40);
+      scene = `Additional feature or settings/customization screen`;
+    }
+
+    const role = i === maxScreenshots - 1 ? "CTA / Download Prompt" : `Feature ${i - 3}`;
+    plan.push({ slot: i + 1, role, caption, scene });
+  }
+
+  return plan;
 }
 
 // ---------------------------------------------------------------------------
 // Brief generators — each section produces a fully tailored brief
 // ---------------------------------------------------------------------------
 
-function generateTitleBrief(data: AppData, kw: KeywordProfile, categories: AuditCategory[]): ActionItem[] {
+function generateTitleBrief(data: AppData, profile: AppProfile, categories: AuditCategory[]): ActionItem[] {
   const actions: ActionItem[] = [];
   const titleCat = categories.find(c => c.id === "title");
   if (!titleCat) return actions;
@@ -125,91 +332,77 @@ function generateTitleBrief(data: AppData, kw: KeywordProfile, categories: Audit
 
   if (!needsKeywords && !needsLength && !needsFrontload) return actions;
 
-  const availableKeywords = [...kw.secondary, ...kw.fromDescription]
-    .filter(w => !data.title.toLowerCase().includes(w))
+  const titleWords = new Set(data.title.toLowerCase().split(/[\s\-:|–—]+/).filter(w => w.length > 2));
+  const availableKeywords = profile.keywords
+    .filter(w => !titleWords.has(w))
     .slice(0, 6);
 
   const copyOptions: string[] = [];
-  const brandSegment = data.title.split(/[\-:|]/)[0]?.trim() || data.title;
-  const existingKeywords = data.title.replace(brandSegment, "").replace(/[\-:|]+/g, "").trim();
 
   if (needsKeywords && availableKeywords.length >= 2) {
     copyOptions.push(
-      `${brandSegment} - ${titleCase(availableKeywords[0])} & ${titleCase(availableKeywords[1])}`.substring(0, 30),
-      `${brandSegment}: ${titleCase(availableKeywords[0])} ${titleCase(availableKeywords[1])}`.substring(0, 30),
+      `${profile.brand} - ${titleCase(availableKeywords[0])} & ${titleCase(availableKeywords[1])}`.substring(0, 30),
+      `${profile.brand}: ${titleCase(availableKeywords[0])} ${titleCase(availableKeywords[1])}`.substring(0, 30),
+      `${titleCase(availableKeywords[0])} ${titleCase(availableKeywords[1])} - ${profile.brand}`.substring(0, 30),
     );
-    if (availableKeywords[2]) {
-      copyOptions.push(
-        `${titleCase(availableKeywords[0])} ${titleCase(availableKeywords[1])} - ${brandSegment}`.substring(0, 30),
-      );
-    }
-  } else if (needsLength && remaining > 3) {
-    const filler = availableKeywords[0] ? ` & ${titleCase(availableKeywords[0])}` : "";
-    if (existingKeywords) {
-      copyOptions.push(`${brandSegment} - ${existingKeywords}${filler}`.substring(0, 30));
-    }
-    if (availableKeywords[0]) {
-      copyOptions.push(`${data.title} ${titleCase(availableKeywords[0])}`.substring(0, 30));
-    }
+  } else if (needsLength && remaining > 3 && availableKeywords[0]) {
+    copyOptions.push(
+      `${data.title} & ${titleCase(availableKeywords[0])}`.substring(0, 30),
+      `${data.title} ${titleCase(availableKeywords[0])}`.substring(0, 30),
+    );
   } else if (needsFrontload && availableKeywords.length >= 1) {
     copyOptions.push(
-      `${titleCase(availableKeywords[0])} - ${brandSegment}`.substring(0, 30),
-      `${titleCase(availableKeywords[0])} ${titleCase(availableKeywords[1] || "")} | ${brandSegment}`.substring(0, 30),
+      `${titleCase(availableKeywords[0])} - ${profile.brand}`.substring(0, 30),
+      `${titleCase(profile.coreFunction)} | ${profile.brand}`.substring(0, 30),
     );
   }
 
   const validOptions = copyOptions.filter(o => o.length > 0 && o.length <= 30);
 
-  const deliverables: string[] = [
-    `Update title in ${data.platform === "ios" ? "App Store Connect" : "Google Play Console"}`,
-    "A/B test the new title for 7 days before committing",
-  ];
-  if (data.platform === "ios") {
-    deliverables.push("Coordinate with next app update submission (title changes require review)");
-  }
-
   let brief = `**Current title:** "${data.title}" (${data.title.length}/30 chars)\n`;
-  brief += `**Brand segment:** "${brandSegment}"\n`;
-  brief += `**Keywords detected in title:** ${kw.primary.length > 0 ? kw.primary.map(w => `"${w}"`).join(", ") : "none"}\n`;
-  brief += `**High-value keywords missing from title:** ${availableKeywords.slice(0, 4).map(w => `"${w}"`).join(", ")}\n\n`;
-  brief += `The title is the single most weighted metadata field on both stores. `;
+  brief += `**Brand:** "${profile.brand}" | **Descriptive part:** "${profile.coreFunction}"\n`;
+  brief += `**Keywords in title:** ${[...titleWords].filter(w => w.length > 2).map(w => `"${w}"`).join(", ") || "none beyond brand"}\n`;
+  brief += `**High-value keywords NOT in title:** ${availableKeywords.slice(0, 4).map(w => `"${w}"`).join(", ")}\n\n`;
+
   if (needsKeywords) {
-    brief += `Your title is currently brand-heavy with limited keyword coverage. Restructure to include descriptive terms that users actually search for.`;
+    brief += `Your title is brand-heavy with limited keyword coverage. Users searching for "${availableKeywords[0] || data.category.toLowerCase()}" won't find you unless those terms are in your title or subtitle. Restructure to "Brand \u2013 Keyword Phrase" format.`;
   } else if (needsLength) {
-    brief += `You have ${remaining} unused characters — that's wasted keyword space in your most valuable field.`;
+    brief += `You have ${remaining} unused characters in your highest-weighted metadata field. Every unused character is a missed ranking opportunity.`;
   } else if (needsFrontload) {
-    brief += `Your brand sits in the first 15 characters (the most visible/weighted zone). Unless "${brandSegment}" is a household name, swap to keyword-first.`;
+    brief += `"${profile.brand}" occupies the first 15 characters (the most visible/weighted zone). Unless it's a household name, move keywords first: "Keyword \u2013 Brand".`;
   }
 
-  const title = needsKeywords
-    ? "Restructure title with high-value keywords"
-    : needsFrontload
-      ? "Front-load keywords in the first 15 characters"
-      : `Fill ${remaining} unused title characters`;
+  brief += `\n\n**Rules:** Front-load keywords in first 15 chars. Write for humans first. No superlatives ("best", "#1") — stores reject these.`;
 
   actions.push({
     id: "title-optimize",
     priority: needsKeywords ? "critical" : "high",
     effort: "quick",
     category: "Title",
-    title,
+    title: needsKeywords
+      ? "Restructure title with high-value keywords"
+      : needsFrontload ? "Front-load keywords before brand name" : `Fill ${remaining} unused title characters`,
     currentState: `"${data.title}" (${data.title.length}/30 chars)`,
     action: brief,
     brief,
     copyOptions: validOptions.length > 0 ? validOptions : undefined,
-    deliverables,
-    impact: "Title keywords directly determine which searches you rank for",
+    deliverables: [
+      `Draft 2-3 title variants (30 chars max)`,
+      `Update in ${data.platform === "ios" ? "App Store Connect" : "Google Play Console"}`,
+      "A/B test for 7+ days before committing",
+      ...(data.platform === "ios" ? ["Requires app update submission"] : []),
+    ],
+    impact: "Title is the single most weighted metadata field for search ranking",
     scoreBoost: needsKeywords ? "+30-50 on Title score" : "+10-20 on Title score",
   });
 
   return actions;
 }
 
-function generateSubtitleBrief(data: AppData, kw: KeywordProfile, categories: AuditCategory[]): ActionItem[] {
+function generateSubtitleBrief(data: AppData, profile: AppProfile, categories: AuditCategory[]): ActionItem[] {
   if (data.platform !== "ios") return [];
-  const actions: ActionItem[] = [];
   const cat = categories.find(c => c.id === "subtitle");
-  if (!cat) return actions;
+  if (!cat) return [];
 
   const lengthRule = cat.results.find(r => r.ruleId === "subtitle-length");
   const dupeRule = cat.results.find(r => r.ruleId === "subtitle-no-duplicate");
@@ -217,21 +410,26 @@ function generateSubtitleBrief(data: AppData, kw: KeywordProfile, categories: Au
   const hasDupes = dupeRule && dupeRule.score < 70;
 
   if (lengthRule && (isEmpty || lengthRule.score < 90 || hasDupes)) {
-    const titleWords = new Set(data.title.toLowerCase().split(/[\s\-:,|\u2013\u2014]+/).filter(w => w.length > 2));
-    const uniqueKeywords = [...kw.secondary, ...kw.fromDescription]
+    const titleWords = new Set(data.title.toLowerCase().split(/[\s\-:,|–—]+/).filter(w => w.length > 2));
+    const uniqueKeywords = profile.keywords
       .filter(w => !titleWords.has(w) && w.length > 2)
       .slice(0, 8);
 
+    const catCtx = CATEGORY_CONTEXT[data.category];
     const copyOptions: string[] = [];
+
+    if (uniqueKeywords.length >= 2) {
+      const verb = catCtx?.verbs[0] || "Discover";
+      copyOptions.push(
+        `${verb} ${titleCase(uniqueKeywords[0])} & ${titleCase(uniqueKeywords[1])}`.substring(0, 30),
+      );
+    }
+    if (profile.benefits[0]) {
+      copyOptions.push(titleCase(profile.benefits[0]).substring(0, 30));
+    }
     if (uniqueKeywords.length >= 3) {
       copyOptions.push(
-        `${titleCase(uniqueKeywords[0])} & ${titleCase(uniqueKeywords[1])} ${titleCase(uniqueKeywords[2])}`.substring(0, 30),
         `${titleCase(uniqueKeywords[0])}, ${titleCase(uniqueKeywords[1])} & More`.substring(0, 30),
-        `${titleCase(uniqueKeywords[2])} ${titleCase(uniqueKeywords[0])} ${titleCase(uniqueKeywords[3] || "")}`.substring(0, 30).trim(),
-      );
-    } else if (uniqueKeywords.length >= 1) {
-      copyOptions.push(
-        `${titleCase(uniqueKeywords[0])} ${kw.fromCategory}`.substring(0, 30),
       );
     }
 
@@ -239,92 +437,97 @@ function generateSubtitleBrief(data: AppData, kw: KeywordProfile, categories: Au
 
     let brief = "";
     if (isEmpty) {
-      brief += `**Current subtitle:** (empty — field not set)\n`;
-      brief += `**Title keywords (to avoid duplicating):** ${[...titleWords].filter(w => w.length > 2).map(w => `"${w}"`).join(", ")}\n`;
-      brief += `**Available unique keywords:** ${uniqueKeywords.slice(0, 5).map(w => `"${w}"`).join(", ")}\n\n`;
-      brief += `The subtitle is iOS's second-most weighted metadata field. Apple combines title + subtitle + keyword field into 160 indexable characters — leaving the subtitle empty wastes ~30 of those. Use keywords that DON'T appear in your title.`;
+      brief += `**Current subtitle:** (empty \u2014 field not set)\n`;
+      brief += `**Title words (avoid duplicating):** ${[...titleWords].filter(w => w.length > 2).map(w => `"${w}"`).join(", ")}\n`;
+      brief += `**Keywords available for subtitle:** ${uniqueKeywords.slice(0, 5).map(w => `"${w}"`).join(", ")}\n\n`;
+      brief += `The subtitle is iOS's second-most weighted metadata field. Apple combines title + subtitle + keyword field into ~160 indexable characters. Leaving the subtitle empty wastes 30 of those.\n\n`;
+      brief += `**Rules:** No word overlap with title (Apple doesn't double-count). No category name (already indexed). Benefit-first language. Use every character.`;
     } else {
       const dupeWords = data.subtitle!.toLowerCase().split(/[\s\-:,|]+/)
         .filter(w => titleWords.has(w) && w.length > 2);
       brief += `**Current subtitle:** "${data.subtitle}" (${data.subtitle!.length}/30 chars)\n`;
       if (dupeWords.length > 0) {
-        brief += `**Duplicated from title:** ${dupeWords.map(w => `"${w}"`).join(", ")} (wasting indexable space)\n`;
+        brief += `**Words duplicated from title:** ${dupeWords.map(w => `"${w}"`).join(", ")} \u2014 these add zero extra ranking value\n`;
       }
-      brief += `**Available unique keywords:** ${uniqueKeywords.slice(0, 5).map(w => `"${w}"`).join(", ")}\n\n`;
-      if (hasDupes) {
-        brief += `Replace duplicated words with fresh keywords. Apple doesn't give extra weight for repeating the same word across fields.`;
-      } else {
-        brief += `You have ${30 - data.subtitle!.length} unused characters. Fill them with your next-priority keywords.`;
-      }
+      brief += `**Keywords to swap in:** ${uniqueKeywords.slice(0, 5).map(w => `"${w}"`).join(", ")}\n\n`;
+      brief += hasDupes
+        ? `Replace duplicated words with fresh keywords. Apple's algorithm gives no extra weight for repeating the same word across title and subtitle.`
+        : `You have ${30 - data.subtitle!.length} unused characters. Fill them with your next-priority keywords that don't appear in the title.`;
     }
 
-    actions.push({
+    return [{
       id: "subtitle-optimize",
       priority: isEmpty ? "critical" : "high",
       effort: "quick",
       category: "Subtitle",
-      title: isEmpty ? "Add a subtitle — your second most valuable field is empty" : "Optimize subtitle keywords",
+      title: isEmpty ? "Add a subtitle \u2014 your second most valuable field is empty" : "Optimize subtitle keywords",
       currentState: isEmpty ? "No subtitle set" : `"${data.subtitle}" (${data.subtitle!.length}/30 chars)`,
       action: brief,
       brief,
       copyOptions: validOptions.length > 0 ? validOptions : undefined,
       deliverables: [
-        "Draft subtitle (30 chars max, no title-word overlap)",
-        "Update in App Store Connect > App Information > Subtitle",
+        "Draft subtitle (30 chars max, zero title-word overlap)",
+        "Update in App Store Connect \u203A App Information \u203A Subtitle",
         "Requires app update submission for review",
       ],
       impact: "Unlocks keyword rankings for terms not reachable via title alone",
       scoreBoost: isEmpty ? "+60-90 on Subtitle score" : "+15-30 on Subtitle score",
-    });
+    }];
   }
 
-  return actions;
+  return [];
 }
 
-function generateShortDescBrief(data: AppData, kw: KeywordProfile, categories: AuditCategory[]): ActionItem[] {
+function generateShortDescBrief(data: AppData, profile: AppProfile, categories: AuditCategory[]): ActionItem[] {
   if (data.platform !== "android") return [];
   const cat = categories.find(c => c.id === "short-description");
   if (!cat) return [];
   const rule = cat.results[0];
   if (!rule || rule.score >= 80) return [];
 
-  const topKw = [...kw.primary, ...kw.secondary].slice(0, 5);
+  const catCtx = CATEGORY_CONTEXT[data.category] || { verbs: ["Discover"] };
+  const verb = catCtx.verbs[0] || "Discover";
+
   const copyOptions: string[] = [];
-  if (topKw.length >= 2) {
+  if (profile.benefits[0]) {
     copyOptions.push(
-      `${titleCase(topKw[0])} & ${titleCase(topKw[1])} — ${titleCase(kw.fromCategory)} for everyone`.substring(0, 80),
-      `The best ${kw.fromCategory.toLowerCase()} experience: ${topKw.slice(0, 3).map(titleCase).join(", ")} & more`.substring(0, 80),
+      `${verb} ${profile.coreFunction.toLowerCase()}: ${profile.benefits[0]}. ${titleCase(profile.keywords[0] || "")} & more.`.substring(0, 80),
+    );
+  }
+  if (profile.features[0]) {
+    copyOptions.push(
+      `${profile.brand}: ${profile.features[0]}. ${profile.coreFunction}.`.substring(0, 80),
     );
   }
 
   let brief = `**Current short description:** ${data.shortDescription ? `"${data.shortDescription}" (${data.shortDescription.length}/80 chars)` : "(empty)"}\n`;
-  brief += `**Primary keywords to include:** ${topKw.map(w => `"${w}"`).join(", ")}\n\n`;
-  brief += `The short description appears in Google Play search results and is the second-most indexed text field. Write a compelling 80-character pitch that front-loads your primary keyword and communicates your core value proposition. It must read naturally — this is the first text users see.`;
+  brief += `**Primary keywords:** ${profile.keywords.slice(0, 5).map(w => `"${w}"`).join(", ")}\n\n`;
+  brief += `The short description appears in Google Play search results and is the second-most indexed text field. Front-load your primary keyword in the first 3 words. It must read naturally \u2014 this is the first text users see in search results.\n\n`;
+  brief += `**Rules:** 80 chars max. Front-load keywords. Write a compelling pitch, not a keyword list. Ends with benefit or call to action.`;
 
   return [{
     id: "short-desc-optimize",
     priority: data.shortDescription ? "high" : "critical",
     effort: "quick",
     category: "Short Description",
-    title: data.shortDescription ? "Rewrite short description for better keyword coverage" : "Add a short description — your second most important field",
+    title: data.shortDescription ? "Rewrite short description for better keyword coverage" : "Add a short description",
     currentState: data.shortDescription ? `"${data.shortDescription}" (${data.shortDescription.length}/80 chars)` : "Not set",
     action: brief,
     brief,
     copyOptions: copyOptions.length > 0 ? copyOptions : undefined,
     deliverables: [
       "Write 2-3 short description variants (80 chars max each)",
-      "Update in Google Play Console > Store Listing > Short description",
-      "Run a Store Listing Experiment to test variants",
+      "Update in Google Play Console \u203A Store Listing \u203A Short description",
+      "Run a Store Listing Experiment to A/B test variants",
     ],
     impact: "Directly affects Google Play search ranking and click-through rate",
     scoreBoost: "+30-60 on Short Description score",
   }];
 }
 
-function generateDescriptionBrief(data: AppData, kw: KeywordProfile, categories: AuditCategory[]): ActionItem[] {
-  const actions: ActionItem[] = [];
+function generateDescriptionBrief(data: AppData, profile: AppProfile, categories: AuditCategory[]): ActionItem[] {
   const cat = categories.find(c => c.id === "description");
-  if (!cat) return actions;
+  if (!cat) return [];
 
   const structRule = cat.results.find(r => r.ruleId === "desc-structure");
   const densityRule = cat.results.find(r => r.ruleId === "desc-keyword-density");
@@ -334,93 +537,80 @@ function generateDescriptionBrief(data: AppData, kw: KeywordProfile, categories:
     (densityRule && densityRule.score < 70) ||
     (lengthRule && lengthRule.score < 70);
 
-  if (!needsWork) return actions;
+  if (!needsWork) return [];
 
   const desc = data.description;
-  const firstSentences = desc.split(/[.!?]\s/).slice(0, 3).join(". ").substring(0, 300);
+  const first200 = desc.substring(0, 200).replace(/\n/g, " ");
   const wordCount = desc.split(/\s+/).length;
   const hasBullets = /[\u2022\-*]/.test(desc);
   const hasParagraphs = (desc.match(/\n\n/g) || []).length >= 2;
 
-  const missingKeywords = kw.secondary
-    .filter(w => !desc.toLowerCase().includes(w))
-    .slice(0, 5);
+  let brief = `**Current description:** ${desc.length} chars, ~${wordCount} words\n`;
+  brief += `**First 3 lines (visible before "Read more"):** "${first200}${desc.length > 200 ? "..." : ""}"\n`;
+  brief += `**Structure:** ${hasParagraphs ? "Has paragraphs" : "No paragraph breaks"} | ${hasBullets ? "Has bullet points" : "No bullet points"}\n`;
+  brief += `**Features detected:** ${profile.features.length > 0 ? profile.features.slice(0, 4).map(f => `"${f}"`).join(", ") : "None (description lacks structured feature content)"}\n\n`;
 
-  const underusedKeywords = kw.primary
-    .map(w => ({ word: w, count: (desc.toLowerCase().split(w).length - 1) }))
-    .filter(k => k.count < 3);
-
-  let brief = `**Current description:** ${desc.length} chars, ${wordCount} words\n`;
-  brief += `**Opening lines:** "${firstSentences}${firstSentences.length >= 300 ? "..." : ""}"\n`;
-  brief += `**Structure:** ${hasParagraphs ? "Has paragraphs" : "No paragraph breaks"}, ${hasBullets ? "Has bullet points" : "No bullet points"}\n\n`;
-
-  if (data.platform === "android") {
-    brief += `**Keyword gaps (not in description):** ${missingKeywords.length > 0 ? missingKeywords.map(w => `"${w}"`).join(", ") : "None detected"}\n`;
-    if (underusedKeywords.length > 0) {
-      brief += `**Underused keywords (< 3 mentions):** ${underusedKeywords.map(k => `"${k.word}" (${k.count}x)`).join(", ")}\n`;
-    }
-    brief += "\n";
-  }
-
-  brief += "**Recommended structure:**\n";
-  brief += `1. **Opening hook** (first 3 lines visible without "Read more"):\n`;
+  brief += `**Recommended structure:**\n\n`;
+  brief += `**1. Opening hook** (first 3 lines \u2014 visible without tapping "Read more"):\n`;
   brief += `   Lead with your core value proposition. Front-load primary keywords.\n`;
-  brief += `   Draft: "${data.title.split(/[\-:|]/)[0].trim()} is the [primary keyword] ${kw.fromCategory.toLowerCase()} that [core benefit]. ${kw.primary.length > 0 ? titleCase(kw.primary[0]) : "[Feature]"} ${kw.secondary[0] ? `and ${kw.secondary[0]}` : ""} [specific outcome]."\n\n`;
-  brief += `2. **Feature list** (bullet points):\n`;
+  brief += `   E.g.: "${profile.brand} is the ${profile.coreFunction.toLowerCase()} that ${profile.benefits[0] || `delivers ${profile.categoryKeywords[0] || "results"}`}. ${profile.features[0] ? capitalize(profile.features[0]) + "." : ""}"\n\n`;
+  brief += `**2. Feature list** (bullet points \u2014 scannable):\n`;
 
-  const featureKw = [...kw.fromDescription].slice(0, 6);
-  for (let i = 0; i < Math.min(featureKw.length, 5); i++) {
-    brief += `   \u2022 ${titleCase(featureKw[i])} — [describe the specific benefit]\n`;
+  for (const feat of profile.features.slice(0, 5)) {
+    brief += `   \u2022 ${feat}\n`;
+  }
+  if (profile.features.length === 0) {
+    brief += `   \u2022 [Core feature 1 \u2014 describe the benefit]\n`;
+    brief += `   \u2022 [Core feature 2 \u2014 describe the benefit]\n`;
+    brief += `   \u2022 [Core feature 3 \u2014 describe the benefit]\n`;
   }
 
-  brief += `\n3. **Social proof section:**\n`;
+  brief += `\n**3. Social proof:**\n`;
   if (data.ratingsCount > 100) {
-    brief += `   "Loved by ${data.ratingsCount.toLocaleString()}+ users" / "${data.rating.toFixed(1)}\u2605 on the ${data.platform === "ios" ? "App Store" : "Play Store"}"\n`;
+    brief += `   "${data.rating.toFixed(1)}\u2605 rated by ${data.ratingsCount.toLocaleString()}+ ${profile.audience}"\n`;
   } else {
     brief += `   Add press mentions, awards, or user milestones\n`;
   }
-  brief += `\n4. **Call to action:**\n   "Download ${data.title.split(/[\-:|]/)[0].trim()} today and [desired outcome]."`;
+
+  brief += `\n**4. Call to action:**\n`;
+  brief += `   "Download ${profile.brand} and ${profile.benefits[0] || `start your ${data.category.toLowerCase()} experience`} today."`;
 
   if (data.platform === "android") {
-    brief += `\n\n**Keyword density targets:**\n`;
-    for (const w of [...kw.primary, ...kw.secondary].slice(0, 4)) {
+    brief += `\n\n**Keyword density targets** (Google indexes full description):`;
+    for (const w of profile.keywords.slice(0, 4)) {
       const count = (desc.toLowerCase().split(w).length - 1);
-      brief += `   "${w}": currently ${count}x → target 3-5x\n`;
+      brief += `\n   "${w}": currently ${count}x \u2192 target 3-5x`;
     }
   }
 
-  const deliverables = [
-    "Rewrite full description following the 4-section structure above",
-    `Target length: ${data.platform === "android" ? "2,500-4,000 chars" : "1,000-4,000 chars"}`,
-  ];
-  if (data.platform === "android") {
-    deliverables.push("Ensure primary keywords appear 3-5x each, front-loaded in first paragraph");
-    deliverables.push("Update in Google Play Console > Store Listing > Full description");
-  } else {
-    deliverables.push("Update in App Store Connect > Version Information > Description");
-    deliverables.push("Note: iOS description is NOT indexed for search, but impacts conversion and web SEO");
-  }
-
-  actions.push({
+  return [{
     id: "desc-rewrite",
     priority: data.platform === "android" ? "high" : "medium",
     effort: "medium",
     category: "Description",
     title: "Rewrite description with optimized structure and keywords",
-    currentState: `${desc.length} chars, ${wordCount} words — ${!hasBullets ? "no bullet points, " : ""}${!hasParagraphs ? "no paragraph breaks" : "has paragraphs"}`,
+    currentState: `${desc.length} chars, ~${wordCount} words \u2014 ${!hasBullets ? "no bullets" : "has bullets"}, ${!hasParagraphs ? "no paragraphs" : "has paragraphs"}`,
     action: brief,
     brief,
-    deliverables,
+    deliverables: [
+      "Rewrite full description following the 4-section structure",
+      `Target length: ${data.platform === "android" ? "2,500-4,000 chars" : "1,000-4,000 chars"}`,
+      ...(data.platform === "android" ? [
+        "Primary keywords appear 3-5x each, front-loaded in first paragraph",
+        "Update in Google Play Console \u203A Store Listing \u203A Full description",
+      ] : [
+        "Update in App Store Connect \u203A Version Information \u203A Description",
+        "Note: iOS description is NOT indexed for search, but impacts conversion + web SEO",
+      ]),
+    ],
     impact: data.platform === "android"
-      ? "Google indexes the full description — structure and density directly affect rankings"
-      : "Better conversion rate from store page visitors + web SEO impact",
+      ? "Google indexes the full description \u2014 structure and density directly affect rankings"
+      : "Better conversion rate from store page visitors + web SEO",
     scoreBoost: "+15-30 on Description score",
-  });
-
-  return actions;
+  }];
 }
 
-function generateVisualsBrief(data: AppData, kw: KeywordProfile, categories: AuditCategory[]): ActionItem[] {
+function generateVisualsBrief(data: AppData, profile: AppProfile, categories: AuditCategory[]): ActionItem[] {
   const actions: ActionItem[] = [];
   const cat = categories.find(c => c.id === "visuals");
   if (!cat) return actions;
@@ -429,66 +619,60 @@ function generateVisualsBrief(data: AppData, kw: KeywordProfile, categories: Aud
   const countRule = cat.results.find(r => r.ruleId === "screenshot-count");
   const videoRule = cat.results.find(r => r.ruleId === "video-presence");
 
-  // Screenshot optimization
-  if (countRule && data.screenshotCount < maxScreenshots) {
-    const allKw = [...kw.primary, ...kw.secondary].slice(0, 10);
-    const screenshotTopics = [
-      { slot: 1, role: "Hero / Core Value", caption: `${titleCase(allKw[0] || kw.fromCategory)} — ${titleCase(allKw[1] || "your core benefit")}` },
-      { slot: 2, role: "Key Differentiator", caption: `${titleCase(allKw[2] || "Unique Feature")} ${titleCase(allKw[3] || "")}`.trim() },
-      { slot: 3, role: "Most Popular Feature", caption: `${titleCase(allKw[1] || "Popular")} ${titleCase(allKw[4] || "Experience")}` },
-      { slot: 4, role: "Social Proof", caption: `"${data.rating > 0 ? data.rating.toFixed(1) + "\u2605" : "Loved by"} ${data.ratingsCount > 100 ? (data.ratingsCount / 1000).toFixed(0) + "K+" : ""} Users"` },
-      { slot: 5, role: "Feature Deep-Dive", caption: `${titleCase(allKw[5] || allKw[0] || "Feature")} & ${titleCase(allKw[6] || "More")}` },
-    ];
-
-    for (let i = 5; i < maxScreenshots; i++) {
-      screenshotTopics.push({
-        slot: i + 1,
-        role: "Secondary Feature",
-        caption: `${titleCase(allKw[i] || allKw[i % allKw.length] || "Feature")} ${titleCase(allKw[(i + 1) % allKw.length] || "")}`.trim(),
-      });
-    }
+  // --- Screenshot brief ---
+  if (countRule && (data.screenshotCount < maxScreenshots || data.platform === "ios")) {
+    const plan = generateScreenshotPlan(data, profile);
+    const needsNew = data.screenshotCount < maxScreenshots;
 
     let brief = `**Current screenshots:** ${data.screenshotCount}/${maxScreenshots} slots used\n\n`;
-    brief += `**Screenshot gallery plan:**\n`;
-    for (const topic of screenshotTopics.slice(0, maxScreenshots)) {
-      const exists = topic.slot <= data.screenshotCount;
-      brief += `  ${exists ? "\u2705" : "\u274C"} **Slot ${topic.slot}** — ${topic.role}\n`;
-      brief += `     Caption: "${topic.caption}"\n`;
+    brief += `**Screenshot gallery plan for ${profile.brand}:**\n`;
+
+    for (const item of plan) {
+      const exists = item.slot <= data.screenshotCount;
+      brief += `\n  ${exists ? "\u2705" : "\u274C"} **Slot ${item.slot} \u2014 ${item.role}**\n`;
+      brief += `     Caption: "${item.caption}"\n`;
+      brief += `     Scene: ${item.scene}\n`;
     }
 
     if (data.platform === "ios") {
-      brief += `\n**Apple OCR optimization (critical for 2025-2026 rankings):**\n`;
-      brief += `Apple now extracts text from screenshot captions via OCR and uses it as a keyword ranking signal. Your screenshot captions are a secondary keyword field.\n\n`;
-      brief += `**Caption specs for OCR:**\n`;
-      brief += `  \u2022 Font: Bold sans-serif (SF Pro, Helvetica, Inter), 40pt+ minimum\n`;
-      brief += `  \u2022 Contrast: Dark text on light bg or white text on dark bg (no mid-tones)\n`;
+      brief += `\n**Apple OCR optimization (2025-2026 ranking signal):**\n`;
+      brief += `Apple extracts text from screenshot captions via OCR and uses it for keyword ranking. Your captions are effectively a secondary keyword field.\n\n`;
+      brief += `**Caption design specs for OCR indexing:**\n`;
+      brief += `  \u2022 Font: Bold sans-serif (SF Pro, Helvetica Neue, Inter) at 40pt+ minimum\n`;
+      brief += `  \u2022 Contrast: Dark text on light background or white on dark (no mid-tones)\n`;
       brief += `  \u2022 Position: Top 1/3 of screenshot for maximum OCR reliability\n`;
-      brief += `  \u2022 Keywords to map across captions: ${allKw.slice(0, 8).map(w => `"${w}"`).join(", ")}\n`;
-      brief += `  \u2022 Avoid: Generic phrases ("Easy to Use", "Get Started"), emoji-only captions\n`;
+      brief += `  \u2022 First 3 screenshots carry heaviest indexing weight \u2014 put primary keywords there\n`;
+      brief += `  \u2022 Align caption keywords with title + subtitle to amplify ranking signals\n`;
+      brief += `  \u2022 OCR check: zoom screenshot to 25% \u2014 if you can still read it, OCR can too\n`;
     }
 
     brief += `\n**Design specs:**\n`;
     if (data.platform === "ios") {
-      brief += `  \u2022 iPhone 6.7": 1290 x 2796 px\n`;
-      brief += `  \u2022 iPhone 6.5": 1284 x 2778 px\n`;
-      brief += `  \u2022 iPad 12.9": 2048 x 2732 px\n`;
+      brief += `  \u2022 iPhone 6.9" (16/17 Pro Max): 1320 x 2868 px (upload this \u2014 Apple scales down)\n`;
+      brief += `  \u2022 iPhone 6.7" (15 Pro Max): 1290 x 2796 px\n`;
+      brief += `  \u2022 iPhone 5.5" (legacy): 1242 x 2208 px\n`;
+      brief += `  \u2022 iPad 13": 2064 x 2752 px (if iPad app)\n`;
+      brief += `  \u2022 Min upload strategy: 6.9" + 5.5" covers modern + legacy devices\n`;
     } else {
-      brief += `  \u2022 Phone: 1080 x 1920 px (min 320px, max 3840px)\n`;
-      brief += `  \u2022 Tablet 7": 1080 x 1920 px\n`;
-      brief += `  \u2022 Tablet 10": 1200 x 1920 px\n`;
+      brief += `  \u2022 Standard phone: 1080 x 1920 px (9:16)\n`;
+      brief += `  \u2022 High-res phone: 1440 x 2560 px\n`;
+      brief += `  \u2022 7" tablet: 1200 x 1920 px (optional, boosts tablet visibility)\n`;
+      brief += `  \u2022 Feature graphic: 1024 x 500 px (required for featuring)\n`;
     }
 
+    brief += `\n**Rules:** Real in-app UI required (no abstract art). No empty states. Current-gen device frames (iPhone 16 Pro, Pixel 9). Captions: 2-5 words, benefit-focused.`;
+
     const deliverables: string[] = [];
-    if (data.screenshotCount < maxScreenshots) {
-      deliverables.push(`Design ${maxScreenshots - data.screenshotCount} new screenshots`);
+    if (needsNew) {
+      deliverables.push(`Design ${maxScreenshots - data.screenshotCount} new screenshots for slots ${data.screenshotCount + 1}-${maxScreenshots}`);
     }
     deliverables.push(
-      "Write keyword-rich captions for all screenshot slots (see plan above)",
-      `Export at required resolutions for ${data.platform === "ios" ? "all required device sizes" : "phone + tablet"}`,
-      `Upload to ${data.platform === "ios" ? "App Store Connect > Media Manager" : "Google Play Console > Store Listing"}`,
+      `Write benefit-focused captions for all ${maxScreenshots} slots (see plan above)`,
+      `Export at required resolutions for ${data.platform === "ios" ? "all device sizes" : "phone + tablet"}`,
+      `Upload to ${data.platform === "ios" ? "App Store Connect \u203A Media Manager" : "Google Play Console \u203A Store Listing"}`,
     );
     if (data.platform === "ios") {
-      deliverables.push("Verify OCR readability: zoom to 25% — if you can still read the caption text, OCR can too");
+      deliverables.push("Verify OCR readability: zoom to 25% and confirm captions are still legible");
     }
 
     actions.push({
@@ -496,39 +680,43 @@ function generateVisualsBrief(data: AppData, kw: KeywordProfile, categories: Aud
       priority: data.screenshotCount < 3 ? "critical" : "high",
       effort: data.screenshotCount < 4 ? "heavy" : "medium",
       category: "Visual Assets",
-      title: `Design ${maxScreenshots - data.screenshotCount > 0 ? `${maxScreenshots - data.screenshotCount} new screenshots + ` : ""}keyword-optimized captions`,
+      title: needsNew
+        ? `Design ${maxScreenshots - data.screenshotCount} new screenshots + optimize all captions`
+        : "Optimize screenshot captions for keywords and conversion",
       currentState: `${data.screenshotCount}/${maxScreenshots} screenshots uploaded`,
       action: brief,
       brief,
       deliverables,
-      impact: "Screenshots are the #1 conversion driver — captions are now also a keyword ranking signal on iOS",
+      impact: "Screenshots are the #1 conversion driver" + (data.platform === "ios" ? " \u2014 captions are now also a keyword ranking signal via OCR" : ""),
       scoreBoost: "+15-30 on Visual Assets score",
     });
   }
 
-  // Video
+  // --- Video brief ---
   if (videoRule && videoRule.score < 60) {
-    const features = kw.fromDescription.slice(0, 4).map(titleCase);
+    const features = profile.features.slice(0, 4);
+    const fallbackFeatures = profile.benefits.slice(0, 4);
+    const scenes = features.length > 0 ? features : fallbackFeatures;
+
     let brief = `**Current state:** No preview video detected\n\n`;
+    brief += `**Video storyboard for ${profile.brand}:**\n\n`;
 
     if (data.platform === "ios") {
-      brief += `**Video storyboard for ${data.title}:**\n`;
-      brief += `  0-3s: **Hook** — Show the core "${kw.fromCategory}" experience in action\n`;
-      brief += `  3-10s: **${features[0] || "Feature 1"}** — Demonstrate the primary use case\n`;
-      brief += `  10-18s: **${features[1] || "Feature 2"}** — Show the key differentiator\n`;
-      brief += `  18-25s: **${features[2] || "Feature 3"}** — Social proof or advanced feature\n`;
-      brief += `  25-30s: **CTA** — App icon + "${data.title.split(/[\-:|]/)[0].trim()}" branding\n\n`;
+      brief += `  **0-3s \u2014 Hook:** Open with the core "${profile.coreFunction}" experience in action. Show the wow moment \u2014 ${scenes[0] || `what makes ${profile.brand} compelling`}. Must grab attention immediately (video loops silently).\n\n`;
+      brief += `  **3-10s \u2014 Feature 1:** ${scenes[0] || "Primary feature"} \u2014 demonstrate the main use case with real content.\n\n`;
+      brief += `  **10-18s \u2014 Feature 2:** ${scenes[1] || "Key differentiator"} \u2014 show what makes ${profile.brand} different from alternatives.\n\n`;
+      brief += `  **18-25s \u2014 Feature 3:** ${scenes[2] || "Social proof or advanced feature"} \u2014 ${data.ratingsCount > 100 ? `flash the ${data.rating.toFixed(1)}\u2605 rating` : "show depth and polish"}.\n\n`;
+      brief += `  **25-30s \u2014 CTA:** End screen with ${profile.brand} app icon and tagline.\n\n`;
       brief += `**Specs:** 15-30s, H.264 .mov or .mp4, no letterboxing\n`;
-      brief += `**Sizes:** 886x1920 (5.5"), 1080x1920 (6.1"), 1284x2778 (6.5"), 1290x2796 (6.7")\n`;
-      brief += `**Rules:** Real app footage only (no renders), no people outside the device, loops silently`;
+      brief += `**Sizes:** 1320x2868 (6.9"), 1290x2796 (6.7"), 1284x2778 (6.5"), 1242x2208 (5.5")\n`;
+      brief += `**Rules:** Real app footage only (no renders), no people outside the device, loops silently in store`;
     } else {
-      brief += `**Video plan for ${data.title}:**\n`;
-      brief += `  0-3s: **Hook** — The most compelling "${kw.fromCategory}" moment\n`;
-      brief += `  3-15s: **Core loop** — ${features[0] || "Main feature"} in action\n`;
-      brief += `  15-25s: **${features[1] || "Feature 2"}** + ${features[2] || "Feature 3"}\n`;
-      brief += `  25-30s: **CTA** — Download prompt\n\n`;
+      brief += `  **0-3s \u2014 Hook:** The most compelling "${profile.coreFunction}" moment. Grab attention instantly.\n\n`;
+      brief += `  **3-15s \u2014 Core experience:** ${scenes[0] || "Main feature"} in action \u2014 show the primary use case.\n\n`;
+      brief += `  **15-25s \u2014 Features:** ${scenes[1] || "Feature 2"} and ${scenes[2] || "Feature 3"} \u2014 show depth.\n\n`;
+      brief += `  **25-30s \u2014 CTA:** Download prompt with ${profile.brand} branding.\n\n`;
       brief += `**Specs:** 30s-2min YouTube video, landscape preferred\n`;
-      brief += `**Upload:** Add YouTube URL in Google Play Console > Store Listing > Promo video`;
+      brief += `**Upload:** Add YouTube URL in Google Play Console \u203A Store Listing \u203A Promo video`;
     }
 
     actions.push({
@@ -536,19 +724,19 @@ function generateVisualsBrief(data: AppData, kw: KeywordProfile, categories: Aud
       priority: "medium",
       effort: "heavy",
       category: "Visual Assets",
-      title: `Create ${data.platform === "ios" ? "App Preview" : "promo"} video for ${data.title.split(/[\-:|]/)[0].trim()}`,
+      title: `Create ${data.platform === "ios" ? "App Preview" : "promo"} video for ${profile.brand}`,
       currentState: "No preview video detected",
       action: brief,
       brief,
       deliverables: [
         "Write video script/storyboard (see plan above)",
-        "Record app screen captures for each scene",
+        `Record in-app screen captures for each scene \u2014 use real content, not empty states`,
         data.platform === "ios"
-          ? "Edit to 15-30s, export H.264 .mov for all required sizes"
+          ? "Edit to 15-30s, export H.264 .mov for all required device sizes"
           : "Edit to 30-60s, upload to YouTube, add URL to Play Console",
-        "Add background music (royalty-free) and caption overlays",
+        "Add subtle background music (royalty-free) and caption overlays",
       ],
-      impact: "Videos increase conversion rate and time-on-page",
+      impact: "Videos increase conversion rate and time-on-page \u2014 auto-play silently in store",
       scoreBoost: "+10-15 on Visual Assets score",
     });
   }
@@ -556,7 +744,7 @@ function generateVisualsBrief(data: AppData, kw: KeywordProfile, categories: Aud
   return actions;
 }
 
-function generateRatingsBrief(data: AppData, kw: KeywordProfile, categories: AuditCategory[]): ActionItem[] {
+function generateRatingsBrief(data: AppData, profile: AppProfile, categories: AuditCategory[]): ActionItem[] {
   const actions: ActionItem[] = [];
   const cat = categories.find(c => c.id === "ratings");
   if (!cat) return actions;
@@ -566,29 +754,24 @@ function generateRatingsBrief(data: AppData, kw: KeywordProfile, categories: Aud
   const lowRating = scoreRule && data.rating > 0 && data.rating < 4.0;
   const lowCount = countRule && countRule.score < 60;
 
-  if (!lowRating && !lowCount) return actions;
-
   if (lowRating) {
     let brief = `**Current rating:** ${data.rating.toFixed(1)}\u2605 from ${data.ratingsCount.toLocaleString()} ratings\n`;
-    brief += `**Target:** 4.0\u2605+ (conversion threshold) → 4.5\u2605+ (optimal)\n`;
-    brief += `**Gap:** +${(4.0 - data.rating).toFixed(1)} stars needed to cross the 4.0 threshold\n\n`;
-    brief += `**Recovery plan for ${data.title.split(/[\-:|]/)[0].trim()}:**\n\n`;
-    brief += `1. **Analyze negative reviews** (this week):\n`;
-    brief += `   \u2022 Export recent 1-2\u2605 reviews from ${data.platform === "ios" ? "App Store Connect > Ratings and Reviews" : "Google Play Console > Reviews"}\n`;
-    brief += `   \u2022 Categorize top 3 complaint themes\n`;
-    brief += `   \u2022 Prioritize fixes by frequency \u00D7 severity\n\n`;
-    brief += `2. **Ship fixes + implement review prompts** (next sprint):\n`;
-    brief += `   \u2022 Fix the #1 complaint and mention it in release notes\n`;
-    brief += `   \u2022 ${data.platform === "ios"
-      ? "Implement SKStoreReviewController.requestReview() — Apple limits 3 prompts per device per year, so time them after:"
-      : "Implement Google Play In-App Review API — show a pre-prompt first to filter unhappy users to a feedback form:"}\n`;
-    brief += `     - Completing a key action in the app\n`;
-    brief += `     - 3rd+ session\n`;
-    brief += `     - After a positive moment (achievement, content discovery)\n\n`;
-    brief += `3. **Respond to negative reviews** (ongoing):\n`;
-    brief += `   \u2022 Reply within 24-48h with empathy + fix timeline\n`;
-    brief += `   \u2022 ${data.platform === "ios" ? "Users can update ratings after developer response" : "Users are prompted to re-rate after developer replies"}\n`;
-    brief += `   \u2022 Template: "Thanks for the feedback. We've fixed [issue] in v[X.X]. Would love for you to try again."`;
+    brief += `**Target:** 4.0\u2605+ (conversion threshold) \u2192 4.5\u2605+ (optimal)\n`;
+    brief += `**Gap:** +${(4.0 - data.rating).toFixed(1)} stars to cross the 4.0 threshold\n\n`;
+    brief += `**Recovery plan:**\n\n`;
+    brief += `**1. Analyze negative reviews** (this week):\n`;
+    brief += `   Export recent 1-2\u2605 reviews from ${data.platform === "ios" ? "App Store Connect \u203A Ratings and Reviews" : "Google Play Console \u203A Reviews"}. Categorize top 3 complaint themes. Prioritize fixes by frequency \u00D7 severity.\n\n`;
+    brief += `**2. Ship fixes + implement review prompts** (next sprint):\n`;
+    brief += `   Fix the #1 complaint and mention it in release notes.\n`;
+    brief += `   ${data.platform === "ios"
+      ? "Implement SKStoreReviewController.requestReview() \u2014 Apple limits 3 prompts per device per year. Trigger after:"
+      : "Implement Google Play In-App Review API \u2014 show a pre-prompt first to filter unhappy users to a feedback form. Trigger after:"}\n`;
+    brief += `   \u2022 Completing a key action (e.g., ${profile.features[0] || "using a core feature"})\n`;
+    brief += `   \u2022 3rd+ session\n`;
+    brief += `   \u2022 After a positive moment in ${profile.brand}\n\n`;
+    brief += `**3. Respond to negative reviews** (ongoing):\n`;
+    brief += `   Reply within 24-48h with empathy + fix timeline. ${data.platform === "ios" ? "Users can update ratings after developer response." : "Users are prompted to re-rate after developer replies."}\n`;
+    brief += `   Template: "Thanks for the feedback. We've fixed [issue] in v[X.X]. Would love for you to try again."`;
 
     actions.push({
       id: "ratings-improve",
@@ -596,16 +779,16 @@ function generateRatingsBrief(data: AppData, kw: KeywordProfile, categories: Aud
       effort: "heavy",
       category: "Ratings",
       title: `Recover rating from ${data.rating.toFixed(1)}\u2605 to 4.0\u2605+`,
-      currentState: `${data.rating.toFixed(1)}\u2605 with ${data.ratingsCount.toLocaleString()} ratings`,
+      currentState: `${data.rating.toFixed(1)}\u2605 from ${data.ratingsCount.toLocaleString()} ratings`,
       action: brief,
       brief,
       deliverables: [
         "Export and categorize recent negative reviews (top 3 themes)",
         "Ship bug fixes for #1 complaint",
-        `Implement ${data.platform === "ios" ? "SKStoreReviewController" : "In-App Review API"} triggered after positive moments`,
+        `Implement ${data.platform === "ios" ? "SKStoreReviewController" : "In-App Review API"} with smart trigger logic`,
         "Set up review monitoring and response workflow (24-48h SLA)",
       ],
-      impact: "Ratings below 4.0 reduce conversion by 50%+ and hurt search rankings",
+      impact: "Ratings below 4.0 reduce conversion by up to 50% and hurt search rankings",
       scoreBoost: "+20-40 on Ratings score",
     });
   }
@@ -613,10 +796,9 @@ function generateRatingsBrief(data: AppData, kw: KeywordProfile, categories: Aud
   if (lowCount && !lowRating) {
     let brief = `**Current volume:** ${data.ratingsCount.toLocaleString()} ratings\n`;
     brief += `**Benchmark:** 1,000+ for credible social proof, 10,000+ for strong algorithm signal\n\n`;
-    brief += `**Implementation:**\n`;
     brief += data.platform === "ios"
-      ? `Use SKStoreReviewController.requestReview():\n  \u2022 3 prompts max per device per 365 days\n  \u2022 Trigger after: task completion, 3rd session, positive outcome\n  \u2022 Never trigger after errors, purchases, or onboarding`
-      : `Use Google Play In-App Review API:\n  \u2022 Show a soft pre-prompt first ("Enjoying ${data.title.split(/[\-:|]/)[0].trim()}?")\n  \u2022 If "Yes" → trigger the system review dialog\n  \u2022 If "No" → route to in-app feedback form\n  \u2022 Quota managed by Google — cannot force-show`;
+      ? `**Implementation:** Use SKStoreReviewController.requestReview():\n  \u2022 3 prompts max per device per 365 days\n  \u2022 Trigger after: ${profile.features[0] || "completing a key action"}, 3rd session, positive outcome\n  \u2022 Never trigger after errors, purchases, or onboarding`
+      : `**Implementation:** Use Google Play In-App Review API:\n  \u2022 Show a soft pre-prompt first ("Enjoying ${profile.brand}?")\n  \u2022 If "Yes" \u2192 trigger the system review dialog\n  \u2022 If "No" \u2192 route to in-app feedback form\n  \u2022 Quota managed by Google \u2014 cannot force-show`;
 
     actions.push({
       id: "ratings-volume",
@@ -629,10 +811,10 @@ function generateRatingsBrief(data: AppData, kw: KeywordProfile, categories: Aud
       brief,
       deliverables: [
         `Implement ${data.platform === "ios" ? "SKStoreReviewController" : "In-App Review API"} with smart trigger logic`,
-        "Define 3 positive moments to trigger review prompts",
-        data.platform === "android" ? "Build soft pre-prompt UI to filter sentiment" : "Test timing with TestFlight before submission",
+        `Define 3 positive in-app moments to trigger prompt (e.g., after ${profile.features[0] || "core action"})`,
+        ...(data.platform === "android" ? ["Build soft pre-prompt UI to filter sentiment before system dialog"] : []),
       ],
-      impact: "Higher volume improves algorithm trust signals and social proof",
+      impact: "Higher volume improves algorithm trust signals and social proof on store page",
       scoreBoost: "+10-25 on Ratings score",
     });
   }
@@ -640,7 +822,7 @@ function generateRatingsBrief(data: AppData, kw: KeywordProfile, categories: Aud
   return actions;
 }
 
-function generateMaintenanceBrief(data: AppData, categories: AuditCategory[]): ActionItem[] {
+function generateMaintenanceBrief(data: AppData, profile: AppProfile, categories: AuditCategory[]): ActionItem[] {
   const cat = categories.find(c => c.id === "maintenance");
   if (!cat) return [];
   const rule = cat.results[0];
@@ -649,17 +831,17 @@ function generateMaintenanceBrief(data: AppData, categories: AuditCategory[]): A
   let brief = `**Last update:** ${rule.message}\n`;
   brief += `**Current version:** ${data.version || "unknown"}\n\n`;
   brief += `Both stores use update recency as a quality signal. Each update is also an opportunity to refresh ASO metadata.\n\n`;
-  brief += `**Update checklist for ${data.title.split(/[\-:|]/)[0].trim()}:**\n`;
+  brief += `**Update checklist for ${profile.brand}:**\n`;
   brief += `  \u2022 Ship a new build (even minor bug fixes count)\n`;
-  brief += `  \u2022 Refresh "What's New" text with feature highlights\n`;
+  brief += `  \u2022 Write "What's New" highlighting improvements\n`;
   if (data.platform === "ios") {
-    brief += `  \u2022 Update title, subtitle, and/or keyword field with latest keyword research\n`;
-    brief += `  \u2022 Refresh screenshots if needed (new screenshots = new OCR-indexable keywords)\n`;
+    brief += `  \u2022 Refresh title, subtitle, and/or keyword field with latest keyword research\n`;
+    brief += `  \u2022 Refresh screenshots if needed (new captions = new OCR-indexable keywords)\n`;
   } else {
     brief += `  \u2022 Refresh short description and full description with latest keywords\n`;
     brief += `  \u2022 Update feature graphic if seasonal opportunity exists\n`;
   }
-  brief += `  \u2022 Target: update every 4-6 weeks for optimal ranking signal`;
+  brief += `  \u2022 Target cadence: update every 4-6 weeks`;
 
   return [{
     id: "ship-update",
@@ -681,7 +863,7 @@ function generateMaintenanceBrief(data: AppData, categories: AuditCategory[]): A
   }];
 }
 
-function generateConversionBrief(data: AppData, kw: KeywordProfile, categories: AuditCategory[]): ActionItem[] {
+function generateConversionBrief(data: AppData, profile: AppProfile, categories: AuditCategory[]): ActionItem[] {
   if (data.platform !== "ios") return [];
   const cat = categories.find(c => c.id === "conversion");
   if (!cat) return [];
@@ -689,20 +871,26 @@ function generateConversionBrief(data: AppData, kw: KeywordProfile, categories: 
   const promoRule = cat.results.find(r => r.ruleId === "promotional-text");
   if (!promoRule || promoRule.score >= 80) return [];
 
-  const copyOptions = [
-    `\u2B50 ${data.version ? `New in v${data.version}: ` : ""}${kw.primary[0] ? titleCase(kw.primary[0]) : "[Latest Feature]"}. Join ${data.ratingsCount > 1000 ? Math.floor(data.ratingsCount / 1000) + "K+" : data.ratingsCount.toLocaleString()} ${kw.fromCategory.toLowerCase()} lovers worldwide.`.substring(0, 170),
-    `Discover the ${kw.fromCategory.toLowerCase()} ${data.platform === "ios" ? "app" : "experience"} that ${data.ratingsCount > 100 ? `${data.ratingsCount.toLocaleString()} users` : "thousands"} love. ${kw.primary.slice(0, 2).map(titleCase).join(", ")} & more.`.substring(0, 170),
-  ];
+  const copyOptions: string[] = [];
+  if (profile.features[0]) {
+    copyOptions.push(
+      `\u2B50 ${data.version ? `New in v${data.version}: ` : ""}${profile.features[0]}. ${data.ratingsCount > 100 ? `Join ${data.ratingsCount.toLocaleString()}+ ${profile.audience}.` : `Try ${profile.brand} today.`}`.substring(0, 170),
+    );
+  }
+  if (profile.benefits[0]) {
+    copyOptions.push(
+      `${capitalize(profile.benefits[0])} with ${profile.brand}. ${data.rating > 4 ? `${data.rating.toFixed(1)}\u2605 rated by ${profile.audience}.` : `Designed for ${profile.audience}.`}`.substring(0, 170),
+    );
+  }
 
   let brief = `**Current promotional text:** ${data.promotionalText ? `"${data.promotionalText}"` : "(not set)"}\n`;
   brief += `**Limit:** 170 characters\n`;
   brief += `**Key advantage:** Can be changed anytime WITHOUT submitting an app update\n\n`;
-  brief += `This is your most flexible metadata field. Use it for:\n`;
-  brief += `  \u2022 Seasonal campaigns ("Summer sale: 50% off Premium")\n`;
-  brief += `  \u2022 Feature announcements ("New: ${kw.primary[0] ? titleCase(kw.primary[0]) : "[Feature]"} support")\n`;
-  brief += `  \u2022 Social proof ("${data.rating > 0 ? data.rating.toFixed(1) + "\u2605" : ""} rated by ${data.ratingsCount.toLocaleString()}+ users")\n`;
-  brief += `  \u2022 Time-limited hooks ("Limited time: Free ${kw.fromCategory.toLowerCase()} trial")\n\n`;
-  brief += `Rotate the promotional text monthly to keep the store page fresh.`;
+  brief += `Use this field for:\n`;
+  brief += `  \u2022 Feature announcements ("New: ${profile.features[0] || "[latest feature]"}")\n`;
+  brief += `  \u2022 Social proof ("${data.rating > 0 ? data.rating.toFixed(1) + "\u2605 rated" : "Loved"} by ${data.ratingsCount > 100 ? data.ratingsCount.toLocaleString() + "+" : ""} ${profile.audience}")\n`;
+  brief += `  \u2022 Seasonal campaigns or limited-time offers\n\n`;
+  brief += `Rotate monthly to keep the store page fresh. This field appears above the description \u2014 it's the first text users read.`;
 
   return [{
     id: "promo-text",
@@ -713,13 +901,13 @@ function generateConversionBrief(data: AppData, kw: KeywordProfile, categories: 
     currentState: data.promotionalText ? `"${data.promotionalText}"` : "Not set",
     action: brief,
     brief,
-    copyOptions,
+    copyOptions: copyOptions.length > 0 ? copyOptions : undefined,
     deliverables: [
       "Write 2-3 promotional text variants (170 chars max)",
-      "Update in App Store Connect > App Information > Promotional Text",
+      "Update in App Store Connect \u203A App Information \u203A Promotional Text",
       "Set monthly calendar reminder to rotate messaging",
     ],
-    impact: "Appears above the description — first text users read on your store page",
+    impact: "Appears above the description \u2014 first text users read on your store page",
     scoreBoost: "+15-25 on Conversion score",
   }];
 }
@@ -733,17 +921,17 @@ export function generateActionPlan(
   categories: AuditCategory[],
   _overallScore: number
 ): ActionItem[] {
-  const kw = buildKeywordProfile(appData);
+  const profile = buildAppProfile(appData);
 
   const actions = [
-    ...generateTitleBrief(appData, kw, categories),
-    ...generateSubtitleBrief(appData, kw, categories),
-    ...generateShortDescBrief(appData, kw, categories),
-    ...generateDescriptionBrief(appData, kw, categories),
-    ...generateVisualsBrief(appData, kw, categories),
-    ...generateRatingsBrief(appData, kw, categories),
-    ...generateMaintenanceBrief(appData, categories),
-    ...generateConversionBrief(appData, kw, categories),
+    ...generateTitleBrief(appData, profile, categories),
+    ...generateSubtitleBrief(appData, profile, categories),
+    ...generateShortDescBrief(appData, profile, categories),
+    ...generateDescriptionBrief(appData, profile, categories),
+    ...generateVisualsBrief(appData, profile, categories),
+    ...generateRatingsBrief(appData, profile, categories),
+    ...generateMaintenanceBrief(appData, profile, categories),
+    ...generateConversionBrief(appData, profile, categories),
   ];
 
   return actions.sort((a, b) => {
