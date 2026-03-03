@@ -94,9 +94,15 @@ export default function Home() {
               style={{ backgroundColor: "var(--accent)", color: "#fff" }}
               aria-hidden="true"
             >
-              A
+              G
             </div>
             <span className="text-sm font-semibold tracking-tight" style={{ color: "var(--text-primary)" }}>
+              GetGrowth
+            </span>
+            <span
+              className="text-xs px-1.5 py-0.5 rounded"
+              style={{ backgroundColor: "var(--accent-bg)", color: "var(--accent)", fontWeight: 500 }}
+            >
               ASO Audit
             </span>
           </div>
@@ -120,10 +126,10 @@ export default function Home() {
           <div className="fade-in">
             <div className="text-center mb-10">
               <h1 className="text-3xl mb-3" style={{ color: "var(--text-primary)" }}>
-                App Store Optimization Audit
+                Free ASO Audit
               </h1>
               <p className="text-base" style={{ color: "var(--text-secondary)", maxWidth: "480px", margin: "0 auto" }}>
-                Analyze any app&rsquo;s metadata, visual assets, ratings, and conversion signals against ASO best practices.
+                Analyze any app&rsquo;s metadata, visual assets, ratings, and conversion signals against ASO best practices. Powered by the ASO Stack framework.
               </p>
             </div>
 
@@ -432,7 +438,8 @@ export default function Home() {
             {/* Footer */}
             <div className="mt-10 pt-6 border-t text-center fade-in fade-in-delay-3" style={{ borderColor: "var(--border)" }}>
               <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                Based on the ASO Stack framework, app-store-optimization &amp; app-store-screenshots best practices.
+                A <strong style={{ color: "var(--text-secondary)" }}>GetGrowth</strong> tool.
+                Based on the ASO Stack framework &amp; store best practices.
                 Keyword volumes are estimates. Store algorithms are proprietary and change without notice.
               </p>
             </div>
