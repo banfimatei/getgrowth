@@ -1,0 +1,118 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+:root {
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --bg-page: #faf8f5;
+  --bg-card: #ffffff;
+  --bg-card-hover: #fefcfa;
+  --bg-inset: #f3f0eb;
+  --bg-code: #f0ede8;
+  --border: #e3ddd4;
+  --border-focus: #b8a68a;
+
+  --text-primary: #1c1917;
+  --text-secondary: #78716c;
+  --text-tertiary: #a8a29e;
+
+  --accent: #c2410c;
+  --accent-muted: #ea580c;
+  --accent-bg: #fff7ed;
+
+  --score-excellent: #15803d;
+  --score-good: #a16207;
+  --score-warning: #c2410c;
+  --score-fail: #be123c;
+
+  --pass-bg: #f0fdf4;
+  --pass-border: #bbf7d0;
+  --pass-text: #166534;
+
+  --warn-bg: #fffbeb;
+  --warn-border: #fde68a;
+  --warn-text: #92400e;
+
+  --fail-bg: #fff1f2;
+  --fail-border: #fecdd3;
+  --fail-text: #9f1239;
+
+  --info-bg: #f0f9ff;
+  --info-border: #bae6fd;
+  --info-text: #075985;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  text-wrap: balance;
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+.score-ring {
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.fade-in-delay-1 { animation-delay: 0.08s; opacity: 0; }
+.fade-in-delay-2 { animation-delay: 0.16s; opacity: 0; }
+.fade-in-delay-3 { animation-delay: 0.24s; opacity: 0; }
+
+@keyframes ellipsis {
+  0% { content: ''; }
+  33% { content: '.'; }
+  66% { content: '..'; }
+  100% { content: '\2026'; }
+}
+
+.loading-ellipsis::after {
+  content: '\2026';
+  animation: ellipsis 1.2s steps(4, end) infinite;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in,
+  .fade-in-delay-1,
+  .fade-in-delay-2,
+  .fade-in-delay-3 {
+    animation: none;
+    opacity: 1;
+  }
+  .score-ring {
+    transition: none;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
