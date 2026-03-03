@@ -5,6 +5,7 @@
 //   - "Advanced App Store Optimization" (Phiture, 2022)
 
 import type { AppData, AuditCategory } from "./aso-rules";
+import type { AIAnalysis } from "./ai-analyzer";
 
 export interface ActionItem {
   id: string;
@@ -224,7 +225,7 @@ function sceneDirection(feature: string | undefined, fallback: string): string {
 // Sources: ASO skill §2 metadata, book Ch.2
 // ---------------------------------------------------------------------------
 
-function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): ActionItem[] {
+function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AIAnalysis | null): ActionItem[] {
   const cat = cats.find(c => c.id === "title");
   if (!cat) return [];
   const lengthR = cat.results.find(r => r.ruleId === "title-length");
@@ -234,7 +235,8 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): Action
   const needsKw = kwR && kwR.score < 60;
   const needsLen = lengthR && lengthR.score < 90 && remaining > 3;
   const needsFront = frontR && frontR.score < 60;
-  if (!needsKw && !needsLen && !needsFront) return [];
+  const hasAiTitle = ai?.title && ai.title.suggestions.length > 0;
+  if (!needsKw && !needsLen && !needsFront && !hasAiTitle) return [];
 
   const titleWords = new Set(data.title.toLowerCase().split(/[\s\-:|–—]+/).filter(w => w.length > 2));
   const available = p.keywords.filter(w => !titleWords.has(w)).slice(0, 6);
@@ -250,9 +252,21 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): Action
   } else if (needsLen && available[0]) {
     opts.push(`${data.title} & ${tc(available[0])}`.substring(0, 30));
   }
-  const validOpts = opts.filter(o => o.length > 0 && o.length <= 30);
+  // AI suggestions override deterministic ones when available
+  if (hasAiTitle) {
+    for (const s of ai!.title.suggestions) {
+      if (s.length <= 30 && s.length > 0) opts.push(s);
+    }
+  }
+  const validOpts = [...new Set(opts)].filter(o => o.length > 0 && o.length <= 30);
 
-  let b = `**Current:** "${data.title}" (${data.title.length}/30 chars)\n`;
+  let b = "";
+  if (hasAiTitle) {
+    b += `**AI Analysis:**\n`;
+    for (const issue of ai!.title.issues) b += `  \u2022 ${issue}\n`;
+    b += `\n${ai!.title.reasoning}\n\n`;
+  }
+  b += `**Current:** "${data.title}" (${data.title.length}/30 chars)\n`;
   b += `**Brand:** "${p.brand}" | **Descriptive keywords:** ${[...titleWords].filter(w => w.length > 2 && !p.brand.toLowerCase().includes(w)).map(w => `"${w}"`).join(", ") || "none"}\n`;
   b += `**Missing high-value keywords:** ${available.slice(0, 4).map(w => `"${w}"`).join(", ")}\n\n`;
 
@@ -302,7 +316,7 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): Action
 // Sources: ASO skill §2 metadata, book Ch.2
 // ---------------------------------------------------------------------------
 
-function subtitleBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): ActionItem[] {
+function subtitleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AIAnalysis | null): ActionItem[] {
   if (data.platform !== "ios") return [];
   const cat = cats.find(c => c.id === "subtitle");
   if (!cat) return [];
@@ -310,19 +324,30 @@ function subtitleBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): Act
   const dupeR = cat.results.find(r => r.ruleId === "subtitle-no-duplicate");
   const empty = !data.subtitle || data.subtitle.length === 0;
   const hasDupes = dupeR && dupeR.score < 70;
-  if (lengthR && !empty && lengthR.score >= 90 && !hasDupes) return [];
+  const hasAiSub = ai?.subtitle && ai.subtitle.suggestions.length > 0;
+  if (lengthR && !empty && lengthR.score >= 90 && !hasDupes && !hasAiSub) return [];
 
   const titleWords = new Set(data.title.toLowerCase().split(/[\s\-:,|–—]+/).filter(w => w.length > 2));
   const unique = p.keywords.filter(w => !titleWords.has(w) && w.length > 2).slice(0, 8);
   const verb = p.categoryVerbs[0] || "Discover";
 
   const opts: string[] = [];
+  if (hasAiSub) {
+    for (const s of ai!.subtitle!.suggestions) {
+      if (s.length <= 30 && s.length > 0) opts.push(s);
+    }
+  }
   if (unique.length >= 2) opts.push(`${verb} ${tc(unique[0])} & ${tc(unique[1])}`.substring(0, 30));
   if (p.benefits[0]) opts.push(condenseCaption(p.benefits[0], 5, 30));
   if (unique.length >= 3) opts.push(`${tc(unique[0])}, ${tc(unique[1])} & More`.substring(0, 30));
-  const validOpts = opts.filter(o => o.length > 0 && o.length <= 30);
+  const validOpts = [...new Set(opts)].filter(o => o.length > 0 && o.length <= 30);
 
   let b = "";
+  if (hasAiSub) {
+    b += `**AI Analysis:**\n`;
+    for (const issue of ai!.subtitle!.issues) b += `  \u2022 ${issue}\n`;
+    b += `\n${ai!.subtitle!.reasoning}\n\n`;
+  }
   if (empty) {
     b += `**Current subtitle:** (empty \u2014 not set)\n`;
     b += `**Title words to avoid repeating:** ${[...titleWords].filter(w => w.length > 2).map(w => `"${w}"`).join(", ")}\n`;
@@ -473,7 +498,7 @@ function shortDescBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): Ac
 // Sources: ASO skill §2, book Ch.2 — "keywords mentioned frequently and earlier have been found more relevant"
 // ---------------------------------------------------------------------------
 
-function descriptionBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): ActionItem[] {
+function descriptionBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AIAnalysis | null): ActionItem[] {
   const cat = cats.find(c => c.id === "description");
   if (!cat) return [];
   const scores = cat.results.map(r => r.score);
@@ -487,49 +512,47 @@ function descriptionBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): 
   const last200 = desc.substring(desc.length - 200).toLowerCase();
   const hasCTA = ["download", "try", "get started", "start", "join", "today", "now"].some(w => last200.includes(w));
 
+  const hasAiDesc = ai?.description && ai.description.openingHook.length > 0;
+
   let b = `**Current:** ${desc.length} chars, ~${wc} words\n`;
   b += `**First 3 lines** (visible before "Read more"): "${first200}${desc.length > 200 ? "..." : ""}"\n`;
-  b += `**Structure:** ${hasParagraphs ? "\u2705 paragraphs" : "\u274C no paragraphs"} | ${hasBullets ? "\u2705 bullet points" : "\u274C no bullets"} | ${hasCTA ? "\u2705 CTA" : "\u274C no CTA"}\n`;
-  b += `**Features detected:** ${p.features.length > 0 ? p.features.slice(0, 3).map(f => `"${f}"`).join(", ") : "None (lacks structured feature content)"}\n\n`;
+  b += `**Structure:** ${hasParagraphs ? "\u2705 paragraphs" : "\u274C no paragraphs"} | ${hasBullets ? "\u2705 bullet points" : "\u274C no bullets"} | ${hasCTA ? "\u2705 CTA" : "\u274C no CTA"}\n\n`;
 
-  // Per book Ch.2: "keywords mentioned frequently and earlier in the long description have been found to be considered more relevant"
-  const verb = p.categoryVerbs[0] || "Discover";
-
-  b += `**Recommended 4-section structure:**\n\n`;
-  b += `**1. Opening hook** (first 3 lines visible without "Read more"):\n`;
-  b += `   Lead with a single compelling sentence. Front-load primary keywords.\n`;
-  b += `   \u2022 Avoid: "Welcome to...", "This app is...", "We are..." (weak openers)\n`;
-  b += `   \u2022 Pattern: "[Action verb] [specific outcome] with [Brand]." or "[Brand] \u2014 [core benefit in one line]."\n`;
-  b += `   \u2022 Example patterns for ${data.category}:\n`;
-  b += `     "${verb} ${p.coreFunction.toLowerCase()} with ${p.brand}." \u2014 action + category + brand\n`;
-  b += `     "${p.brand}: ${condenseCaption(p.features[0] || p.coreFunction, 6, 50)}." \u2014 brand + key feature\n`;
-  if (data.ratingsCount > 100) {
-    b += `     "Loved by ${data.ratingsCount.toLocaleString()}+ ${p.audience}. ${verb} ${p.coreFunction.toLowerCase()} with ${p.brand}." \u2014 social proof + action\n`;
-  }
-  b += `   \u2022 The opening must read naturally as a complete sentence \u2014 never concatenate raw keywords\n\n`;
-
-  b += `**2. Feature list** (bullet points \u2014 scannable):\n`;
-  b += `   Rewrite each feature as a user benefit, not a technical capability.\n`;
-  if (p.features.length > 0) {
-    b += `   Your app's key features to highlight:\n`;
-    for (const f of p.features.slice(0, 5)) {
-      b += `   \u2022 ${sceneDirection(f, f)}\n`;
+  if (hasAiDesc) {
+    b += `**AI-written description draft** (ready to use):\n\n`;
+    b += `**Opening hook:**\n`;
+    b += `${ai!.description.openingHook}\n\n`;
+    b += `**Feature bullets:**\n`;
+    for (const bullet of ai!.description.featureBullets) {
+      b += `${bullet}\n`;
+    }
+    b += `\n**Call to action:**\n`;
+    b += `${ai!.description.cta}\n`;
+    if (ai!.description.keywordGaps.length > 0) {
+      b += `\n**Keyword gaps to address:** ${ai!.description.keywordGaps.map(w => `"${w}"`).join(", ")}\n`;
     }
   } else {
-    b += `   \u2022 [Feature 1] \u2014 [what the user gets, not what the code does]\n`;
-    b += `   \u2022 [Feature 2] \u2014 [outcome, not mechanism]\n`;
-    b += `   \u2022 [Feature 3] \u2014 [benefit, not spec]\n`;
-  }
-  b += `   Per ASO skill: write for humans first, SEO second. "Never miss a beat" > "Push notification system".\n\n`;
+    const verb = p.categoryVerbs[0] || "Discover";
+    b += `**Recommended 4-section structure:**\n\n`;
+    b += `**1. Opening hook** (first 3 lines visible without "Read more"):\n`;
+    b += `   Lead with a single compelling sentence. Front-load primary keywords.\n`;
+    b += `   \u2022 Avoid: "Welcome to...", "This app is...", "We are..." (weak openers)\n`;
+    b += `   \u2022 Pattern: "[Action verb] [specific outcome] with [Brand]." or "[Brand] \u2014 [core benefit in one line]."\n`;
+    b += `   \u2022 Example: "${verb} ${p.coreFunction.toLowerCase()} with ${p.brand}."\n\n`;
 
-  b += `**3. Social proof:**\n`;
-  if (data.ratingsCount > 100) {
-    b += `   Your data: ${data.rating.toFixed(1)}\u2605 from ${data.ratingsCount.toLocaleString()} ratings \u2014 use this.\n`;
+    b += `**2. Feature list** (bullet points \u2014 scannable):\n`;
+    if (p.features.length > 0) {
+      for (const f of p.features.slice(0, 5)) b += `   \u2022 ${sceneDirection(f, f)}\n`;
+    } else {
+      b += `   \u2022 [Feature] \u2014 [benefit to user]\n`;
+    }
+    b += `\n**3. Social proof:**\n`;
+    if (data.ratingsCount > 100) {
+      b += `   ${data.rating.toFixed(1)}\u2605 from ${data.ratingsCount.toLocaleString()} ratings\n`;
+    }
+    b += `   Add: press, awards, download milestones\n\n`;
+    b += `**4. CTA:** "Download ${p.brand} today."\n`;
   }
-  b += `   Include: rating, review count, download milestones, press mentions, awards, partnerships\n\n`;
-
-  b += `**4. Call to action:**\n`;
-  b += `   End with a direct prompt: "Download ${p.brand} today." or "Start [verb]ing \u2014 it's free."\n`;
 
   if (data.platform === "android") {
     b += `\n**Keyword density** (Google indexes full description):\n`;
@@ -564,7 +587,7 @@ function descriptionBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): 
 // Sources: app-store-screenshots skill (entire document systematically integrated)
 // ---------------------------------------------------------------------------
 
-function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): ActionItem[] {
+function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AIAnalysis | null): ActionItem[] {
   const actions: ActionItem[] = [];
   const cat = cats.find(c => c.id === "visuals");
   if (!cat) return actions;
@@ -633,23 +656,51 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): Acti
       }
     }
 
+    const hasAiScreenshots = ai?.screenshots && ai.screenshots.perScreenshot.length > 0;
+
     let b = `**Current:** ${data.screenshotCount}/${max} slots used\n\n`;
 
-    // Per screenshots skill: "First 3 Rule — 80% of impressions show only the first 3 screenshots"
-    b += `**The First 3 Rule** (per screenshots skill):\n`;
-    b += `80% of App Store impressions show only the first 3 screenshots. Users spend ~7 seconds on an app page. 65% of downloads happen immediately after search. Your first 3 must be a complete elevator pitch:\n`;
-    b += `  1. **What is it?** \u2014 Core value proposition\n`;
-    b += `  2. **What does it do?** \u2014 Best feature/outcome\n`;
-    b += `  3. **Why do I need it?** \u2014 Differentiator from alternatives\n\n`;
+    if (hasAiScreenshots) {
+      // AI-powered screenshot analysis with actual image review
+      b += `**AI Screenshot Analysis** (vision-powered):\n`;
+      b += `${ai!.screenshots.overallAssessment}\n`;
+      b += `**Gallery coherence:** ${ai!.screenshots.galleryCoherence}/10\n\n`;
 
-    // Gallery plan
-    b += `**Gallery plan for ${p.brand}:**\n`;
-    for (let i = 0; i < max; i++) {
-      const exists = i < data.screenshotCount;
-      const role = galleryRoles[Math.min(i, galleryRoles.length - 1)];
-      b += `\n  ${exists ? "\u2705" : "\u274C"} **Slot ${i + 1} \u2014 ${role.role}**\n`;
-      b += `     Caption: "${captions[i]}"\n`;
-      b += `     Scene: ${scenes[Math.min(i, scenes.length - 1)]}\n`;
+      b += `**Per-screenshot analysis:**\n`;
+      for (const ss of ai!.screenshots.perScreenshot) {
+        b += `\n  \u2705 **Slot ${ss.slot}:**\n`;
+        b += `     Shows: ${ss.whatItShows}\n`;
+        if (ss.captionQuality) b += `     Current caption: ${ss.captionQuality}\n`;
+        b += `     Suggested caption: "${ss.captionSuggestion}"\n`;
+        if (ss.issues.length > 0) {
+          for (const issue of ss.issues) b += `     \u274C ${issue}\n`;
+        }
+      }
+
+      if (ai!.screenshots.missingSlots.length > 0) {
+        b += `\n**Missing screenshots to add:**\n`;
+        for (const ms of ai!.screenshots.missingSlots) {
+          b += `\n  \u274C **Slot ${ms.slot}:**\n`;
+          b += `     What to show: ${ms.whatToShow}\n`;
+          b += `     Suggested caption: "${ms.captionSuggestion}"\n`;
+        }
+      }
+    } else {
+      // Deterministic fallback
+      b += `**The First 3 Rule** (per screenshots skill):\n`;
+      b += `80% of App Store impressions show only the first 3 screenshots. Users spend ~7 seconds on an app page. 65% of downloads happen immediately after search. Your first 3 must be a complete elevator pitch:\n`;
+      b += `  1. **What is it?** \u2014 Core value proposition\n`;
+      b += `  2. **What does it do?** \u2014 Best feature/outcome\n`;
+      b += `  3. **Why do I need it?** \u2014 Differentiator from alternatives\n\n`;
+
+      b += `**Gallery plan for ${p.brand}:**\n`;
+      for (let i = 0; i < max; i++) {
+        const exists = i < data.screenshotCount;
+        const role = galleryRoles[Math.min(i, galleryRoles.length - 1)];
+        b += `\n  ${exists ? "\u2705" : "\u274C"} **Slot ${i + 1} \u2014 ${role.role}**\n`;
+        b += `     Caption: "${captions[i]}"\n`;
+        b += `     Scene: ${scenes[Math.min(i, scenes.length - 1)]}\n`;
+      }
     }
 
     // Per screenshots skill: Caption Writing rules with examples
@@ -1090,22 +1141,40 @@ function localizationBrief(data: AppData, p: AppProfile): ActionItem[] {
 export function generateActionPlan(
   appData: AppData,
   categories: AuditCategory[],
-  _overallScore: number
+  _overallScore: number,
+  ai?: AIAnalysis | null,
 ): ActionItem[] {
   const p = buildProfile(appData);
 
   const actions = [
-    ...titleBrief(appData, p, categories),
-    ...subtitleBrief(appData, p, categories),
+    ...titleBrief(appData, p, categories, ai),
+    ...subtitleBrief(appData, p, categories, ai),
     ...keywordFieldBrief(appData, p, categories),
     ...shortDescBrief(appData, p, categories),
-    ...descriptionBrief(appData, p, categories),
-    ...visualsBrief(appData, p, categories),
+    ...descriptionBrief(appData, p, categories, ai),
+    ...visualsBrief(appData, p, categories, ai),
     ...ratingsBrief(appData, p, categories),
     ...maintenanceBrief(appData, p, categories),
     ...conversionBrief(appData, p, categories),
     ...localizationBrief(appData, p),
   ];
+
+  // Add AI top insights as a standalone action item
+  if (ai?.topInsights && ai.topInsights.length > 0) {
+    let b = `**Key strategic insights from AI analysis:**\n\n`;
+    for (let i = 0; i < ai.topInsights.length; i++) {
+      b += `${i + 1}. ${ai.topInsights[i]}\n`;
+    }
+    actions.unshift({
+      id: "ai-insights",
+      priority: "high", effort: "quick", category: "Strategic Insights",
+      title: "Top priorities from AI analysis",
+      currentState: `${ai.topInsights.length} insights identified`,
+      action: b, brief: b,
+      impact: "AI-identified priorities based on full listing analysis including visual review",
+      scoreBoost: "Varies by action",
+    });
+  }
 
   return actions.sort((a, b) => {
     const pr = { critical: 0, high: 1, medium: 2, low: 3 };

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { fetchAppStoreData, fetchGooglePlayData } from "@/lib/store-scraper";
 import { runAudit, calculateOverallScore } from "@/lib/aso-rules";
 import { generateActionPlan } from "@/lib/action-plan";
+import { analyzeWithAI } from "@/lib/ai-analyzer";
+
+export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
   const appId = request.nextUrl.searchParams.get("id");
@@ -17,9 +20,14 @@ export async function GET(request: NextRequest) {
       ? await fetchAppStoreData(appId, country)
       : await fetchGooglePlayData(appId, country);
 
-    const categories = runAudit(appData);
+    // Run rule-based audit and AI analysis in parallel
+    const [categories, aiAnalysis] = await Promise.all([
+      Promise.resolve(runAudit(appData)),
+      analyzeWithAI(appData),
+    ]);
+
     const overallScore = calculateOverallScore(categories);
-    const actionPlan = generateActionPlan(appData, categories, overallScore);
+    const actionPlan = generateActionPlan(appData, categories, overallScore, aiAnalysis);
 
     return NextResponse.json({
       app: {
@@ -34,6 +42,7 @@ export async function GET(request: NextRequest) {
       overallScore,
       categories,
       actionPlan,
+      aiPowered: !!aiAnalysis,
     });
   } catch (error) {
     console.error("Audit error:", error);

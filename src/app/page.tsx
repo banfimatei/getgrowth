@@ -30,6 +30,7 @@ interface AuditReport {
   overallScore: number;
   categories: AuditCategory[];
   actionPlan: ActionItem[];
+  aiPowered?: boolean;
 }
 
 type ViewState = "search" | "results" | "auditing" | "report";
@@ -431,8 +432,13 @@ export default function Home() {
             {/* Action Plan */}
             {report.actionPlan && report.actionPlan.length > 0 && (
               <div className="mb-8 fade-in fade-in-delay-2">
-                <h3 className="text-lg mb-3" style={{ color: "var(--text-primary)" }}>
+                <h3 className="text-lg mb-3 flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
                   Action Plan
+                  {report.aiPowered && (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "var(--info-bg)", color: "var(--info-text)", border: "1px solid var(--info-border)" }}>
+                      AI-Powered
+                    </span>
+                  )}
                 </h3>
                 <ActionPlan actions={report.actionPlan} />
               </div>
