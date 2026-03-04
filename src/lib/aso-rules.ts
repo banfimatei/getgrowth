@@ -46,6 +46,7 @@ export interface AppData {
   screenshots?: string[];
   whatsNew?: string;
   promotionalText?: string;
+  featureGraphicUrl?: string;
 }
 
 export interface AuditCategory {

@@ -149,6 +149,7 @@ export async function fetchGooglePlayData(appId: string, country = "us"): Promis
     iconUrl: app.icon || "",
     screenshots: app.screenshots || [],
     whatsNew: app.recentChanges || undefined,
+    featureGraphicUrl: app.headerImage || undefined,
   };
 }
 

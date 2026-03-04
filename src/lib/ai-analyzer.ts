@@ -34,6 +34,11 @@ export interface AIAnalysis {
     cta: string;
     keywordGaps: string[];
     structureIssues: string[];
+    keywordDensity?: {
+      keyword: string;
+      currentCount: number;
+      recommendedCount: number;
+    }[];
   };
   promotionalText?: {
     suggestions: string[];
@@ -69,6 +74,16 @@ export interface AIAnalysis {
       keywordClusters: string[];
       reasoning: string;
     };
+    customStoreListings?: {
+      shouldUse: boolean;
+      listingIdeas: string[];
+      reasoning: string;
+    };
+  };
+  featureGraphic?: {
+    assessment: string;
+    issues: string[];
+    suggestions: string[];
   };
   video?: {
     assessment: string;
@@ -267,6 +282,35 @@ Up to 70 custom product pages per app, each with unique screenshots per keyword 
 - Align CPP captions with target keywords for OCR indexing
 - Link CPPs to Apple Search Ads campaigns
 
+### Google Play Custom Store Listings
+Android's equivalent to CPPs — create multiple store listings per app:
+- Country-specific listings with localized screenshots and descriptions
+- Pre-registration listings with unique messaging
+- Custom listings for paid campaign landing pages
+- Each listing can have different screenshots, short description, and full description
+- Use to target different user segments or geographic markets
+- Set up in Google Play Console → Store presence → Custom store listings
+
+### Google Play Feature Graphic (1024 x 500 px)
+Required for Google Play featuring and editorial promotion. Appears at the top of the store listing.
+- Must clearly communicate what the app does
+- No excessive text — focus on visual storytelling
+- Don't duplicate screenshot content — use as a hero banner
+- Avoid small text (unreadable on mobile)
+- Should work on both light and dark backgrounds
+- Keep important content centered (edges may be cropped on some devices)
+- PNG or JPEG, 1024 x 500 px exactly
+- Update seasonally or with major feature launches
+
+### Google Play Content Policy Compliance
+Screenshots and graphics must comply with Google Play policies:
+- No fake badges, awards, or certifications unless verifiable
+- No direct competitor comparisons by name
+- No false superlative claims ("Best app", "#1 rated") without third-party verification
+- Promotional text must be under 20% of screenshot image area
+- No misleading imagery showing features not in the app
+- No inappropriate content mismatched with content rating
+
 ### Common Screenshot Mistakes (flag any found)
 1. Settings, onboarding, or login screens — show app in-use with real data
 2. Too much text — stick to 2-5 word captions, 40pt+ font
@@ -410,6 +454,7 @@ function buildUserPrompt(data: AppData): string {
 
   const imgCount = Math.min(data.screenshots?.length || 0, 8);
   if (data.iconUrl) p += `I'm including the app icon image for visual analysis.\n`;
+  if (!isIOS && data.featureGraphicUrl) p += `I'm including the Google Play feature graphic (1024x500) for visual analysis.\n`;
   if (imgCount > 0) p += `I'm including ${imgCount} screenshot images for visual analysis. Analyze each one in order.\n`;
   p += `\n`;
 
@@ -450,7 +495,18 @@ function buildUserPrompt(data: AppData): string {
   p += `    "featureBullets": ["• Benefit-focused bullet 1", "• Bullet 2", "...5-8 bullets"],\n`;
   p += `    "cta": "A complete closing CTA paragraph",\n`;
   p += `    "keywordGaps": ["keyword not found in description that should be"],\n`;
-  p += `    "structureIssues": ["specific structural problem observed"]\n`;
+  p += `    "structureIssues": ["specific structural problem observed"]`;
+
+  if (!isIOS) {
+    p += `,\n`;
+    p += `    "keywordDensity": [\n`;
+    p += `      { "keyword": "primary keyword", "currentCount": 2, "recommendedCount": 5 },\n`;
+    p += `      { "keyword": "secondary keyword", "currentCount": 0, "recommendedCount": 3 }\n`;
+    p += `    ]\n`;
+  } else {
+    p += `\n`;
+  }
+
   p += `  },\n`;
 
   p += `  "icon": {\n`;
@@ -458,6 +514,14 @@ function buildUserPrompt(data: AppData): string {
   p += `    "issues": ["specific issue"],\n`;
   p += `    "suggestions": ["specific improvement"]\n`;
   p += `  },\n`;
+
+  if (!isIOS) {
+    p += `  "featureGraphic": {\n`;
+    p += `    "assessment": "${data.featureGraphicUrl ? "Analyze the feature graphic: does it communicate the app's purpose? Is text readable? Does it work as a hero banner?" : "No feature graphic detected — this is required for Google Play featuring"}",\n`;
+    p += `    "issues": ["specific issue with the feature graphic"],\n`;
+    p += `    "suggestions": ["specific improvement for the 1024x500 graphic"]\n`;
+    p += `  },\n`;
+  }
 
   p += `  "screenshots": {\n`;
   p += `    "overallAssessment": "2-3 sentence assessment of gallery quality, story coherence, conversion effectiveness",\n`;
@@ -492,7 +556,12 @@ function buildUserPrompt(data: AppData): string {
     p += `      "reasoning": "Why CPPs would help THIS app's conversion and which audience segments to target"\n`;
     p += `    }\n`;
   } else {
-    p += `\n`;
+    p += `,\n`;
+    p += `    "customStoreListings": {\n`;
+    p += `      "shouldUse": true,\n`;
+    p += `      "listingIdeas": ["Country/segment-specific listing idea 1", "Listing idea 2"],\n`;
+    p += `      "reasoning": "Why custom store listings would help THIS app"\n`;
+    p += `    }\n`;
   }
 
   p += `  },\n`;
@@ -577,6 +646,10 @@ export async function analyzeWithAI(appData: AppData): Promise<AIAnalysis | null
 
     if (appData.iconUrl) {
       imageUrls.push({ url: appData.iconUrl, label: "App icon:" });
+    }
+
+    if (appData.featureGraphicUrl) {
+      imageUrls.push({ url: appData.featureGraphicUrl, label: "Google Play feature graphic (1024x500):" });
     }
 
     const screenshotUrls = (appData.screenshots || []).slice(0, 8);

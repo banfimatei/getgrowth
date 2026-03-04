@@ -562,6 +562,14 @@ function descriptionBrief(data: AppData, p: AppProfile, cats: AuditCategory[], a
     if (ai!.description.keywordGaps.length > 0) {
       b += `\n**Keyword gaps to address:** ${ai!.description.keywordGaps.map(w => `"${w}"`).join(", ")}\n`;
     }
+    if (data.platform === "android" && ai!.description.keywordDensity && ai!.description.keywordDensity.length > 0) {
+      b += `\n**Keyword density analysis** (Google indexes full description):\n`;
+      for (const kd of ai!.description.keywordDensity) {
+        const status = kd.currentCount >= kd.recommendedCount ? "\u2705" : "\u274C";
+        b += `  ${status} "${kd.keyword}": ${kd.currentCount}x \u2192 target ${kd.recommendedCount}x\n`;
+      }
+      b += `  Per ASO best practice: "keywords mentioned frequently and earlier have been found more relevant"\n`;
+    }
   } else {
     const verb = p.categoryVerbs[0] || "Discover";
     b += `**Recommended 4-section structure:**\n\n`;
@@ -1178,11 +1186,78 @@ function maintenanceBrief(data: AppData, p: AppProfile, cats: AuditCategory[], a
 }
 
 // ---------------------------------------------------------------------------
+// FEATURE GRAPHIC BRIEF (Android only, AI-powered)
+// ---------------------------------------------------------------------------
+
+function featureGraphicBrief(data: AppData, p: AppProfile, ai?: AIAnalysis | null): ActionItem[] {
+  const hasAiFg = ai?.featureGraphic && ai.featureGraphic.assessment.length > 0;
+  const hasFg = !!data.featureGraphicUrl;
+
+  let b = "";
+
+  if (hasAiFg) {
+    b += `**AI Feature Graphic Analysis** (vision-powered):\n`;
+    b += `${ai!.featureGraphic!.assessment}\n\n`;
+    if (ai!.featureGraphic!.issues.length > 0) {
+      b += `**Issues found:**\n`;
+      for (const issue of ai!.featureGraphic!.issues) b += `  \u2022 ${issue}\n`;
+      b += `\n`;
+    }
+    if (ai!.featureGraphic!.suggestions.length > 0) {
+      b += `**Suggestions:**\n`;
+      for (const s of ai!.featureGraphic!.suggestions) b += `  \u2022 ${s}\n`;
+      b += `\n`;
+    }
+  }
+
+  b += `**Current:** ${hasFg ? "Feature graphic detected" : "No feature graphic detected"}\n`;
+  b += `**Required size:** 1024 x 500 px (PNG or JPEG)\n\n`;
+
+  b += `**Feature graphic best practices:**\n`;
+  b += `  \u2022 Required for Google Play editorial featuring and promotion\n`;
+  b += `  \u2022 Appears as a hero banner at the top of your store listing\n`;
+  b += `  \u2022 Must clearly communicate what ${p.brand} does — visual storytelling over text\n`;
+  b += `  \u2022 Minimal text — small text is unreadable on mobile\n`;
+  b += `  \u2022 Keep important content centered (edges may crop on some devices)\n`;
+  b += `  \u2022 Works on both light and dark backgrounds\n`;
+  b += `  \u2022 Don't duplicate screenshot content — this is a hero banner, not a screenshot\n`;
+  b += `  \u2022 Update seasonally or with major feature launches\n\n`;
+
+  b += `**Content policy (Google Play):**\n`;
+  b += `  \u274C No fake badges, unverified awards, or false superlative claims\n`;
+  b += `  \u274C No direct competitor comparisons by name\n`;
+  b += `  \u274C Promotional text under 20% of image area\n`;
+  b += `  \u274C No misleading imagery showing features not in the app`;
+
+  return [{
+    id: "feature-graphic",
+    priority: hasFg ? "medium" : "high",
+    effort: "medium",
+    category: "Conversion",
+    title: hasFg ? "Optimize feature graphic for better conversion" : "Create a feature graphic (required for featuring)",
+    currentState: hasFg ? "Feature graphic exists" : "No feature graphic",
+    action: b, brief: b,
+    deliverables: [
+      "Design feature graphic at exactly 1024 x 500 px",
+      "Test readability on mobile (small screen)",
+      "Upload to Google Play Console \u203A Store Listing \u203A Feature graphic",
+      "A/B test via Store Listing Experiments",
+    ],
+    impact: "Required for Google Play editorial featuring; appears as hero banner on listing page",
+    scoreBoost: "+10-20 on Conversion score",
+  }];
+}
+
+// ---------------------------------------------------------------------------
 // CONVERSION / PROMOTIONAL TEXT BRIEF
 // ---------------------------------------------------------------------------
 
 function conversionBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AIAnalysis | null): ActionItem[] {
-  if (data.platform !== "ios") return [];
+  // Android: feature graphic brief
+  if (data.platform === "android") {
+    return featureGraphicBrief(data, p, ai);
+  }
+
   const cat = cats.find(c => c.id === "conversion");
   if (!cat) return [];
   const promoR = cat.results.find(r => r.ruleId === "promotional-text");
@@ -1391,11 +1466,64 @@ function abTestingBrief(data: AppData, _p: AppProfile, ai?: AIAnalysis | null): 
 }
 
 // ---------------------------------------------------------------------------
+// CUSTOM STORE LISTINGS BRIEF (Android, AI-powered)
+// ---------------------------------------------------------------------------
+
+function customStoreListingsBrief(data: AppData, ai?: AIAnalysis | null): ActionItem[] {
+  const hasAi = ai?.screenshots?.customStoreListings && ai.screenshots.customStoreListings.shouldUse;
+  if (!hasAi) return [];
+
+  const csl = ai!.screenshots!.customStoreListings!;
+  let b = `**AI Custom Store Listings Recommendation:**\n${csl.reasoning}\n\n`;
+
+  if (csl.listingIdeas.length > 0) {
+    b += `**Listing ideas for ${data.title}:**\n`;
+    for (let i = 0; i < csl.listingIdeas.length; i++) {
+      b += `  ${i + 1}. ${csl.listingIdeas[i]}\n`;
+    }
+    b += `\n`;
+  }
+
+  b += `**Google Play Custom Store Listings:**\n`;
+  b += `  \u2022 Create multiple store listings per app (Android's equivalent to iOS CPPs)\n`;
+  b += `  \u2022 Country-specific listings with localized screenshots and descriptions\n`;
+  b += `  \u2022 Custom listings for paid campaign landing pages\n`;
+  b += `  \u2022 Each listing can have different screenshots, short description, and full description\n`;
+  b += `  \u2022 Set up in Google Play Console \u203A Store presence \u203A Custom store listings\n\n`;
+
+  b += `**Implementation:**\n`;
+  b += `  1. Identify target segments (countries, campaign audiences, user types)\n`;
+  b += `  2. Create tailored screenshots and descriptions for each segment\n`;
+  b += `  3. Link custom listings to paid campaigns for targeted landing pages\n`;
+  b += `  4. Monitor conversion rates per listing vs default`;
+
+  return [{
+    id: "custom-store-listings",
+    priority: "medium", effort: "heavy", category: "Custom Store Listings",
+    title: `Create ${csl.listingIdeas.length} custom store listings for targeted conversion`,
+    currentState: "Default listing only",
+    action: b, brief: b,
+    deliverables: [
+      ...csl.listingIdeas.map(idea => `Create listing: "${idea}"`),
+      "Design segment-specific screenshots for each listing",
+      "Set up in Google Play Console \u203A Custom store listings",
+      "Link to relevant ad campaigns",
+    ],
+    impact: "Custom listings improve conversion for specific audiences and ad campaigns",
+    scoreBoost: "Improves conversion for targeted segments",
+  }];
+}
+
+// ---------------------------------------------------------------------------
 // CPP STRATEGY BRIEF (iOS, AI-powered)
 // ---------------------------------------------------------------------------
 
 function cppBrief(data: AppData, _p: AppProfile, ai?: AIAnalysis | null): ActionItem[] {
-  if (data.platform !== "ios") return [];
+  // Android: custom store listings (equivalent to CPPs)
+  if (data.platform === "android") {
+    return customStoreListingsBrief(data, ai);
+  }
+
   const hasCpp = ai?.screenshots?.cppStrategy && ai.screenshots.cppStrategy.shouldUseCPPs;
   if (!hasCpp) return [];
 
