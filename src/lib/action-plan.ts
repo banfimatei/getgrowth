@@ -393,23 +393,35 @@ function subtitleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?:
 // Sources: ASO skill §2 metadata — "Apple keyword field: no plurals, no duplicates, no spaces between commas"
 // ---------------------------------------------------------------------------
 
-function keywordFieldBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): ActionItem[] {
+function keywordFieldBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AIAnalysis | null): ActionItem[] {
   if (data.platform !== "ios") return [];
 
-  // Only surface this brief when other metadata signals suggest the developer
-  // hasn't done thorough ASO work. If title and subtitle are well-optimized,
-  // the developer likely already knows about the keyword field.
+  const hasAiKw = ai?.keywordField && ai.keywordField.suggestedKeywords.length > 0;
+
+  // Surface when: AI has suggestions, OR metadata signals suggest developer
+  // hasn't done thorough ASO work.
   const titleCat = cats.find(c => c.id === "title");
   const subtitleCat = cats.find(c => c.id === "subtitle");
   const titleScore = titleCat?.score ?? 100;
   const subtitleScore = subtitleCat?.score ?? 100;
-  if (titleScore >= 75 && subtitleScore >= 75) return [];
+  if (titleScore >= 75 && subtitleScore >= 75 && !hasAiKw) return [];
 
   const titleWords = new Set(data.title.toLowerCase().split(/[\s\-:,|–—]+/).filter(w => w.length > 2));
   const subtitleWords = new Set((data.subtitle || "").toLowerCase().split(/[\s\-:,|–—]+/).filter(w => w.length > 2));
   const usedWords = new Set([...titleWords, ...subtitleWords]);
 
   let b = `**Note:** We cannot see your keyword field contents (private to App Store Connect). This guidance assumes it may need optimization based on other metadata gaps detected in your title and subtitle.\n\n`;
+
+  if (hasAiKw) {
+    b += `**AI Keyword Recommendations:**\n`;
+    b += `${ai!.keywordField!.reasoning}\n\n`;
+    b += `**Suggested keywords** (single words to add): ${ai!.keywordField!.suggestedKeywords.join(", ")}\n`;
+    if (ai!.keywordField!.avoidKeywords.length > 0) {
+      b += `**Avoid** (already covered or wasteful): ${ai!.keywordField!.avoidKeywords.join(", ")}\n`;
+    }
+    b += `\n`;
+  }
+
   b += `**Field:** 100 characters, comma-separated, invisible to users\n`;
   b += `**Budget:** title (30) + subtitle (30) + keyword field (100) = 160 indexable characters total\n`;
   b += `**Words already used in title/subtitle:** ${[...usedWords].filter(w => w.length > 2).map(w => `"${w}"`).join(", ")}\n\n`;
@@ -454,20 +466,34 @@ function keywordFieldBrief(data: AppData, p: AppProfile, cats: AuditCategory[]):
 // SHORT DESCRIPTION BRIEF (Android)
 // ---------------------------------------------------------------------------
 
-function shortDescBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): ActionItem[] {
+function shortDescBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AIAnalysis | null): ActionItem[] {
   if (data.platform !== "android") return [];
   const cat = cats.find(c => c.id === "short-description");
   if (!cat) return [];
   const rule = cat.results[0];
-  if (!rule || rule.score >= 80) return [];
+  const hasAiShort = ai?.shortDescription && ai.shortDescription.suggestions.length > 0;
+  if (!rule || (rule.score >= 80 && !hasAiShort)) return [];
 
   const verb = p.categoryVerbs[0] || "Discover";
   const opts: string[] = [];
+
+  if (hasAiShort) {
+    for (const s of ai!.shortDescription!.suggestions) {
+      if (s.length <= 80 && s.length > 0) opts.push(s);
+    }
+  }
+
   const condensedFeat = p.features[0] ? condenseCaption(p.features[0], 6, 50) : "";
   if (condensedFeat) opts.push(`${verb} ${p.coreFunction.toLowerCase()}. ${condensedFeat}.`.substring(0, 80));
   opts.push(`${p.brand}: ${p.coreFunction} for ${p.audience}.`.substring(0, 80));
 
-  let b = `**Current:** ${data.shortDescription ? `"${data.shortDescription}" (${data.shortDescription.length}/80 chars)` : "(empty)"}\n`;
+  let b = "";
+  if (hasAiShort) {
+    b += `**AI Analysis:**\n`;
+    for (const issue of ai!.shortDescription!.issues) b += `  \u2022 ${issue}\n`;
+    b += `\n${ai!.shortDescription!.reasoning}\n\n`;
+  }
+  b += `**Current:** ${data.shortDescription ? `"${data.shortDescription}" (${data.shortDescription.length}/80 chars)` : "(empty)"}\n`;
   b += `**Primary keywords:** ${p.keywords.slice(0, 5).map(w => `"${w}"`).join(", ")}\n\n`;
   b += `The short description appears in Google Play search results and is the second-most indexed text field. Front-load your primary keyword in the first 3 words.\n\n`;
   b += `**Rules:**\n`;
@@ -519,6 +545,11 @@ function descriptionBrief(data: AppData, p: AppProfile, cats: AuditCategory[], a
   b += `**Structure:** ${hasParagraphs ? "\u2705 paragraphs" : "\u274C no paragraphs"} | ${hasBullets ? "\u2705 bullet points" : "\u274C no bullets"} | ${hasCTA ? "\u2705 CTA" : "\u274C no CTA"}\n\n`;
 
   if (hasAiDesc) {
+    if (ai!.description.structureIssues && ai!.description.structureIssues.length > 0) {
+      b += `**Structural issues found:**\n`;
+      for (const issue of ai!.description.structureIssues) b += `  \u2022 ${issue}\n`;
+      b += `\n`;
+    }
     b += `**AI-written description draft** (ready to use):\n\n`;
     b += `**Opening hook:**\n`;
     b += `${ai!.description.openingHook}\n\n`;
@@ -579,6 +610,58 @@ function descriptionBrief(data: AppData, p: AppProfile, cats: AuditCategory[], a
     ],
     impact: data.platform === "android" ? "Google indexes the full description \u2014 structure and density directly affect rankings" : "Better conversion rate + web SEO",
     scoreBoost: "+15-30 on Description score",
+  }];
+}
+
+// ---------------------------------------------------------------------------
+// ICON BRIEF (AI-powered vision analysis)
+// ---------------------------------------------------------------------------
+
+function iconBrief(data: AppData, p: AppProfile, ai?: AIAnalysis | null): ActionItem[] {
+  const hasAiIcon = ai?.icon && ai.icon.assessment.length > 0;
+  if (!hasAiIcon) return [];
+
+  const hasIssues = ai!.icon!.issues.length > 0;
+  if (!hasIssues && ai!.icon!.suggestions.length === 0) return [];
+
+  let b = `**AI Icon Analysis** (vision-powered):\n`;
+  b += `${ai!.icon!.assessment}\n\n`;
+
+  if (hasIssues) {
+    b += `**Issues found:**\n`;
+    for (const issue of ai!.icon!.issues) b += `  \u2022 ${issue}\n`;
+    b += `\n`;
+  }
+
+  if (ai!.icon!.suggestions.length > 0) {
+    b += `**Suggestions:**\n`;
+    for (const s of ai!.icon!.suggestions) b += `  \u2022 ${s}\n`;
+    b += `\n`;
+  }
+
+  b += `**Icon best practices:**\n`;
+  b += `  \u2022 Must be recognizable at 60x60px — the smallest display size\n`;
+  b += `  \u2022 Simple, bold shapes with high contrast\n`;
+  b += `  \u2022 Should communicate the app's purpose at a glance\n`;
+  b += `  \u2022 Test against both light and dark backgrounds\n`;
+  b += `  \u2022 Unique within your category — avoid looking like competitors`;
+
+  return [{
+    id: "icon-optimize",
+    priority: hasIssues ? "high" : "medium",
+    effort: "medium",
+    category: "Icon",
+    title: "Improve app icon based on visual analysis",
+    currentState: "Icon analyzed via AI vision",
+    action: b, brief: b,
+    deliverables: [
+      "Design 2-3 icon variants addressing the issues above",
+      "Test at 60x60px, 120x120px, and 1024x1024px sizes",
+      `Upload to ${data.platform === "ios" ? "App Store Connect" : "Google Play Console"}`,
+      `A/B test with ${data.platform === "ios" ? "Apple PPO" : "Google Play Store Listing Experiments"}`,
+    ],
+    impact: "Icon is the first thing users see in search — affects tap-through rate before anything else",
+    scoreBoost: "+5-15 on overall conversion",
   }];
 }
 
@@ -661,16 +744,21 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
     let b = `**Current:** ${data.screenshotCount}/${max} slots used\n\n`;
 
     if (hasAiScreenshots) {
-      // AI-powered screenshot analysis with actual image review
       b += `**AI Screenshot Analysis** (vision-powered):\n`;
       b += `${ai!.screenshots.overallAssessment}\n`;
       b += `**Gallery coherence:** ${ai!.screenshots.galleryCoherence}/10\n\n`;
+
+      if (ai!.screenshots.firstThreeVerdict) {
+        b += `**First 3 Rule verdict:** ${ai!.screenshots.firstThreeVerdict}\n\n`;
+      }
 
       b += `**Per-screenshot analysis:**\n`;
       for (const ss of ai!.screenshots.perScreenshot) {
         b += `\n  \u2705 **Slot ${ss.slot}:**\n`;
         b += `     Shows: ${ss.whatItShows}\n`;
-        if (ss.captionQuality) b += `     Current caption: ${ss.captionQuality}\n`;
+        if (ss.style) b += `     Style: ${ss.style}\n`;
+        if (ss.captionVisible && ss.captionVisible !== "none") b += `     Visible caption: "${ss.captionVisible}"\n`;
+        if (ss.captionQuality) b += `     Caption assessment: ${ss.captionQuality}\n`;
         b += `     Suggested caption: "${ss.captionSuggestion}"\n`;
         if (ss.issues.length > 0) {
           for (const issue of ss.issues) b += `     \u274C ${issue}\n`;
@@ -683,7 +771,13 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
           b += `\n  \u274C **Slot ${ms.slot}:**\n`;
           b += `     What to show: ${ms.whatToShow}\n`;
           b += `     Suggested caption: "${ms.captionSuggestion}"\n`;
+          if (ms.recommendedStyle) b += `     Recommended style: ${ms.recommendedStyle}\n`;
         }
+      }
+
+      if (ai!.screenshots.commonMistakesFound && ai!.screenshots.commonMistakesFound.length > 0) {
+        b += `\n**Common mistakes detected:**\n`;
+        for (const m of ai!.screenshots.commonMistakesFound) b += `  \u274C ${m}\n`;
       }
     } else {
       // Deterministic fallback
@@ -863,27 +957,41 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
 
   // --- VIDEO BRIEF ---
   if (videoR && videoR.score < 60) {
+    const hasAiVideo = ai?.video && ai.video.storyboard.length > 0;
     const vFeats = p.features.slice(0, 4).map(f => sceneDirection(f, ""));
-    let b = `**Current:** No preview video detected\n\n`;
+    let b = `**Current:** ${data.hasVideo ? "Video detected" : "No preview video detected"}\n\n`;
 
-    b += `**Video storyboard for ${p.brand}:**\n\n`;
-
-    if (data.platform === "ios") {
-      b += `  \u2022 **0-3s \u2014 Hook:** ${vFeats[0] || `Core ${p.coreFunction} experience`} \u2014 the wow moment that stops scrolling\n`;
-      b += `  \u2022 **3-10s \u2014 Feature 1:** ${vFeats[1] || "Primary use case"} \u2014 demonstrate with real content\n`;
-      b += `  \u2022 **10-18s \u2014 Feature 2:** ${vFeats[2] || "Key differentiator"} \u2014 what makes ${p.brand} unique\n`;
-      b += `  \u2022 **18-25s \u2014 Feature 3:** ${vFeats[3] || "Social proof or advanced feature"}\n`;
-      b += `  \u2022 **25-30s \u2014 CTA:** ${p.brand} app icon + tagline\n\n`;
-      b += `  **Specs:** 15-30s, H.264 .mov or .mp4, no letterboxing\n`;
-      b += `  **Sizes:** 1320x2868 (6.9"), 1290x2796 (6.7"), 1284x2778 (6.5"), 1242x2208 (5.5")\n`;
-      b += `  **Rules:** Real app footage only (no renders), no people outside the device, loops silently in store, audio optional\n`;
+    if (hasAiVideo) {
+      b += `**AI Video Assessment:**\n${ai!.video!.assessment}\n\n`;
+      b += `**AI-recommended storyboard for ${p.brand}:**\n\n`;
+      for (const seg of ai!.video!.storyboard) {
+        b += `  \u2022 **${seg.duration} \u2014 ${seg.segment}:** ${seg.content}\n`;
+      }
     } else {
-      b += `  \u2022 **0-3s \u2014 Hook:** Most compelling ${p.coreFunction} moment\n`;
-      b += `  \u2022 **3-15s \u2014 Core loop:** ${vFeats[0] || "Main feature"} in action\n`;
-      b += `  \u2022 **15-25s \u2014 Features:** ${vFeats[1] || "Feature 2"} + ${vFeats[2] || "Feature 3"}\n`;
-      b += `  \u2022 **25-30s \u2014 CTA:** Download prompt + ${p.brand} branding\n\n`;
-      b += `  **Specs:** 30s-2min YouTube video, landscape preferred\n`;
-      b += `  **Upload:** YouTube URL in Google Play Console \u203A Promo video\n`;
+      b += `**Video storyboard for ${p.brand}:**\n\n`;
+
+      if (data.platform === "ios") {
+        b += `  \u2022 **0-3s \u2014 Hook:** ${vFeats[0] || `Core ${p.coreFunction} experience`} \u2014 the wow moment that stops scrolling\n`;
+        b += `  \u2022 **3-10s \u2014 Feature 1:** ${vFeats[1] || "Primary use case"} \u2014 demonstrate with real content\n`;
+        b += `  \u2022 **10-18s \u2014 Feature 2:** ${vFeats[2] || "Key differentiator"} \u2014 what makes ${p.brand} unique\n`;
+        b += `  \u2022 **18-25s \u2014 Feature 3:** ${vFeats[3] || "Social proof or advanced feature"}\n`;
+        b += `  \u2022 **25-30s \u2014 CTA:** ${p.brand} app icon + tagline\n`;
+      } else {
+        b += `  \u2022 **0-3s \u2014 Hook:** Most compelling ${p.coreFunction} moment\n`;
+        b += `  \u2022 **3-15s \u2014 Core loop:** ${vFeats[0] || "Main feature"} in action\n`;
+        b += `  \u2022 **15-25s \u2014 Features:** ${vFeats[1] || "Feature 2"} + ${vFeats[2] || "Feature 3"}\n`;
+        b += `  \u2022 **25-30s \u2014 CTA:** Download prompt + ${p.brand} branding\n`;
+      }
+    }
+
+    b += `\n`;
+    if (data.platform === "ios") {
+      b += `**Specs:** 15-30s, H.264 .mov or .mp4, no letterboxing\n`;
+      b += `**Sizes:** 1320x2868 (6.9"), 1290x2796 (6.7"), 1284x2778 (6.5"), 1242x2208 (5.5")\n`;
+      b += `**Rules:** Real app footage only (no renders), no people outside the device, loops silently in store, audio optional\n`;
+    } else {
+      b += `**Specs:** 30s-2min YouTube video, landscape preferred\n`;
+      b += `**Upload:** YouTube URL in Google Play Console \u203A Promo video\n`;
     }
 
     b += `\n**Hook is everything:** The first 3 seconds determine whether users watch or scroll. Show your core outcome immediately \u2014 not a logo animation or loading screen.`;
@@ -913,15 +1021,23 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
 // Sources: ASO skill §7 review analysis, §1 keyword research (review keyword extraction)
 // ---------------------------------------------------------------------------
 
-function ratingsBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): ActionItem[] {
+function ratingsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AIAnalysis | null): ActionItem[] {
   const actions: ActionItem[] = [];
   const cat = cats.find(c => c.id === "ratings");
   if (!cat) return actions;
   const scoreR = cat.results.find(r => r.ruleId === "rating-score");
   const countR = cat.results.find(r => r.ruleId === "ratings-count");
+  const hasAiRatings = ai?.ratings && ai.ratings.assessment.length > 0;
 
   if (scoreR && data.rating > 0 && data.rating < 4.0) {
-    let b = `**Current:** ${data.rating.toFixed(1)}\u2605 from ${data.ratingsCount.toLocaleString()} ratings\n`;
+    let b = "";
+    if (hasAiRatings) {
+      b += `**AI Assessment:**\n${ai!.ratings!.assessment}\n\n`;
+      if (ai!.ratings!.promptStrategy) {
+        b += `**Recommended prompt timing:** ${ai!.ratings!.promptStrategy}\n\n`;
+      }
+    }
+    b += `**Current:** ${data.rating.toFixed(1)}\u2605 from ${data.ratingsCount.toLocaleString()} ratings\n`;
     b += `**Target:** 4.0\u2605+ (conversion threshold) \u2192 4.5\u2605+ (optimal)\n\n`;
 
     b += `**Recovery plan** (per ASO skill: review analysis \u2192 fixes \u2192 prompts \u2192 responses):\n\n`;
@@ -973,7 +1089,12 @@ function ratingsBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): Acti
   }
 
   if (countR && countR.score < 60 && !(scoreR && data.rating < 4.0)) {
-    let b = `**Current:** ${data.ratingsCount.toLocaleString()} ratings\n`;
+    let b = "";
+    if (hasAiRatings) {
+      b += `**AI Assessment:**\n${ai!.ratings!.assessment}\n\n`;
+      if (ai!.ratings!.promptStrategy) b += `**Recommended prompt timing:** ${ai!.ratings!.promptStrategy}\n\n`;
+    }
+    b += `**Current:** ${data.ratingsCount.toLocaleString()} ratings\n`;
     b += `**Benchmark:** 1,000+ for social proof, 10,000+ for strong algorithm signal\n\n`;
     b += data.platform === "ios"
       ? `**Implementation:** SKStoreReviewController.requestReview()\n  \u2022 3 prompts max per device per 365 days\n  \u2022 Trigger after: ${p.features[0] ? sceneDirection(p.features[0], "completing a key action") : "completing a key action"}, 3rd session, positive outcome\n  \u2022 Never after errors, purchases, or onboarding`
@@ -1002,13 +1123,22 @@ function ratingsBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): Acti
 // MAINTENANCE BRIEF
 // ---------------------------------------------------------------------------
 
-function maintenanceBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): ActionItem[] {
+function maintenanceBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AIAnalysis | null): ActionItem[] {
   const cat = cats.find(c => c.id === "maintenance");
   if (!cat) return [];
   const rule = cat.results[0];
-  if (!rule || rule.score >= 70) return [];
+  const hasAiMaint = ai?.maintenance && ai.maintenance.assessment.length > 0;
+  if (!rule || (rule.score >= 70 && !hasAiMaint)) return [];
 
-  let b = `**Last update:** ${rule.message}\n`;
+  let b = "";
+  if (hasAiMaint) {
+    b += `**AI Assessment:**\n${ai!.maintenance!.assessment}\n\n`;
+    if (ai!.maintenance!.suggestions.length > 0) {
+      for (const s of ai!.maintenance!.suggestions) b += `  \u2022 ${s}\n`;
+      b += `\n`;
+    }
+  }
+  b += `**Last update:** ${rule?.message || "unknown"}\n`;
   b += `**Current version:** ${data.version || "unknown"}\n\n`;
   b += `Both stores use update recency as a quality signal. Each update is also a metadata refresh opportunity.\n\n`;
   b += `**Update checklist for ${p.brand}:**\n`;
@@ -1045,14 +1175,22 @@ function maintenanceBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): 
 // CONVERSION / PROMOTIONAL TEXT BRIEF
 // ---------------------------------------------------------------------------
 
-function conversionBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): ActionItem[] {
+function conversionBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AIAnalysis | null): ActionItem[] {
   if (data.platform !== "ios") return [];
   const cat = cats.find(c => c.id === "conversion");
   if (!cat) return [];
   const promoR = cat.results.find(r => r.ruleId === "promotional-text");
-  if (!promoR || promoR.score >= 80) return [];
+  const hasAiPromo = ai?.promotionalText && ai.promotionalText.suggestions.length > 0;
+  if (!promoR || (promoR.score >= 80 && !hasAiPromo)) return [];
 
   const opts: string[] = [];
+
+  if (hasAiPromo) {
+    for (const s of ai!.promotionalText!.suggestions) {
+      if (s.length <= 170 && s.length > 0) opts.push(s);
+    }
+  }
+
   const featSnippet = p.features[0] ? sceneDirection(p.features[0], p.coreFunction) : p.coreFunction;
   if (data.version) {
     opts.push(`\u2B50 New in v${data.version}: ${featSnippet}. ${data.ratingsCount > 100 ? `Join ${data.ratingsCount.toLocaleString()}+ ${p.audience}.` : `Try ${p.brand} today.`}`.substring(0, 170));
@@ -1061,7 +1199,11 @@ function conversionBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): A
     opts.push(`${data.rating.toFixed(1)}\u2605 rated by ${data.ratingsCount.toLocaleString()}+ ${p.audience}. ${cap(p.categoryVerbs[0] || "Discover")} ${p.coreFunction.toLowerCase()} with ${p.brand}.`.substring(0, 170));
   }
 
-  let b = `**Current:** ${data.promotionalText ? `"${data.promotionalText}"` : "(not set)"}\n`;
+  let b = "";
+  if (hasAiPromo) {
+    b += `**AI Analysis:**\n${ai!.promotionalText!.reasoning}\n\n`;
+  }
+  b += `**Current:** ${data.promotionalText ? `"${data.promotionalText}"` : "(not set)"}\n`;
   b += `**Limit:** 170 characters\n`;
   b += `**Key advantage:** Can be changed anytime WITHOUT an app update\n\n`;
   b += `Use for:\n`;
@@ -1092,11 +1234,24 @@ function conversionBrief(data: AppData, p: AppProfile, cats: AuditCategory[]): A
 // Sources: ASO skill §6 localization, screenshots skill localization section
 // ---------------------------------------------------------------------------
 
-function localizationBrief(data: AppData, p: AppProfile): ActionItem[] {
-  // Per ASO skill: "International Expansion: Market prioritization → Metadata translation → Cultural keyword adaptation → ROI analysis"
+function localizationBrief(data: AppData, p: AppProfile, ai?: AIAnalysis | null): ActionItem[] {
+  const hasAiLoc = ai?.localization && ai.localization.reasoning.length > 0;
+
   let b = `**Current state:** English only (assumed from audit)\n\n`;
 
-  // Per screenshots skill localization tiers
+  if (hasAiLoc) {
+    b += `**AI Localization Assessment:**\n`;
+    b += `**Priority:** ${ai!.localization!.priority}\n`;
+    b += `${ai!.localization!.reasoning}\n\n`;
+    if (ai!.localization!.tier1Markets.length > 0) {
+      b += `**Recommended Tier 1 markets** (full localization): ${ai!.localization!.tier1Markets.join(", ")}\n`;
+    }
+    if (ai!.localization!.tier2Markets.length > 0) {
+      b += `**Recommended Tier 2 markets** (translated captions): ${ai!.localization!.tier2Markets.join(", ")}\n`;
+    }
+    b += `\n`;
+  }
+
   b += `**Market tiers** (per ASO/screenshots skills):\n\n`;
   b += `  **Tier 1 \u2014 Full localization** (new screenshots + translated captions + local keywords):\n`;
   b += `    Japanese, Korean, Chinese (Simplified)\n`;
@@ -1149,14 +1304,15 @@ export function generateActionPlan(
   const actions = [
     ...titleBrief(appData, p, categories, ai),
     ...subtitleBrief(appData, p, categories, ai),
-    ...keywordFieldBrief(appData, p, categories),
-    ...shortDescBrief(appData, p, categories),
+    ...keywordFieldBrief(appData, p, categories, ai),
+    ...shortDescBrief(appData, p, categories, ai),
     ...descriptionBrief(appData, p, categories, ai),
+    ...iconBrief(appData, p, ai),
     ...visualsBrief(appData, p, categories, ai),
-    ...ratingsBrief(appData, p, categories),
-    ...maintenanceBrief(appData, p, categories),
-    ...conversionBrief(appData, p, categories),
-    ...localizationBrief(appData, p),
+    ...ratingsBrief(appData, p, categories, ai),
+    ...maintenanceBrief(appData, p, categories, ai),
+    ...conversionBrief(appData, p, categories, ai),
+    ...localizationBrief(appData, p, ai),
   ];
 
   // Add AI top insights as a standalone action item

@@ -89,6 +89,7 @@ export async function fetchAppStoreData(appId: string, country = "us"): Promise<
     iconUrl: app.artworkUrl512 || app.artworkUrl100 || "",
     screenshots: screenshotUrls,
     promotionalText: promotionalText || undefined,
+    whatsNew: app.releaseNotes || undefined,
   };
 }
 
@@ -147,6 +148,7 @@ export async function fetchGooglePlayData(appId: string, country = "us"): Promis
     url: app.url || `https://play.google.com/store/apps/details?id=${appId}`,
     iconUrl: app.icon || "",
     screenshots: app.screenshots || [],
+    whatsNew: app.recentChanges || undefined,
   };
 }
 
