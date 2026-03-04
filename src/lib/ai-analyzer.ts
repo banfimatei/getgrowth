@@ -64,6 +64,11 @@ export interface AIAnalysis {
       recommendedStyle: string;
     }[];
     commonMistakesFound: string[];
+    cppStrategy?: {
+      shouldUseCPPs: boolean;
+      keywordClusters: string[];
+      reasoning: string;
+    };
   };
   video?: {
     assessment: string;
@@ -78,8 +83,22 @@ export interface AIAnalysis {
     promptStrategy: string;
     suggestions: string[];
   };
+  whatsNew?: {
+    assessment: string;
+    suggestions: string[];
+  };
+  abTesting?: {
+    priority: string;
+    experiments: {
+      name: string;
+      hypothesis: string;
+      variants: string[];
+      metric: string;
+    }[];
+  };
   maintenance?: {
     assessment: string;
+    seasonalOpportunities: string[];
     suggestions: string[];
   };
   localization?: {
@@ -463,7 +482,19 @@ function buildUserPrompt(data: AppData): string {
   p += `        "recommendedStyle": "device-frame-with-caption"\n`;
   p += `      }\n`;
   p += `    ],\n`;
-  p += `    "commonMistakesFound": ["List any of the 12 common screenshot mistakes you observe"]\n`;
+  p += `    "commonMistakesFound": ["List any of the 12 common screenshot mistakes you observe"]`;
+
+  if (isIOS) {
+    p += `,\n`;
+    p += `    "cppStrategy": {\n`;
+    p += `      "shouldUseCPPs": true,\n`;
+    p += `      "keywordClusters": ["cluster 1 keywords", "cluster 2 keywords", "...high-intent keyword groups that deserve dedicated product pages"],\n`;
+    p += `      "reasoning": "Why CPPs would help THIS app's conversion and which audience segments to target"\n`;
+    p += `    }\n`;
+  } else {
+    p += `\n`;
+  }
+
   p += `  },\n`;
 
   p += `  "video": {\n`;
@@ -483,8 +514,28 @@ function buildUserPrompt(data: AppData): string {
   p += `    "suggestions": ["specific suggestion 1", "suggestion 2"]\n`;
   p += `  },\n`;
 
+  if (data.whatsNew) {
+    p += `  "whatsNew": {\n`;
+    p += `    "assessment": "Assessment of current What's New / release notes quality",\n`;
+    p += `    "suggestions": ["Rewritten What's New copy option 1", "Option 2"]\n`;
+    p += `  },\n`;
+  }
+
+  p += `  "abTesting": {\n`;
+  p += `    "priority": "high | medium | low — how urgently this app should run experiments",\n`;
+  p += `    "experiments": [\n`;
+  p += `      {\n`;
+  p += `        "name": "Name of the experiment",\n`;
+  p += `        "hypothesis": "If we change X, then Y will improve because Z",\n`;
+  p += `        "variants": ["Control: current state", "Variant A: specific change", "Variant B: specific change"],\n`;
+  p += `        "metric": "Primary metric to track (e.g., conversion rate, tap-through rate)"\n`;
+  p += `      }\n`;
+  p += `    ]\n`;
+  p += `  },\n`;
+
   p += `  "maintenance": {\n`;
   p += `    "assessment": "How fresh/stale the app looks based on last update, version, and what's new text",\n`;
+  p += `    "seasonalOpportunities": ["Upcoming seasonal opportunity relevant to THIS app's category"],\n`;
   p += `    "suggestions": ["specific suggestion"]\n`;
   p += `  },\n`;
 

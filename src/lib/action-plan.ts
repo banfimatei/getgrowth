@@ -1133,7 +1133,13 @@ function maintenanceBrief(data: AppData, p: AppProfile, cats: AuditCategory[], a
   let b = "";
   if (hasAiMaint) {
     b += `**AI Assessment:**\n${ai!.maintenance!.assessment}\n\n`;
+    if (ai!.maintenance!.seasonalOpportunities && ai!.maintenance!.seasonalOpportunities.length > 0) {
+      b += `**Seasonal opportunities:**\n`;
+      for (const s of ai!.maintenance!.seasonalOpportunities) b += `  \u2022 ${s}\n`;
+      b += `\n`;
+    }
     if (ai!.maintenance!.suggestions.length > 0) {
+      b += `**Recommendations:**\n`;
       for (const s of ai!.maintenance!.suggestions) b += `  \u2022 ${s}\n`;
       b += `\n`;
     }
@@ -1290,6 +1296,152 @@ function localizationBrief(data: AppData, p: AppProfile, ai?: AIAnalysis | null)
 }
 
 // ---------------------------------------------------------------------------
+// WHAT'S NEW BRIEF (AI-powered)
+// ---------------------------------------------------------------------------
+
+function whatsNewBrief(data: AppData, p: AppProfile, ai?: AIAnalysis | null): ActionItem[] {
+  const hasAi = ai?.whatsNew && ai.whatsNew.assessment.length > 0;
+  if (!hasAi) return [];
+
+  let b = `**AI Assessment:**\n${ai!.whatsNew!.assessment}\n\n`;
+
+  if (data.whatsNew) {
+    const preview = data.whatsNew.length > 300 ? data.whatsNew.substring(0, 300) + "..." : data.whatsNew;
+    b += `**Current What's New text:**\n${preview}\n\n`;
+  } else {
+    b += `**Current:** No What's New text detected\n\n`;
+  }
+
+  if (ai!.whatsNew!.suggestions.length > 0) {
+    b += `**AI-suggested What's New copy:**\n`;
+    for (const s of ai!.whatsNew!.suggestions) b += `\n${s}\n`;
+    b += `\n`;
+  }
+
+  b += `**Best practices:**\n`;
+  b += `  \u2022 Lead with the most exciting user-facing change\n`;
+  b += `  \u2022 Write for users, not developers — no internal jargon or ticket numbers\n`;
+  b += `  \u2022 Include keywords naturally (indexed on Google Play)\n`;
+  b += `  \u2022 ${data.platform === "ios" ? "Limit: 4,000 chars. Shown in the Updates tab." : "Shown under What's New section."}`;
+
+  return [{
+    id: "whats-new",
+    priority: "medium", effort: "quick", category: "What's New",
+    title: "Improve release notes for next update",
+    currentState: data.whatsNew ? `${data.whatsNew.length} chars` : "Not set",
+    action: b, brief: b,
+    copyOptions: ai!.whatsNew!.suggestions.length > 0 ? ai!.whatsNew!.suggestions : undefined,
+    deliverables: [
+      "Rewrite What's New copy using AI suggestions above",
+      `Update in ${data.platform === "ios" ? "App Store Connect \u203A What's New" : "Google Play Console \u203A Release notes"}`,
+    ],
+    impact: "What's New drives re-engagement from existing users and appears in Updates tab",
+    scoreBoost: "Indirect — improves user perception and re-engagement",
+  }];
+}
+
+// ---------------------------------------------------------------------------
+// A/B TESTING BRIEF (AI-powered)
+// ---------------------------------------------------------------------------
+
+function abTestingBrief(data: AppData, _p: AppProfile, ai?: AIAnalysis | null): ActionItem[] {
+  const hasAi = ai?.abTesting && ai.abTesting.experiments.length > 0;
+  if (!hasAi) return [];
+
+  let b = `**AI Testing Recommendations:**\n`;
+  b += `**Priority:** ${ai!.abTesting!.priority}\n\n`;
+
+  for (let i = 0; i < ai!.abTesting!.experiments.length; i++) {
+    const exp = ai!.abTesting!.experiments[i];
+    b += `**Experiment ${i + 1}: ${exp.name}**\n`;
+    b += `  Hypothesis: ${exp.hypothesis}\n`;
+    b += `  Variants:\n`;
+    for (const v of exp.variants) b += `    \u2022 ${v}\n`;
+    b += `  Primary metric: ${exp.metric}\n\n`;
+  }
+
+  if (data.platform === "ios") {
+    b += `**Platform:** Apple Product Page Optimization (PPO)\n`;
+    b += `  \u2022 Up to 3 treatments against original\n`;
+    b += `  \u2022 Test screenshot order, caption copy, or visual styles\n`;
+    b += `  \u2022 Set up in App Store Connect \u203A Product Page Optimization\n`;
+  } else {
+    b += `**Platform:** Google Play Store Listing Experiments\n`;
+    b += `  \u2022 Run for 7+ days with 50%+ traffic for statistical significance\n`;
+    b += `  \u2022 Test screenshots, short description, or icon\n`;
+    b += `  \u2022 Set up in Google Play Console \u203A Store Listing Experiments\n`;
+  }
+
+  return [{
+    id: "ab-testing",
+    priority: ai!.abTesting!.priority === "high" ? "high" : "medium",
+    effort: "medium",
+    category: "A/B Testing",
+    title: `Run ${ai!.abTesting!.experiments.length} store listing experiment${ai!.abTesting!.experiments.length > 1 ? "s" : ""}`,
+    currentState: "No active experiments detected",
+    action: b, brief: b,
+    deliverables: [
+      ...ai!.abTesting!.experiments.map(e => `Set up experiment: "${e.name}"`),
+      `Run each for ${data.platform === "ios" ? "minimum 7 days" : "7+ days with 50%+ traffic"}`,
+      "Analyze results and implement winning variants",
+    ],
+    impact: "A/B testing removes guesswork — data-driven decisions improve conversion",
+    scoreBoost: "Depends on experiment outcomes",
+  }];
+}
+
+// ---------------------------------------------------------------------------
+// CPP STRATEGY BRIEF (iOS, AI-powered)
+// ---------------------------------------------------------------------------
+
+function cppBrief(data: AppData, _p: AppProfile, ai?: AIAnalysis | null): ActionItem[] {
+  if (data.platform !== "ios") return [];
+  const hasCpp = ai?.screenshots?.cppStrategy && ai.screenshots.cppStrategy.shouldUseCPPs;
+  if (!hasCpp) return [];
+
+  const cpp = ai!.screenshots!.cppStrategy!;
+  let b = `**AI CPP Recommendation:**\n${cpp.reasoning}\n\n`;
+
+  if (cpp.keywordClusters.length > 0) {
+    b += `**Keyword clusters for dedicated CPPs:**\n`;
+    for (let i = 0; i < cpp.keywordClusters.length; i++) {
+      b += `  ${i + 1}. ${cpp.keywordClusters[i]}\n`;
+    }
+    b += `\n`;
+  }
+
+  b += `**Custom Product Pages** (per screenshots skill):\n`;
+  b += `  \u2022 Up to 70 CPPs per app, each with unique screenshots\n`;
+  b += `  \u2022 Average 8.6% conversion lift, up to 60% CPA reduction vs default page\n`;
+  b += `  \u2022 Each CPP gets its own screenshot set and promotional text\n`;
+  b += `  \u2022 Link CPPs to Apple Search Ads for keyword-specific landing pages\n`;
+  b += `  \u2022 Align CPP screenshot captions with target keyword cluster for OCR indexing\n\n`;
+
+  b += `**Implementation:**\n`;
+  b += `  1. Identify 2-3 high-intent keyword clusters from your search ads or organic data\n`;
+  b += `  2. Design screenshot sets tailored to each cluster's user intent\n`;
+  b += `  3. Write keyword-optimized captions matching each cluster\n`;
+  b += `  4. Create CPPs in App Store Connect \u203A Custom Product Pages\n`;
+  b += `  5. Link to Apple Search Ads campaigns targeting those keywords`;
+
+  return [{
+    id: "cpp-strategy",
+    priority: "medium", effort: "heavy", category: "Custom Product Pages",
+    title: `Create ${cpp.keywordClusters.length} Custom Product Pages for keyword clusters`,
+    currentState: "No CPPs detected",
+    action: b, brief: b,
+    deliverables: [
+      ...cpp.keywordClusters.map(c => `Design screenshot set for: "${c}"`),
+      "Create CPPs in App Store Connect",
+      "Link to Apple Search Ads campaigns",
+      "Monitor conversion rates per CPP vs default page",
+    ],
+    impact: "CPPs deliver average 8.6% conversion lift and up to 60% CPA reduction on paid campaigns",
+    scoreBoost: "Improves paid acquisition ROI + organic conversion for specific keyword intents",
+  }];
+}
+
+// ---------------------------------------------------------------------------
 // MAIN GENERATOR
 // ---------------------------------------------------------------------------
 
@@ -1310,8 +1462,11 @@ export function generateActionPlan(
     ...iconBrief(appData, p, ai),
     ...visualsBrief(appData, p, categories, ai),
     ...ratingsBrief(appData, p, categories, ai),
+    ...whatsNewBrief(appData, p, ai),
     ...maintenanceBrief(appData, p, categories, ai),
     ...conversionBrief(appData, p, categories, ai),
+    ...abTestingBrief(appData, p, ai),
+    ...cppBrief(appData, p, ai),
     ...localizationBrief(appData, p, ai),
   ];
 
