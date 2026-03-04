@@ -940,22 +940,78 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
       b += `  \u2022 Link CPPs to Apple Search Ads campaigns for keyword-specific landing pages\n`;
     }
 
+    // Build deliverables dynamically from AI findings
     const deliverables: string[] = [];
-    if (needsNew) deliverables.push(`Design ${max - data.screenshotCount} new screenshots for slots ${data.screenshotCount + 1}-${max}`);
-    deliverables.push(
-      `Write benefit-focused, keyword-rich captions for all ${max} slots (see gallery plan)`,
-      `Export at platform-required resolutions`,
-      `Upload to ${data.platform === "ios" ? "App Store Connect \u203A Media Manager" : "Google Play Console \u203A Store Listing"}`,
-    );
+    const slotsToRedo: number[] = [];
+    const captionsToFix: number[] = [];
+    let needsDeviceFrameUpdate = false;
+    let needsUIUpdate = false;
+
+    if (hasAiScreenshots) {
+      for (const ss of ai!.screenshots.perScreenshot) {
+        const issues = ss.issues.map(i => i.toLowerCase()).join(" ");
+        const hasFrameIssue = issues.includes("outdated device") || issues.includes("old device") || issues.includes("iphone 8") || issues.includes("home button");
+        const hasUIIssue = issues.includes("outdated ui") || issues.includes("2019") || issues.includes("2020") || issues.includes("placeholder") || issues.includes("old date");
+        const hasCaptionIssue = (ss.captionQuality || "").toLowerCase().match(/weak|generic|filler|repetitive|low/);
+
+        if (hasFrameIssue) needsDeviceFrameUpdate = true;
+        if (hasUIIssue) needsUIUpdate = true;
+        if (hasFrameIssue || hasUIIssue) slotsToRedo.push(ss.slot);
+        if (hasCaptionIssue) captionsToFix.push(ss.slot);
+      }
+
+      // Also check commonMistakesFound for broad issues
+      const mistakes = (ai!.screenshots.commonMistakesFound || []).map(m => m.toLowerCase()).join(" ");
+      if (mistakes.includes("outdated device") || mistakes.includes("old device")) needsDeviceFrameUpdate = true;
+      if (mistakes.includes("outdated ui") || mistakes.includes("2019") || mistakes.includes("2020") || mistakes.includes("old date")) needsUIUpdate = true;
+    }
+
+    const needsRedo = slotsToRedo.length > 0;
+
+    if (needsDeviceFrameUpdate) {
+      deliverables.push(`Reshoot all ${data.screenshotCount} existing screenshots with current-gen device frames (iPhone 16 Pro / Pixel 9)`);
+    }
+    if (needsUIUpdate) {
+      deliverables.push("Update all screenshots to show the current app version (outdated UI/dates detected)");
+    }
+    if (needsRedo && !needsDeviceFrameUpdate && !needsUIUpdate) {
+      deliverables.push(`Redo screenshots for slot${slotsToRedo.length > 1 ? "s" : ""} ${slotsToRedo.join(", ")} (issues detected by AI — see analysis above)`);
+    }
+    if (captionsToFix.length > 0) {
+      deliverables.push(`Rewrite captions for slot${captionsToFix.length > 1 ? "s" : ""} ${captionsToFix.join(", ")} — replace generic/weak text with benefit-focused, keyword-rich copy`);
+    }
+    if (needsNew) {
+      deliverables.push(`Design ${max - data.screenshotCount} new screenshots for slots ${data.screenshotCount + 1}-${max} (see missing slots above)`);
+    }
+    if (!needsRedo && !captionsToFix.length && !needsNew) {
+      deliverables.push(`Write benefit-focused, keyword-rich captions for all ${max} slots`);
+    }
+    deliverables.push(`Export at platform-required resolutions`);
+    deliverables.push(`Upload to ${data.platform === "ios" ? "App Store Connect \u203A Media Manager" : "Google Play Console \u203A Store Listing"}`);
     if (data.platform === "ios") deliverables.push("Verify OCR readability (zoom to 25% test)");
     deliverables.push("Set up A/B test with current vs new screenshots");
 
+    // Build a title that reflects the actual scope
+    let actionTitle: string;
+    if (needsRedo && needsNew) {
+      actionTitle = `Redo ${slotsToRedo.length} existing + design ${max - data.screenshotCount} new screenshots`;
+    } else if (needsRedo) {
+      actionTitle = `Redo ${slotsToRedo.length} screenshots (outdated) + optimize all captions`;
+    } else if (needsNew) {
+      actionTitle = `Design ${max - data.screenshotCount} new screenshots + optimize all captions`;
+    } else {
+      actionTitle = "Optimize screenshot captions for keywords and conversion";
+    }
+
+    const isHighEffort = needsRedo || data.screenshotCount < 4;
+    const isCritical = data.screenshotCount < 3 || (needsDeviceFrameUpdate && needsUIUpdate);
+
     actions.push({
       id: "screenshots-optimize",
-      priority: data.screenshotCount < 3 ? "critical" : "high",
-      effort: data.screenshotCount < 4 ? "heavy" : "medium",
+      priority: isCritical ? "critical" : "high",
+      effort: isHighEffort ? "heavy" : "medium",
       category: "Visual Assets",
-      title: needsNew ? `Design ${max - data.screenshotCount} new screenshots + optimize all captions` : "Optimize screenshot captions for keywords and conversion",
+      title: actionTitle,
       currentState: `${data.screenshotCount}/${max} screenshots`,
       action: b, brief: b, deliverables,
       impact: "Screenshots are the #1 conversion driver" + (data.platform === "ios" ? " \u2014 captions are also a keyword ranking signal via OCR" : ""),
