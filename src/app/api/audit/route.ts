@@ -33,6 +33,9 @@ export async function GET(request: NextRequest) {
       console.warn("Audit: AI analysis returned null — action plan will use deterministic fallback");
     }
 
+    const hasTextAI = !!(aiAnalysis?.title?.suggestions?.length);
+    const hasVisualAI = !!(aiAnalysis?.screenshots?.perScreenshot?.length);
+
     return NextResponse.json({
       app: {
         title: appData.title,
@@ -46,8 +49,9 @@ export async function GET(request: NextRequest) {
       overallScore,
       categories,
       actionPlan,
-      aiPowered: !!aiAnalysis,
-      aiScreenshots: !!(aiAnalysis?.screenshots?.perScreenshot?.length),
+      aiPowered: hasTextAI || hasVisualAI,
+      aiText: hasTextAI,
+      aiScreenshots: hasVisualAI,
     });
   } catch (error) {
     console.error("Audit error:", error);
