@@ -211,6 +211,12 @@ Google has no separate keyword field — keywords extracted from title and descr
 - Android: In-App Review API — use soft pre-prompt ("Enjoying the app?") to filter sentiment first.
 - Respond to negative reviews within 24-48 hours, always professional.
 
+## PREVIEW VIDEO
+iOS: 15-30s, H.264, loops silently, real app footage only. No people outside device.
+Android: YouTube URL, 30s-2min, landscape preferred.
+Structure: Hook (0-3s, core outcome) → Feature 1 (3-10s) → Feature 2 (10-18s) → Feature 3 (18-25s) → CTA (25-30s).
+The first 3 seconds determine whether users watch or scroll. Show the core outcome immediately.
+
 ## A/B TESTING
 - Apple PPO: up to 3 treatments against original (screenshot order, caption copy, visual styles)
 - Google Play Store Listing Experiments: 7+ days with 50%+ traffic for statistical significance
@@ -352,11 +358,6 @@ DO NOT make up captions that aren't visible. Report exactly what you SEE on each
 The icon is the single most important visual element — must be recognizable at 60x60px.
 Evaluate: simplicity, recognizability at small sizes, color contrast against white/dark backgrounds, brand alignment, uniqueness within category, whether it communicates app purpose, visual weight and balance.
 
-## PREVIEW VIDEO
-iOS: 15-30s, H.264, loops silently, real app footage only.
-Android: YouTube URL, 30s-2min, landscape preferred.
-Structure: Hook (0-3s) → Feature 1 (3-10s) → Feature 2 (10-18s) → Feature 3 (18-25s) → CTA (25-30s).
-
 ### Design Specs (2026)
 iOS: iPhone 6.9" = 1320x2868, 6.7" = 1290x2796, 5.5" = 1242x2208, iPad 13" = 2064x2752. Up to 10 per localization.
 Android: 1080x1920 (standard), 1440x2560 (high-res). Feature graphic 1024x500. Max 8. PNG/JPEG, 8MB max.
@@ -374,7 +375,7 @@ You MUST return valid JSON. Every assessment must be:
 
 async function downloadImageAsBase64(
   url: string,
-  timeoutMs = 8000,
+  timeoutMs = 5000,
 ): Promise<{ data: string; mimeType: string } | null> {
   try {
     const resp = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
@@ -511,6 +512,17 @@ function buildTextPrompt(data: AppData): string {
   p += `    "reasoning": "Why these specific markets for THIS app's category"\n`;
   p += `  },\n`;
 
+  p += `  "video": {\n`;
+  p += `    "assessment": "${data.hasVideo ? "Assessment of having a video — is it effective?" : "No video detected — explain why this app should invest in one"}",\n`;
+  p += `    "storyboard": [\n`;
+  p += `      { "segment": "Hook", "duration": "0-3s", "content": "Specific content for THIS app" },\n`;
+  p += `      { "segment": "Feature 1", "duration": "3-10s", "content": "Specific feature from the description" },\n`;
+  p += `      { "segment": "Feature 2", "duration": "10-18s", "content": "Specific feature" },\n`;
+  p += `      { "segment": "Feature 3", "duration": "18-25s", "content": "Specific feature or social proof" },\n`;
+  p += `      { "segment": "CTA", "duration": "25-30s", "content": "End screen description" }\n`;
+  p += `    ]\n`;
+  p += `  },\n`;
+
   p += `  "topInsights": [\n`;
   p += `    "Most impactful insight 1",\n`;
   p += `    "Insight 2",\n`;
@@ -532,13 +544,15 @@ function buildVisualPrompt(data: AppData): string {
 
   let p = `Analyze the visual assets for this ${isIOS ? "iOS App Store" : "Google Play"} listing.\n\n`;
 
-  p += `## APP CONTEXT (for grounding your analysis)\n`;
+  p += `## APP CONTEXT (for grounding your visual analysis)\n`;
   p += `**App:** ${data.title}\n`;
   p += `**Developer:** ${data.developerName}\n`;
   p += `**Category:** ${data.category}\n`;
   p += `**Platform:** ${isIOS ? "iOS" : "Android"}\n`;
-  p += `**Screenshots uploaded:** ${data.screenshotCount} / ${screenshotMax} slots\n`;
-  p += `**Preview video:** ${data.hasVideo ? "Yes" : "No"}\n\n`;
+  p += `**Screenshots uploaded:** ${data.screenshotCount} / ${screenshotMax} slots\n\n`;
+
+  const descSnippet = data.description.substring(0, 800).replace(/\n{2,}/g, "\n");
+  p += `## APP FEATURES (from description — use to identify what screenshots show)\n${descSnippet}\n\n`;
 
   if (data.iconUrl) p += `I'm providing the app icon image for analysis.\n`;
   if (!isIOS && data.featureGraphicUrl) p += `I'm providing the Google Play feature graphic (1024x500) for analysis.\n`;
@@ -615,17 +629,6 @@ function buildVisualPrompt(data: AppData): string {
     p += `    }\n`;
   }
 
-  p += `  },\n`;
-
-  p += `  "video": {\n`;
-  p += `    "assessment": "${data.hasVideo ? "General video recommendation based on what you see in screenshots" : "No video detected — provide recommendation based on what you see in the screenshots"}",\n`;
-  p += `    "storyboard": [\n`;
-  p += `      { "segment": "Hook", "duration": "0-3s", "content": "Specific content for THIS app based on screenshots" },\n`;
-  p += `      { "segment": "Feature 1", "duration": "3-10s", "content": "Specific feature visible in screenshots" },\n`;
-  p += `      { "segment": "Feature 2", "duration": "10-18s", "content": "Specific feature" },\n`;
-  p += `      { "segment": "Feature 3", "duration": "18-25s", "content": "Specific feature or social proof" },\n`;
-  p += `      { "segment": "CTA", "duration": "25-30s", "content": "End screen description" }\n`;
-  p += `    ]\n`;
   p += `  }\n`;
 
   p += `}`;
@@ -686,7 +689,13 @@ async function callGemini(apiKey: string, opts: GeminiCallOptions): Promise<Reco
       return null;
     }
 
-    console.log(`AI [${opts.label}]: ${text.length} chars in ${elapsed}ms`);
+    const finishReason = result?.candidates?.[0]?.finishReason;
+    console.log(`AI [${opts.label}]: ${text.length} chars in ${elapsed}ms, finishReason=${finishReason}`);
+
+    if (finishReason === "MAX_TOKENS") {
+      console.warn(`AI [${opts.label}]: Output was TRUNCATED — response likely incomplete`);
+    }
+
     return JSON.parse(text);
   } catch (error) {
     const elapsed = Date.now() - t0;
@@ -713,7 +722,7 @@ export async function analyzeWithAI(appData: AppData): Promise<AIAnalysis | null
     systemPrompt: TEXT_SYSTEM_PROMPT,
     parts: [{ text: buildTextPrompt(appData) }],
     maxOutputTokens: 8192,
-    timeoutMs: 30000,
+    timeoutMs: 40000,
     label: "TEXT",
   });
 
@@ -773,8 +782,8 @@ export async function analyzeWithAI(appData: AppData): Promise<AIAnalysis | null
   const visualCall = callGemini(apiKey, {
     systemPrompt: VISUAL_SYSTEM_PROMPT,
     parts: visualParts,
-    maxOutputTokens: 8192,
-    timeoutMs: 55000,
+    maxOutputTokens: 12288,
+    timeoutMs: 90000,
     label: "VISUAL",
   });
 
@@ -818,7 +827,7 @@ export async function analyzeWithAI(appData: AppData): Promise<AIAnalysis | null
       commonMistakesFound: [],
     },
     featureGraphic: v.featureGraphic,
-    video: v.video,
+    video: t.video,
     ratings: t.ratings,
     whatsNew: t.whatsNew,
     abTesting: t.abTesting,
