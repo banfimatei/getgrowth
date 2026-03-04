@@ -29,6 +29,7 @@ export interface AIAnalysis {
     reasoning: string;
   };
   description: {
+    fullRewrite: string;
     openingHook: string;
     featureBullets: string[];
     cta: string;
@@ -457,11 +458,12 @@ function buildTextPrompt(data: AppData): string {
   }
 
   p += `  "description": {\n`;
-  p += `    "openingHook": "A complete, well-written 2-3 sentence opening paragraph for THIS app. No brackets or placeholders.",\n`;
-  p += `    "featureBullets": ["• Benefit-focused bullet 1", "• Bullet 2", "...5-8 bullets"],\n`;
-  p += `    "cta": "A complete closing CTA paragraph",\n`;
-  p += `    "keywordGaps": ["keyword not found in description that should be"],\n`;
-  p += `    "structureIssues": ["specific structural problem observed"]`;
+  p += `    "fullRewrite": "A COMPLETE, READY-TO-PASTE rewritten description for THIS app (${isIOS ? "1,000-4,000" : "2,500-4,000"} chars). Include: compelling opening hook, feature bullets with benefits, social proof, and CTA. Use real app features from the description above. ${!isIOS ? "Front-load primary keywords and use them 3-5x naturally." : ""} No brackets, no placeholders, no [insert here] — write the actual final copy.",\n`;
+  p += `    "openingHook": "Just the opening 2-3 sentences extracted from the fullRewrite above (for separate display).",\n`;
+  p += `    "featureBullets": ["• Benefit-focused bullet 1", "• Bullet 2", "...5-8 bullets extracted from the fullRewrite"],\n`;
+  p += `    "cta": "Just the closing CTA paragraph extracted from the fullRewrite",\n`;
+  p += `    "keywordGaps": ["keyword not found in current description that should be added"],\n`;
+  p += `    "structureIssues": ["specific structural problem observed in the CURRENT description"]`;
 
   if (!isIOS) {
     p += `,\n    "keywordDensity": [\n`;
@@ -810,6 +812,7 @@ export async function analyzeWithAI(appData: AppData): Promise<AIAnalysis | null
     shortDescription: t.shortDescription,
     keywordField: t.keywordField,
     description: t.description || {
+      fullRewrite: "",
       openingHook: "",
       featureBullets: [],
       cta: "",

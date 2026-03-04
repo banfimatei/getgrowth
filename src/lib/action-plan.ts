@@ -528,7 +528,7 @@ function descriptionBrief(data: AppData, p: AppProfile, cats: AuditCategory[], a
   const cat = cats.find(c => c.id === "description");
   if (!cat) return [];
   const scores = cat.results.map(r => r.score);
-  if (scores.every(s => s >= 75)) return [];
+  if (scores.every(s => s >= 75) && !ai?.description?.fullRewrite) return [];
 
   const desc = data.description;
   const first200 = desc.substring(0, 200).replace(/\n/g, " ");
@@ -538,84 +538,124 @@ function descriptionBrief(data: AppData, p: AppProfile, cats: AuditCategory[], a
   const last200 = desc.substring(desc.length - 200).toLowerCase();
   const hasCTA = ["download", "try", "get started", "start", "join", "today", "now"].some(w => last200.includes(w));
 
-  const hasAiDesc = ai?.description && ai.description.openingHook.length > 0;
+  const hasAiRewrite = ai?.description?.fullRewrite && ai.description.fullRewrite.length > 100;
+  const hasAiDesc = hasAiRewrite || (ai?.description && ai.description.openingHook.length > 0);
 
-  let b = `**Current:** ${desc.length} chars, ~${wc} words\n`;
-  b += `**First 3 lines** (visible before "Read more"): "${first200}${desc.length > 200 ? "..." : ""}"\n`;
-  b += `**Structure:** ${hasParagraphs ? "\u2705 paragraphs" : "\u274C no paragraphs"} | ${hasBullets ? "\u2705 bullet points" : "\u274C no bullets"} | ${hasCTA ? "\u2705 CTA" : "\u274C no CTA"}\n\n`;
+  let b = "";
 
-  if (hasAiDesc) {
-    if (ai!.description.structureIssues && ai!.description.structureIssues.length > 0) {
-      b += `**Structural issues found:**\n`;
-      for (const issue of ai!.description.structureIssues) b += `  \u2022 ${issue}\n`;
+  // ── Section 1: Current state analysis ──
+  b += `**Current description analysis:**\n`;
+  b += `  \u2022 Length: ${desc.length} chars, ~${wc} words\n`;
+  b += `  \u2022 Structure: ${hasParagraphs ? "\u2705 paragraphs" : "\u274C no paragraph breaks"} | ${hasBullets ? "\u2705 bullet points" : "\u274C no bullet points"} | ${hasCTA ? "\u2705 CTA" : "\u274C no closing CTA"}\n`;
+  b += `  \u2022 Opening: "${first200}${desc.length > 200 ? "..." : ""}"\n`;
+
+  if (hasAiDesc && ai!.description.structureIssues && ai!.description.structureIssues.length > 0) {
+    b += `\n**Issues found in current description:**\n`;
+    for (const issue of ai!.description.structureIssues) b += `  \u274C ${issue}\n`;
+  }
+
+  if (hasAiDesc && ai!.description.keywordGaps.length > 0) {
+    b += `\n**Missing keywords:** ${ai!.description.keywordGaps.map(w => `"${w}"`).join(", ")}\n`;
+  }
+
+  // ── Section 2: Full rewrite (AI) or structural guidance (deterministic) ──
+  if (hasAiRewrite) {
+    b += `\n---\n\n`;
+    b += `**AI-written description** (ready to copy-paste):\n\n`;
+    b += `${ai!.description.fullRewrite}\n`;
+    b += `\n---\n\n`;
+    b += `**Breakdown of the rewrite above:**\n\n`;
+    if (ai!.description.openingHook) {
+      b += `**Opening hook:** ${ai!.description.openingHook}\n\n`;
+    }
+    if (ai!.description.featureBullets.length > 0) {
+      b += `**Feature bullets:**\n`;
+      for (const bullet of ai!.description.featureBullets) b += `${bullet}\n`;
       b += `\n`;
     }
-    b += `**AI-written description draft** (ready to use):\n\n`;
-    b += `**Opening hook:**\n`;
-    b += `${ai!.description.openingHook}\n\n`;
-    b += `**Feature bullets:**\n`;
-    for (const bullet of ai!.description.featureBullets) {
-      b += `${bullet}\n`;
+    if (ai!.description.cta) {
+      b += `**CTA:** ${ai!.description.cta}\n`;
     }
-    b += `\n**Call to action:**\n`;
-    b += `${ai!.description.cta}\n`;
-    if (ai!.description.keywordGaps.length > 0) {
-      b += `\n**Keyword gaps to address:** ${ai!.description.keywordGaps.map(w => `"${w}"`).join(", ")}\n`;
-    }
+
     if (data.platform === "android" && ai!.description.keywordDensity && ai!.description.keywordDensity.length > 0) {
-      b += `\n**Keyword density analysis** (Google indexes full description):\n`;
+      b += `\n**Keyword density in the rewrite** (Google indexes full description):\n`;
       for (const kd of ai!.description.keywordDensity) {
         const status = kd.currentCount >= kd.recommendedCount ? "\u2705" : "\u274C";
         b += `  ${status} "${kd.keyword}": ${kd.currentCount}x \u2192 target ${kd.recommendedCount}x\n`;
       }
-      b += `  Per ASO best practice: "keywords mentioned frequently and earlier have been found more relevant"\n`;
     }
+  } else if (hasAiDesc) {
+    b += `\n---\n\n`;
+    b += `**AI-suggested description sections:**\n\n`;
+    b += `**Opening hook:**\n${ai!.description.openingHook}\n\n`;
+    if (ai!.description.featureBullets.length > 0) {
+      b += `**Feature bullets:**\n`;
+      for (const bullet of ai!.description.featureBullets) b += `${bullet}\n`;
+      b += `\n`;
+    }
+    b += `**CTA:** ${ai!.description.cta}\n`;
   } else {
+    // Deterministic fallback — structural guidance only
     const verb = p.categoryVerbs[0] || "Discover";
+    b += `\n---\n\n`;
+    b += `\u26A0\uFE0F AI analysis was unavailable \u2014 showing structural guidance instead.\n\n`;
     b += `**Recommended 4-section structure:**\n\n`;
-    b += `**1. Opening hook** (first 3 lines visible without "Read more"):\n`;
-    b += `   Lead with a single compelling sentence. Front-load primary keywords.\n`;
-    b += `   \u2022 Avoid: "Welcome to...", "This app is...", "We are..." (weak openers)\n`;
-    b += `   \u2022 Pattern: "[Action verb] [specific outcome] with [Brand]." or "[Brand] \u2014 [core benefit in one line]."\n`;
-    b += `   \u2022 Example: "${verb} ${p.coreFunction.toLowerCase()} with ${p.brand}."\n\n`;
+    b += `**1. Opening hook** (first 3 lines visible before "Read more"):\n`;
+    b += `  Lead with a single compelling sentence that front-loads primary keywords.\n`;
+    b += `  \u2022 Avoid: "Welcome to...", "This app is...", "We are..."\n`;
+    b += `  \u2022 Pattern: "[Action verb] [specific outcome] with [Brand]."\n`;
+    b += `  \u2022 Example: "${verb} ${p.coreFunction.toLowerCase()} with ${p.brand}."\n\n`;
 
-    b += `**2. Feature list** (bullet points \u2014 scannable):\n`;
+    b += `**2. Feature bullets** (scannable, benefit-focused):\n`;
     if (p.features.length > 0) {
-      for (const f of p.features.slice(0, 5)) b += `   \u2022 ${sceneDirection(f, f)}\n`;
+      for (const f of p.features.slice(0, 5)) {
+        const clean = f.length > 80 ? f.substring(0, f.lastIndexOf(" ", 80)) : f;
+        b += `  \u2022 ${clean}\n`;
+      }
     } else {
-      b += `   \u2022 [Feature] \u2014 [benefit to user]\n`;
+      b += `  \u2022 [Key feature] \u2014 [benefit to user]\n`;
     }
     b += `\n**3. Social proof:**\n`;
     if (data.ratingsCount > 100) {
-      b += `   ${data.rating.toFixed(1)}\u2605 from ${data.ratingsCount.toLocaleString()} ratings\n`;
+      b += `  ${data.rating.toFixed(1)}\u2605 from ${data.ratingsCount.toLocaleString()} ratings. Add: press mentions, awards, download milestones.\n\n`;
+    } else {
+      b += `  Add: ratings, press mentions, awards, download milestones.\n\n`;
     }
-    b += `   Add: press, awards, download milestones\n\n`;
-    b += `**4. CTA:** "Download ${p.brand} today."\n`;
+    b += `**4. CTA:** "Download ${p.brand} today \u2014 [one-line benefit]."\n`;
   }
 
+  // ── Platform-specific notes ──
   if (data.platform === "android") {
-    b += `\n**Keyword density** (Google indexes full description):\n`;
-    b += `   Per book Ch.2: "keywords mentioned frequently and earlier have been found more relevant"\n`;
+    b += `\n**Keyword density** (Google Play indexes full description):\n`;
     for (const w of p.keywords.slice(0, 4)) {
       const count = (desc.toLowerCase().split(w).length - 1);
-      b += `   "${w}": currently ${count}x \u2192 target 3-5x (naturally placed, not stuffed)\n`;
+      b += `  "${w}": currently ${count}x \u2192 target 3-5x (naturally placed)\n`;
     }
   } else {
-    b += `\n**Note:** iOS description is NOT indexed for search, but it directly impacts conversion rate and is indexed by web search engines (Apple web pages, Google web results).`;
+    b += `\n**Note:** iOS description is NOT indexed for search, but it directly impacts conversion rate and is indexed by web search engines.`;
   }
+
+  const deliverables: string[] = [];
+  if (hasAiRewrite) {
+    deliverables.push("Review the AI-written description above and adapt for brand voice");
+    deliverables.push(`Paste into ${data.platform === "ios" ? "App Store Connect \u203A Description" : "Google Play Console \u203A Full description"}`);
+    if (data.platform === "ios") {
+      deliverables.push("Requires app update submission to take effect");
+    }
+  } else {
+    deliverables.push("Rewrite using the 4-section structure (hook \u2192 features \u2192 social proof \u2192 CTA)");
+    deliverables.push(`Target ${data.platform === "android" ? "2,500-4,000" : "1,000-4,000"} chars`);
+    if (data.platform === "android") deliverables.push("Front-load primary keywords, use 3-5x each naturally");
+    deliverables.push(`Update in ${data.platform === "ios" ? "App Store Connect \u203A Description" : "Google Play Console \u203A Full description"}`);
+  }
+  deliverables.push("A/B test new vs current description (Google Play Experiments or track conversion via App Store Connect analytics)");
 
   return [{
     id: "desc-rewrite",
     priority: data.platform === "android" ? "high" : "medium", effort: "medium", category: "Description",
-    title: "Rewrite description with optimized structure and keywords",
+    title: hasAiRewrite ? "Replace description with AI-optimized version" : "Rewrite description with optimized structure and keywords",
     currentState: `${desc.length} chars, ~${wc} words \u2014 ${!hasBullets ? "no bullets, " : ""}${!hasParagraphs ? "no paragraphs, " : ""}${!hasCTA ? "no CTA" : "has CTA"}`,
-    action: b, brief: b,
-    deliverables: [
-      "Rewrite using the 4-section structure above",
-      `Target ${data.platform === "android" ? "2,500-4,000" : "1,000-4,000"} chars`,
-      ...(data.platform === "android" ? ["Primary keywords 3-5x each, front-loaded in first paragraph"] : []),
-      `Update in ${data.platform === "ios" ? "App Store Connect \u203A Description" : "Google Play Console \u203A Full description"}`,
-    ],
+    action: b, brief: b, deliverables,
     impact: data.platform === "android" ? "Google indexes the full description \u2014 structure and density directly affect rankings" : "Better conversion rate + web SEO",
     scoreBoost: "+15-30 on Description score",
   }];
