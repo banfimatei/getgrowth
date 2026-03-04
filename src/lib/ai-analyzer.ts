@@ -636,6 +636,8 @@ export async function analyzeWithAI(appData: AppData): Promise<AIAnalysis | null
     return null;
   }
 
+  const t0 = Date.now();
+
   try {
     const parts: Record<string, unknown>[] = [
       { text: buildUserPrompt(appData) },
@@ -657,20 +659,38 @@ export async function analyzeWithAI(appData: AppData): Promise<AIAnalysis | null
       imageUrls.push({ url: screenshotUrls[i], label: `Screenshot ${i + 1}:` });
     }
 
+    let totalImageBytes = 0;
+    const MAX_TOTAL_IMAGE_BYTES = 8_000_000; // 8MB total cap for all images
+
     if (imageUrls.length > 0) {
       const downloads = await Promise.all(
         imageUrls.map(({ url }) => downloadImageAsBase64(url)),
       );
 
+      const imgTime = Date.now() - t0;
+      let attached = 0;
+      let skipped = 0;
+
       for (let i = 0; i < downloads.length; i++) {
         const img = downloads[i];
         if (img) {
+          const imgBytes = img.data.length * 0.75; // base64 → bytes approx
+          if (totalImageBytes + imgBytes > MAX_TOTAL_IMAGE_BYTES) {
+            skipped++;
+            continue;
+          }
+          totalImageBytes += imgBytes;
           parts.push({ text: imageUrls[i].label });
           parts.push({
             inlineData: { mimeType: img.mimeType, data: img.data },
           });
+          attached++;
+        } else {
+          skipped++;
         }
       }
+
+      console.log(`AI: ${attached} images attached, ${skipped} skipped, ${(totalImageBytes / 1_000_000).toFixed(1)}MB total, download took ${imgTime}ms`);
     }
 
     const body = {
@@ -683,37 +703,49 @@ export async function analyzeWithAI(appData: AppData): Promise<AIAnalysis | null
       },
     };
 
+    const bodyJson = JSON.stringify(body);
+    console.log(`AI: Request body size: ${(bodyJson.length / 1_000_000).toFixed(1)}MB, sending to Gemini...`);
+
     const resp = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: bodyJson,
       signal: AbortSignal.timeout(50000),
     });
 
+    const apiTime = Date.now() - t0;
+
     if (!resp.ok) {
       const err = await resp.text();
-      console.error("Gemini API error:", resp.status, err);
+      console.error(`AI: Gemini API error ${resp.status} after ${apiTime}ms:`, err.substring(0, 500));
       return null;
     }
 
     const result = await resp.json();
     const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) {
-      console.error("Gemini returned no text");
+      const finishReason = result?.candidates?.[0]?.finishReason;
+      const safetyRatings = result?.candidates?.[0]?.safetyRatings;
+      console.error(`AI: Gemini returned no text after ${apiTime}ms. finishReason: ${finishReason}, safetyRatings:`, JSON.stringify(safetyRatings));
       return null;
     }
+
+    console.log(`AI: Got ${text.length} chars response in ${apiTime}ms`);
 
     const analysis: AIAnalysis = JSON.parse(text);
 
-    // Basic validation — title and topInsights are required
     if (!analysis.title || !Array.isArray(analysis.topInsights)) {
-      console.error("Gemini response missing required fields");
+      console.error("AI: Gemini response missing required fields (title or topInsights)");
       return null;
     }
 
+    const screenshotCount = analysis.screenshots?.perScreenshot?.length ?? 0;
+    console.log(`AI: Analysis complete — ${screenshotCount} screenshots analyzed, ${analysis.topInsights.length} insights`);
+
     return analysis;
   } catch (error) {
-    console.error("AI analysis failed:", error);
+    const elapsed = Date.now() - t0;
+    console.error(`AI: Analysis failed after ${elapsed}ms:`, error instanceof Error ? error.message : error);
     return null;
   }
 }

@@ -788,7 +788,7 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
         for (const m of ai!.screenshots.commonMistakesFound) b += `  \u274C ${m}\n`;
       }
     } else {
-      // Deterministic fallback
+      b += `\u26A0\uFE0F **Note:** AI vision analysis was unavailable for this audit. The captions below are auto-generated from your description text \u2014 not from actual screenshot analysis. Re-run the audit if AI was expected.\n\n`;
       b += `**The First 3 Rule** (per screenshots skill):\n`;
       b += `80% of App Store impressions show only the first 3 screenshots. Users spend ~7 seconds on an app page. 65% of downloads happen immediately after search. Your first 3 must be a complete elevator pitch:\n`;
       b += `  1. **What is it?** \u2014 Core value proposition\n`;

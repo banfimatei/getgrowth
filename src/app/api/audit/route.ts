@@ -29,6 +29,10 @@ export async function GET(request: NextRequest) {
     const overallScore = calculateOverallScore(categories);
     const actionPlan = generateActionPlan(appData, categories, overallScore, aiAnalysis);
 
+    if (!aiAnalysis) {
+      console.warn("Audit: AI analysis returned null — action plan will use deterministic fallback");
+    }
+
     return NextResponse.json({
       app: {
         title: appData.title,
@@ -43,6 +47,7 @@ export async function GET(request: NextRequest) {
       categories,
       actionPlan,
       aiPowered: !!aiAnalysis,
+      aiScreenshots: !!(aiAnalysis?.screenshots?.perScreenshot?.length),
     });
   } catch (error) {
     console.error("Audit error:", error);
