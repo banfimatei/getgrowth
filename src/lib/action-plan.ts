@@ -7,6 +7,19 @@
 import type { AppData, AuditCategory } from "./aso-rules";
 import type { AIAnalysis } from "./ai-analyzer";
 
+export type DeepDiveSection =
+  | "title"
+  | "subtitle"
+  | "keywords"
+  | "shortDescription"
+  | "description"
+  | "screenshots"
+  | "icon"
+  | "ratings"
+  | "video"
+  | "maintenance"
+  | "localization";
+
 export interface ActionItem {
   id: string;
   priority: "critical" | "high" | "medium" | "low";
@@ -20,6 +33,8 @@ export interface ActionItem {
   deliverables?: string[];
   impact: string;
   scoreBoost: string;
+  aiStatus: "none" | "reviewed" | "available";
+  deepDiveSection?: DeepDiveSection;
 }
 
 // ---------------------------------------------------------------------------
@@ -308,6 +323,8 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
     ],
     impact: "Title is the single most weighted metadata field for search ranking on both stores",
     scoreBoost: needsKw ? "+30-50 on Title score" : "+10-20 on Title score",
+    aiStatus: hasAiTitle ? "reviewed" : "available",
+    deepDiveSection: "title",
   }];
 }
 
@@ -385,6 +402,8 @@ function subtitleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?:
     ],
     impact: "Unlocks keyword rankings for terms not reachable via title alone",
     scoreBoost: empty ? "+60-90 on Subtitle score" : "+15-30 on Subtitle score",
+    aiStatus: hasAiSub ? "reviewed" : "available",
+    deepDiveSection: "subtitle",
   }];
 }
 
@@ -459,6 +478,8 @@ function keywordFieldBrief(data: AppData, p: AppProfile, cats: AuditCategory[], 
     ],
     impact: "The keyword field is the third pillar of iOS indexing \u2014 100 invisible characters dedicated to search ranking. We cannot assess its current state, so review it directly.",
     scoreBoost: "Not directly scored (field is private)",
+    aiStatus: hasAiKw ? "reviewed" : "available",
+    deepDiveSection: "keywords",
   }];
 }
 
@@ -516,6 +537,8 @@ function shortDescBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?
     ],
     impact: "Directly affects Google Play search ranking and search result click-through rate",
     scoreBoost: "+30-60 on Short Description score",
+    aiStatus: hasAiShort ? "reviewed" : "available",
+    deepDiveSection: "shortDescription",
   }];
 }
 
@@ -658,6 +681,8 @@ function descriptionBrief(data: AppData, p: AppProfile, cats: AuditCategory[], a
     action: b, brief: b, deliverables,
     impact: data.platform === "android" ? "Google indexes the full description \u2014 structure and density directly affect rankings" : "Better conversion rate + web SEO",
     scoreBoost: "+15-30 on Description score",
+    aiStatus: hasAiDesc ? "reviewed" : "available",
+    deepDiveSection: "description",
   }];
 }
 
@@ -710,6 +735,8 @@ function iconBrief(data: AppData, p: AppProfile, ai?: AIAnalysis | null): Action
     ],
     impact: "Icon is the first thing users see in search — affects tap-through rate before anything else",
     scoreBoost: "+5-15 on overall conversion",
+    aiStatus: "reviewed",
+    deepDiveSection: "icon",
   }];
 }
 
@@ -1056,6 +1083,8 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
       action: b, brief: b, deliverables,
       impact: "Screenshots are the #1 conversion driver" + (data.platform === "ios" ? " \u2014 captions are also a keyword ranking signal via OCR" : ""),
       scoreBoost: "+15-30 on Visual Assets score",
+      aiStatus: hasAiScreenshots ? "reviewed" : "available",
+      deepDiveSection: "screenshots",
     });
   }
 
@@ -1114,6 +1143,8 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
       ],
       impact: "Videos increase conversion rate and time-on-page \u2014 auto-play silently in store",
       scoreBoost: "+10-15 on Visual Assets score",
+      aiStatus: hasAiVideo ? "reviewed" : "available",
+      deepDiveSection: "video",
     });
   }
 
@@ -1189,6 +1220,8 @@ function ratingsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
       ],
       impact: "Ratings below 4.0 reduce conversion by up to 50% and hurt search rankings",
       scoreBoost: "+20-40 on Ratings score",
+      aiStatus: hasAiRatings ? "reviewed" : "available",
+      deepDiveSection: "ratings",
     });
   }
 
@@ -1217,6 +1250,8 @@ function ratingsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
       ],
       impact: "Higher volume improves algorithm trust signals and social proof",
       scoreBoost: "+10-25 on Ratings score",
+      aiStatus: hasAiRatings ? "reviewed" : "available",
+      deepDiveSection: "ratings",
     });
   }
 
@@ -1278,6 +1313,8 @@ function maintenanceBrief(data: AppData, p: AppProfile, cats: AuditCategory[], a
     ],
     impact: "Both stores favor actively maintained apps in rankings",
     scoreBoost: "+30-50 on Maintenance score",
+    aiStatus: hasAiMaint ? "reviewed" : "available",
+    deepDiveSection: "maintenance",
   }];
 }
 
@@ -1341,6 +1378,8 @@ function featureGraphicBrief(data: AppData, p: AppProfile, ai?: AIAnalysis | nul
     ],
     impact: "Required for Google Play editorial featuring; appears as hero banner on listing page",
     scoreBoost: "+10-20 on Conversion score",
+    aiStatus: hasAiFg ? "reviewed" : "available",
+    deepDiveSection: "icon",
   }];
 }
 
@@ -1403,6 +1442,8 @@ function conversionBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai
     ],
     impact: "First text users read on your store page \u2014 above the description",
     scoreBoost: "+15-25 on Conversion score",
+    aiStatus: hasAiPromo ? "reviewed" : "available",
+    deepDiveSection: "title",
   }];
 }
 
@@ -1463,6 +1504,8 @@ function localizationBrief(data: AppData, p: AppProfile, ai?: AIAnalysis | null)
     ],
     impact: "Localization typically yields 20-30% download increase in target markets",
     scoreBoost: "Expands reach to new markets (doesn't change English audit score)",
+    aiStatus: hasAiLoc ? "reviewed" : "available",
+    deepDiveSection: "localization",
   }];
 }
 
@@ -1507,7 +1550,9 @@ function whatsNewBrief(data: AppData, p: AppProfile, ai?: AIAnalysis | null): Ac
       `Update in ${data.platform === "ios" ? "App Store Connect \u203A What's New" : "Google Play Console \u203A Release notes"}`,
     ],
     impact: "What's New drives re-engagement from existing users and appears in Updates tab",
-    scoreBoost: "Indirect — improves user perception and re-engagement",
+    scoreBoost: "Indirect \u2014 improves user perception and re-engagement",
+    aiStatus: "reviewed",
+    deepDiveSection: "maintenance",
   }];
 }
 
@@ -1556,8 +1601,10 @@ function abTestingBrief(data: AppData, _p: AppProfile, ai?: AIAnalysis | null): 
       `Run each for ${data.platform === "ios" ? "minimum 7 days" : "7+ days with 50%+ traffic"}`,
       "Analyze results and implement winning variants",
     ],
-    impact: "A/B testing removes guesswork — data-driven decisions improve conversion",
+    impact: "A/B testing removes guesswork \u2014 data-driven decisions improve conversion",
     scoreBoost: "Depends on experiment outcomes",
+    aiStatus: "reviewed",
+    deepDiveSection: "title",
   }];
 }
 
@@ -1607,6 +1654,8 @@ function customStoreListingsBrief(data: AppData, ai?: AIAnalysis | null): Action
     ],
     impact: "Custom listings improve conversion for specific audiences and ad campaigns",
     scoreBoost: "Improves conversion for targeted segments",
+    aiStatus: "reviewed",
+    deepDiveSection: "localization",
   }];
 }
 
@@ -1662,6 +1711,8 @@ function cppBrief(data: AppData, _p: AppProfile, ai?: AIAnalysis | null): Action
     ],
     impact: "CPPs deliver average 8.6% conversion lift and up to 60% CPA reduction on paid campaigns",
     scoreBoost: "Improves paid acquisition ROI + organic conversion for specific keyword intents",
+    aiStatus: "reviewed",
+    deepDiveSection: "screenshots",
   }];
 }
 
@@ -1708,6 +1759,7 @@ export function generateActionPlan(
       action: b, brief: b,
       impact: "AI-identified priorities based on full listing analysis including visual review",
       scoreBoost: "Varies by action",
+      aiStatus: "reviewed",
     });
   }
 

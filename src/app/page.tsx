@@ -7,6 +7,87 @@ import ActionPlan from "@/components/ActionPlan";
 import type { AuditCategory } from "@/lib/aso-rules";
 import type { ActionItem } from "@/lib/action-plan";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatDeepDiveResult(section: string, analysis: any): string {
+  if (!analysis) return "";
+  let out = "";
+
+  if (section === "description") {
+    if (analysis.primaryRewrite) {
+      out += `**Recommended Description (${analysis.charCounts?.primary || "?"} chars):**\n\n`;
+      out += analysis.primaryRewrite + "\n\n";
+    }
+    if (analysis.alternativeA) {
+      out += `**Alternative A (${analysis.charCounts?.altA || "?"} chars):**\n\n`;
+      out += analysis.alternativeA + "\n\n";
+    }
+    if (analysis.alternativeB) {
+      out += `**Alternative B (${analysis.charCounts?.altB || "?"} chars):**\n\n`;
+      out += analysis.alternativeB + "\n\n";
+    }
+    if (analysis.keywordStrategy) {
+      out += `**Keyword Strategy:**\n${analysis.keywordStrategy}\n\n`;
+    }
+    if (analysis.structuralChanges?.length) {
+      out += `**Structural Changes:**\n`;
+      for (const c of analysis.structuralChanges) out += `  \u2022 ${c}\n`;
+    }
+  } else if (section === "screenshots") {
+    if (analysis.overallAssessment) out += `**Overall:** ${analysis.overallAssessment}\n\n`;
+    if (analysis.visualIdentity) out += `**Visual Identity:** ${analysis.visualIdentity}\n\n`;
+    if (analysis.firstThreeVerdict) out += `**First 3 Rule:** ${analysis.firstThreeVerdict}\n\n`;
+    if (analysis.perScreenshot?.length) {
+      for (const ss of analysis.perScreenshot) {
+        out += `**Slot ${ss.slot}:** ${ss.whatItShows}\n`;
+        out += `  Caption: "${ss.captionVisible}"\n`;
+        out += `  Quality: ${ss.captionQuality}\n`;
+        if (ss.captionSuggestions?.length) {
+          out += `  Suggestions: ${ss.captionSuggestions.join(" | ")}\n`;
+        }
+        if (ss.issues?.length) {
+          for (const issue of ss.issues) out += `  \u274C ${issue}\n`;
+        }
+        if (ss.designBrief) out += `  **Design brief:** ${ss.designBrief}\n`;
+        out += "\n";
+      }
+    }
+    if (analysis.missingSlots?.length) {
+      out += `**Missing Slots:**\n`;
+      for (const ms of analysis.missingSlots) {
+        out += `  \u274C Slot ${ms.slot}: ${ms.whatToShow}\n`;
+        out += `    Caption: "${ms.captionSuggestion}"\n`;
+        if (ms.designBrief) out += `    **Brief:** ${ms.designBrief}\n`;
+      }
+      out += "\n";
+    }
+    if (analysis.galleryReorderSuggestion) out += `**Reorder:** ${analysis.galleryReorderSuggestion}\n\n`;
+    if (analysis.ocrOptimization) out += `**OCR:** ${analysis.ocrOptimization}\n`;
+  } else if (section === "title" || section === "subtitle" || section === "keywords" || section === "shortDescription") {
+    if (analysis.currentAnalysis) out += `**Analysis:** ${analysis.currentAnalysis}\n\n`;
+    if (analysis.variants?.length) {
+      out += `**Title Variants:**\n`;
+      for (const v of analysis.variants) {
+        out += `  \u2022 "${v.title}" (${v.charCount}ch, ${v.strategy}) \u2014 ${v.reasoning}\n`;
+      }
+      out += "\n";
+    }
+    if (analysis.recommendation) out += `**Recommendation:** ${analysis.recommendation}\n`;
+  } else if (section === "icon") {
+    if (analysis.assessment) out += `**Assessment:** ${analysis.assessment}\n\n`;
+    if (analysis.colorAnalysis) out += `**Colors:** ${analysis.colorAnalysis}\n\n`;
+    if (analysis.competitorComparison) out += `**vs Competitors:** ${analysis.competitorComparison}\n\n`;
+    if (analysis.redesignBrief) out += `**Design Brief:** ${analysis.redesignBrief}\n\n`;
+    if (analysis.suggestions?.length) {
+      out += `**Suggestions:**\n`;
+      for (const s of analysis.suggestions) out += `  \u2022 ${s}\n`;
+    }
+  } else {
+    out = JSON.stringify(analysis, null, 2);
+  }
+
+  return out.trim();
+}
+
 interface SearchResult {
   id: string;
   name: string;
@@ -15,6 +96,29 @@ interface SearchResult {
   rating: number;
   platform: "ios" | "android";
   url: string;
+}
+
+interface CachedAppData {
+  platform: "ios" | "android";
+  title: string;
+  subtitle?: string;
+  shortDescription?: string;
+  description: string;
+  developerName: string;
+  category: string;
+  rating: number;
+  ratingsCount: number;
+  version: string;
+  lastUpdated: string;
+  screenshotCount: number;
+  hasVideo: boolean;
+  price: string;
+  url: string;
+  iconUrl?: string;
+  screenshots?: string[];
+  whatsNew?: string;
+  promotionalText?: string;
+  featureGraphicUrl?: string;
 }
 
 interface AuditReport {
@@ -31,6 +135,7 @@ interface AuditReport {
   categories: AuditCategory[];
   actionPlan: ActionItem[];
   aiPowered?: boolean;
+  appData?: CachedAppData;
 }
 
 type ViewState = "search" | "results" | "auditing" | "report";
@@ -44,6 +149,26 @@ export default function Home() {
   const [report, setReport] = useState<AuditReport | null>(null);
   const [error, setError] = useState("");
   const [searching, setSearching] = useState(false);
+  const [deepDiveLoading, setDeepDiveLoading] = useState<string | null>(null);
+
+  const handleDeepDive = useCallback(async (section: string, actionId: string): Promise<string | null> => {
+    if (!report?.appData) return null;
+    setDeepDiveLoading(actionId);
+    try {
+      const resp = await fetch("/api/audit/deep-dive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appData: report.appData, section }),
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      return formatDeepDiveResult(section, data.analysis);
+    } catch {
+      return null;
+    } finally {
+      setDeepDiveLoading(null);
+    }
+  }, [report]);
 
   const handleSearch = useCallback(async (e: FormEvent) => {
     e.preventDefault();
@@ -432,15 +557,10 @@ export default function Home() {
             {/* Action Plan */}
             {report.actionPlan && report.actionPlan.length > 0 && (
               <div className="mb-8 fade-in fade-in-delay-2">
-                <h3 className="text-lg mb-3 flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
+                <h3 className="text-lg mb-3" style={{ color: "var(--text-primary)" }}>
                   Action Plan
-                  {report.aiPowered && (
-                    <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: "var(--info-bg)", color: "var(--info-text)", border: "1px solid var(--info-border)" }}>
-                      AI-Powered
-                    </span>
-                  )}
                 </h3>
-                <ActionPlan actions={report.actionPlan} />
+                <ActionPlan actions={report.actionPlan} onDeepDive={handleDeepDive} deepDiveLoading={deepDiveLoading} />
               </div>
             )}
 

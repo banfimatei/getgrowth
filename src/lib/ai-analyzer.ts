@@ -844,3 +844,247 @@ export async function analyzeWithAI(appData: AppData): Promise<AIAnalysis | null
 
   return analysis;
 }
+
+// ---------------------------------------------------------------------------
+// Deep-dive: section-specific focused AI calls with higher token budgets
+// ---------------------------------------------------------------------------
+
+export type DeepDiveSection = "title" | "subtitle" | "keywords" | "shortDescription" | "description" | "screenshots" | "icon" | "ratings" | "video" | "maintenance" | "localization";
+
+function buildDescriptionDeepDivePrompt(data: AppData): string {
+  const isIOS = data.platform === "ios";
+  let p = `You are a senior ASO copywriter. Provide a comprehensive description rewrite for this ${isIOS ? "iOS" : "Android"} app.\n\n`;
+
+  p += `## APP CONTEXT\n`;
+  p += `**Title:** "${data.title}"\n`;
+  p += `**Category:** ${data.category}\n`;
+  p += `**Platform:** ${isIOS ? "iOS" : "Android"}\n`;
+  p += `**Rating:** ${data.rating > 0 ? `${data.rating.toFixed(1)}★ (${data.ratingsCount.toLocaleString()})` : "No rating"}\n\n`;
+
+  p += `## CURRENT DESCRIPTION\n${data.description.substring(0, 4000)}\n\n`;
+
+  p += `## REQUIREMENTS\n`;
+  p += `- Write ${isIOS ? "1 complete rewrite (1,000-4,000 chars)" : "1 complete rewrite (2,500-4,000 chars)"}\n`;
+  p += `- Also write 2 alternative versions with different angles/tones\n`;
+  p += `- Each version must include: compelling opening hook (2-3 sentences), feature bullets with user benefits, social proof, and CTA\n`;
+  p += `- ${!isIOS ? "Front-load primary keywords, use them 3-5x naturally. Google indexes the full description." : "Description is NOT indexed for search on iOS but affects conversion + web SEO."}\n`;
+  p += `- NO brackets, NO placeholders, NO [insert here] — write actual final copy using real app features\n`;
+  p += `- Each bullet should be benefit-focused: "✦ Feature → Benefit" format\n`;
+  p += `- Include character count for each version\n\n`;
+
+  p += `Return JSON:\n{\n`;
+  p += `  "primaryRewrite": "Complete description ready to paste (${isIOS ? "1,000-4,000" : "2,500-4,000"} chars)",\n`;
+  p += `  "alternativeA": "Alternative version with different angle",\n`;
+  p += `  "alternativeB": "Another alternative version",\n`;
+  p += `  "charCounts": { "primary": 2500, "altA": 2800, "altB": 2200 },\n`;
+  p += `  "openingHook": "Just the opening hook extracted from primaryRewrite",\n`;
+  p += `  "featureBullets": ["• Benefit bullet 1", "• Bullet 2", "...5-8 bullets"],\n`;
+  p += `  "cta": "Closing CTA from primaryRewrite",\n`;
+  p += `  "keywordStrategy": "Explanation of keyword placement strategy",\n`;
+  p += `  "keywordGaps": ["keyword missing from current description"],\n`;
+  p += `  "structuralChanges": ["Specific structural improvement made and why"]\n`;
+  p += `}`;
+  return p;
+}
+
+function buildScreenshotsDeepDivePrompt(data: AppData): string {
+  const isIOS = data.platform === "ios";
+  const screenshotMax = isIOS ? 10 : 8;
+  const imgCount = Math.min(data.screenshots?.length || 0, 8);
+
+  let p = `You are a senior ASO consultant specializing in app store visual assets. Provide a deep analysis of screenshots.\n\n`;
+
+  p += `## APP CONTEXT\n`;
+  p += `**App:** ${data.title}\n`;
+  p += `**Category:** ${data.category}\n`;
+  p += `**Platform:** ${isIOS ? "iOS" : "Android"}\n`;
+  p += `**Screenshots uploaded:** ${data.screenshotCount} / ${screenshotMax} slots\n\n`;
+
+  const descSnippet = data.description.substring(0, 1200).replace(/\n{2,}/g, "\n");
+  p += `## APP FEATURES\n${descSnippet}\n\n`;
+
+  if (imgCount > 0) {
+    p += `I'm providing ${imgCount} screenshot images. For EACH one, give an extremely detailed analysis:\n`;
+    p += `1. Describe what the screenshot shows in detail (UI elements, content, layout)\n`;
+    p += `2. Read and transcribe the EXACT caption text visible (or "none")\n`;
+    p += `3. Deep caption evaluation: benefit-focused? keyword-rich? readable at thumbnail? emotional trigger? OCR-friendly?\n`;
+    p += `4. Identify style and assess if it's the right choice\n`;
+    p += `5. List ALL issues (device frame age, UI freshness, placeholder data, contrast, readability)\n`;
+    p += `6. Provide a specific design brief for how to remake this screenshot\n`;
+    p += `7. Suggest 3 caption alternatives (benefit-focused, keyword-rich, 2-5 words each)\n\n`;
+  }
+
+  p += `Return JSON matching this structure:\n{\n`;
+  p += `  "overallAssessment": "Detailed 3-5 sentence assessment of gallery quality",\n`;
+  p += `  "galleryCoherence": 7,\n`;
+  p += `  "firstThreeVerdict": "Detailed First 3 Rule analysis",\n`;
+  p += `  "visualIdentity": "Assessment of consistent design language, color palette, typography",\n`;
+  p += `  "perScreenshot": [\n`;
+  for (let i = 1; i <= imgCount; i++) {
+    p += `    {\n`;
+    p += `      "slot": ${i},\n`;
+    p += `      "whatItShows": "Detailed description of screenshot ${i}",\n`;
+    p += `      "captionVisible": "EXACT text on the screenshot, or 'none'",\n`;
+    p += `      "captionQuality": "Deep assessment of caption effectiveness",\n`;
+    p += `      "captionSuggestions": ["Caption Alt 1", "Caption Alt 2", "Caption Alt 3"],\n`;
+    p += `      "style": "device-frame-with-caption | full-bleed | lifestyle | feature-highlight",\n`;
+    p += `      "issues": ["every issue observed"],\n`;
+    p += `      "designBrief": "Specific instructions for a designer to remake this screenshot — what to change, keep, and improve"\n`;
+    p += `    }${i < imgCount ? "," : ""}\n`;
+  }
+  p += `  ],\n`;
+
+  p += `  "missingSlots": [\n`;
+  const startSlot = imgCount + 1;
+  const endSlot = Math.min(imgCount + (screenshotMax - imgCount), screenshotMax);
+  for (let i = startSlot; i <= endSlot; i++) {
+    p += `    {\n`;
+    p += `      "slot": ${i},\n`;
+    p += `      "whatToShow": "What this new screenshot should display",\n`;
+    p += `      "captionSuggestion": "2-5 Word Caption",\n`;
+    p += `      "recommendedStyle": "device-frame-with-caption",\n`;
+    p += `      "designBrief": "Full design brief for a designer to create this screenshot"\n`;
+    p += `    }${i < endSlot ? "," : ""}\n`;
+  }
+  p += `  ],\n`;
+
+  p += `  "commonMistakesFound": ["list all common screenshot mistakes observed"],\n`;
+  p += `  "galleryReorderSuggestion": "If the current order is suboptimal, suggest a better order with reasoning",\n`;
+  p += `  "ocrOptimization": "Assessment of caption text for Apple OCR indexing (font size, contrast, positioning)"\n`;
+  p += `}`;
+  return p;
+}
+
+function buildTitleDeepDivePrompt(data: AppData): string {
+  const isIOS = data.platform === "ios";
+  const titleMax = isIOS ? 30 : 50;
+  let p = `You are a senior ASO consultant. Provide an exhaustive title optimization analysis.\n\n`;
+  p += `**Current title:** "${data.title}" (${data.title.length}/${titleMax} chars)\n`;
+  if (isIOS && data.subtitle) p += `**Current subtitle:** "${data.subtitle}" (${data.subtitle.length}/30 chars)\n`;
+  p += `**Category:** ${data.category}\n`;
+  p += `**Platform:** ${isIOS ? "iOS" : "Android"}\n\n`;
+  p += `**Description excerpt:** ${data.description.substring(0, 800)}\n\n`;
+
+  p += `Return JSON:\n{\n`;
+  p += `  "currentAnalysis": "Detailed analysis of current title — keyword coverage, brand placement, character usage",\n`;
+  p += `  "variants": [\n`;
+  for (let i = 1; i <= 8; i++) {
+    p += `    {\n`;
+    p += `      "title": "Title variant ${i} (≤${titleMax} chars)",\n`;
+    p += `      "charCount": ${titleMax},\n`;
+    p += `      "strategy": "keyword-first | brand-first | hybrid",\n`;
+    p += `      "reasoning": "Why this variant works"\n`;
+    p += `    }${i < 8 ? "," : ""}\n`;
+  }
+  p += `  ],\n`;
+  p += `  "keywordCoverage": [\n`;
+  p += `    { "keyword": "target keyword", "presentIn": ["variant 1", "variant 3"], "searchVolume": "high | medium | low" }\n`;
+  p += `  ],\n`;
+  p += `  "recommendation": "Which variant is the top recommendation and why"\n`;
+  p += `}`;
+  return p;
+}
+
+function getDeepDivePromptAndConfig(section: DeepDiveSection, data: AppData): {
+  systemPrompt: string;
+  prompt: string;
+  maxOutputTokens: number;
+  needsImages: boolean;
+} {
+  switch (section) {
+    case "description":
+      return {
+        systemPrompt: TEXT_SYSTEM_PROMPT,
+        prompt: buildDescriptionDeepDivePrompt(data),
+        maxOutputTokens: 16384,
+        needsImages: false,
+      };
+    case "screenshots":
+      return {
+        systemPrompt: VISUAL_SYSTEM_PROMPT,
+        prompt: buildScreenshotsDeepDivePrompt(data),
+        maxOutputTokens: 16384,
+        needsImages: true,
+      };
+    case "title":
+    case "subtitle":
+    case "keywords":
+    case "shortDescription":
+      return {
+        systemPrompt: TEXT_SYSTEM_PROMPT,
+        prompt: buildTitleDeepDivePrompt(data),
+        maxOutputTokens: 8192,
+        needsImages: false,
+      };
+    case "icon":
+      return {
+        systemPrompt: VISUAL_SYSTEM_PROMPT,
+        prompt: `Provide a deep-dive icon analysis for "${data.title}" (${data.category}, ${data.platform}).\n\nReturn JSON:\n{\n  "assessment": "Detailed assessment of the icon",\n  "issues": ["list every issue"],\n  "colorAnalysis": "Color palette assessment — contrast, visibility on light/dark backgrounds",\n  "competitorComparison": "How this icon compares to typical icons in ${data.category} category",\n  "redesignBrief": "Detailed brief for a designer to improve the icon",\n  "suggestions": ["specific improvement 1", "improvement 2", "improvement 3"]\n}`,
+        maxOutputTokens: 4096,
+        needsImages: true,
+      };
+    default:
+      return {
+        systemPrompt: TEXT_SYSTEM_PROMPT,
+        prompt: buildTextPrompt(data),
+        maxOutputTokens: 8192,
+        needsImages: false,
+      };
+  }
+}
+
+export async function runDeepDive(
+  appData: AppData,
+  section: DeepDiveSection,
+): Promise<Record<string, unknown> | null> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.log("Deep-dive skipped: no GEMINI_API_KEY");
+    return null;
+  }
+
+  const config = getDeepDivePromptAndConfig(section, appData);
+  const parts: Record<string, unknown>[] = [{ text: config.prompt }];
+
+  if (config.needsImages) {
+    const imageUrls: { url: string; label: string }[] = [];
+
+    if (section === "icon" && appData.iconUrl) {
+      imageUrls.push({ url: appData.iconUrl, label: "App icon:" });
+    }
+    if (section === "icon" && appData.featureGraphicUrl) {
+      imageUrls.push({ url: appData.featureGraphicUrl, label: "Feature graphic:" });
+    }
+    if (section === "screenshots") {
+      if (appData.iconUrl) imageUrls.push({ url: appData.iconUrl, label: "App icon (for context):" });
+      const screenshotUrls = (appData.screenshots || []).slice(0, 8);
+      for (let i = 0; i < screenshotUrls.length; i++) {
+        imageUrls.push({ url: screenshotUrls[i], label: `Screenshot ${i + 1} of ${screenshotUrls.length}:` });
+      }
+    }
+
+    if (imageUrls.length > 0) {
+      const downloads = await Promise.all(imageUrls.map(({ url }) => downloadImageAsBase64(url)));
+      let totalBytes = 0;
+      for (let i = 0; i < downloads.length; i++) {
+        const img = downloads[i];
+        if (img) {
+          const imgBytes = img.data.length * 0.75;
+          if (totalBytes + imgBytes > 12_000_000) break;
+          totalBytes += imgBytes;
+          parts.push({ text: imageUrls[i].label });
+          parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
+        }
+      }
+      console.log(`Deep-dive [${section}]: ${downloads.filter(Boolean).length} images, ${(totalBytes / 1_000_000).toFixed(1)}MB`);
+    }
+  }
+
+  return callGemini(apiKey, {
+    systemPrompt: config.systemPrompt,
+    parts,
+    maxOutputTokens: config.maxOutputTokens,
+    timeoutMs: 90000,
+    label: `DEEP-DIVE-${section.toUpperCase()}`,
+  });
+}

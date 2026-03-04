@@ -52,6 +52,28 @@ export async function GET(request: NextRequest) {
       aiPowered: hasTextAI || hasVisualAI,
       aiText: hasTextAI,
       aiScreenshots: hasVisualAI,
+      appData: {
+        platform: appData.platform,
+        title: appData.title,
+        subtitle: appData.subtitle,
+        shortDescription: appData.shortDescription,
+        description: appData.description,
+        developerName: appData.developerName,
+        category: appData.category,
+        rating: appData.rating,
+        ratingsCount: appData.ratingsCount,
+        version: appData.version,
+        lastUpdated: appData.lastUpdated,
+        screenshotCount: appData.screenshotCount,
+        hasVideo: appData.hasVideo,
+        price: appData.price,
+        url: appData.url,
+        iconUrl: appData.iconUrl,
+        screenshots: appData.screenshots,
+        whatsNew: appData.whatsNew,
+        promotionalText: appData.promotionalText,
+        featureGraphicUrl: appData.featureGraphicUrl,
+      },
     });
   } catch (error) {
     console.error("Audit error:", error);

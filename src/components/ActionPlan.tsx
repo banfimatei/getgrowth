@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import type { ActionItem } from "@/lib/action-plan";
+import type { ActionItem, DeepDiveSection } from "@/lib/action-plan";
+
+interface ActionPlanProps {
+  actions: ActionItem[];
+  onDeepDive?: (section: DeepDiveSection, actionId: string) => Promise<string | null>;
+  deepDiveLoading?: string | null;
+}
 
 const priorityConfig = {
   critical: { bg: "var(--fail-bg)", border: "var(--fail-border)", text: "var(--fail-text)", label: "Critical" },
@@ -16,7 +22,7 @@ const effortConfig = {
   heavy: { label: "Significant effort", color: "var(--text-tertiary)" },
 };
 
-export default function ActionPlan({ actions }: { actions: ActionItem[] }) {
+export default function ActionPlan({ actions, onDeepDive, deepDiveLoading }: ActionPlanProps) {
   if (actions.length === 0) {
     return (
       <div
@@ -37,19 +43,25 @@ export default function ActionPlan({ actions }: { actions: ActionItem[] }) {
   return (
     <div className="space-y-4">
       {quickWins.length > 0 && (
-        <ActionGroup title="Quick Wins" subtitle="Can be done today" actions={quickWins} />
+        <ActionGroup title="Quick Wins" subtitle="Can be done today" actions={quickWins} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} />
       )}
       {mediumEffort.length > 0 && (
-        <ActionGroup title="This Sprint" subtitle="Medium effort, high impact" actions={mediumEffort} />
+        <ActionGroup title="This Sprint" subtitle="Medium effort, high impact" actions={mediumEffort} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} />
       )}
       {heavyEffort.length > 0 && (
-        <ActionGroup title="Roadmap" subtitle="Significant effort" actions={heavyEffort} />
+        <ActionGroup title="Roadmap" subtitle="Significant effort" actions={heavyEffort} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} />
       )}
     </div>
   );
 }
 
-function ActionGroup({ title, subtitle, actions }: { title: string; subtitle: string; actions: ActionItem[] }) {
+function ActionGroup({ title, subtitle, actions, onDeepDive, deepDiveLoading }: {
+  title: string;
+  subtitle: string;
+  actions: ActionItem[];
+  onDeepDive?: (section: DeepDiveSection, actionId: string) => Promise<string | null>;
+  deepDiveLoading?: string | null;
+}) {
   return (
     <div>
       <div className="flex items-baseline gap-2 mb-2">
@@ -58,22 +70,35 @@ function ActionGroup({ title, subtitle, actions }: { title: string; subtitle: st
       </div>
       <div className="space-y-2">
         {actions.map((action) => (
-          <ActionCard key={action.id} action={action} />
+          <ActionCard key={action.id} action={action} onDeepDive={onDeepDive} isLoading={deepDiveLoading === action.id} />
         ))}
       </div>
     </div>
   );
 }
 
-function ActionCard({ action }: { action: ActionItem }) {
+function ActionCard({ action, onDeepDive, isLoading }: {
+  action: ActionItem;
+  onDeepDive?: (section: DeepDiveSection, actionId: string) => Promise<string | null>;
+  isLoading?: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [deepDiveResult, setDeepDiveResult] = useState<string | null>(null);
   const pConfig = priorityConfig[action.priority];
   const eConfig = effortConfig[action.effort];
+
+  const canDeepDive = !!action.deepDiveSection && !!onDeepDive;
+  const deepDiveSections: DeepDiveSection[] = ["description", "screenshots", "title", "subtitle", "icon"];
+  const showDeepDive = canDeepDive && deepDiveSections.includes(action.deepDiveSection!);
 
   return (
     <div
       className="border rounded-lg overflow-hidden"
-      style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border)" }}
+      style={{
+        backgroundColor: "var(--bg-card)",
+        borderColor: isLoading ? "var(--info-border)" : "var(--border)",
+        transition: "border-color 0.3s ease",
+      }}
     >
       <button
         onClick={() => setExpanded(!expanded)}
@@ -87,9 +112,29 @@ function ActionCard({ action }: { action: ActionItem }) {
           {pConfig.label}
         </span>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-            {action.title}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+              {action.title}
+            </p>
+            {action.aiStatus === "reviewed" && (
+              <span
+                className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none"
+                style={{ background: "linear-gradient(135deg, #7c3aed, #6366f1)", color: "#fff" }}
+                title="Analyzed by AI"
+              >
+                AI
+              </span>
+            )}
+            {action.aiStatus === "available" && (
+              <span
+                className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium leading-none"
+                style={{ backgroundColor: "var(--bg-inset)", color: "var(--text-tertiary)", border: "1px dashed var(--border)" }}
+                title="AI analysis available"
+              >
+                ✦ AI
+              </span>
+            )}
+          </div>
           <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>
             {action.category} {"\u00B7"} <span style={{ color: eConfig.color }}>{eConfig.label}</span> {"\u00B7"} {action.scoreBoost}
           </p>
@@ -158,6 +203,44 @@ function ActionCard({ action }: { action: ActionItem }) {
           <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
             <span className="font-medium" style={{ color: "var(--text-secondary)" }}>Impact:</span> {action.impact}
           </p>
+
+          {/* Deep Dive button */}
+          {showDeepDive && (
+            <div className="pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+              {isLoading ? (
+                <div className="flex items-center gap-2 text-xs py-1.5" style={{ color: "var(--info-text)" }}>
+                  <span className="inline-block w-3.5 h-3.5 border-2 rounded-full animate-spin" style={{ borderColor: "var(--info-border)", borderTopColor: "var(--info-text)" }} />
+                  Running deep AI analysis on {action.deepDiveSection}...
+                </div>
+              ) : deepDiveResult ? (
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--info-text)" }}>
+                    ✦ Deep AI Analysis
+                  </p>
+                  <BriefContent text={deepDiveResult} />
+                </div>
+              ) : (
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (onDeepDive && action.deepDiveSection) {
+                      const result = await onDeepDive(action.deepDiveSection, action.id);
+                      if (result) setDeepDiveResult(result);
+                    }
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-medium py-1.5 px-3 rounded cursor-pointer transition-colors"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(124,58,237,0.1), rgba(99,102,241,0.1))",
+                    color: "var(--info-text)",
+                    border: "1px solid var(--info-border)",
+                  }}
+                >
+                  <span>✦</span>
+                  {action.aiStatus === "reviewed" ? "Deep Dive" : "Enhance with AI"}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
