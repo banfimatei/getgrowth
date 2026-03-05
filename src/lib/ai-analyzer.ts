@@ -377,17 +377,30 @@ You MUST return valid JSON. Every assessment must be:
 
 async function downloadImageAsBase64(
   url: string,
-  timeoutMs = 5000,
+  timeoutMs = 8000,
 ): Promise<{ data: string; mimeType: string } | null> {
   try {
-    const resp = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
-    if (!resp.ok) return null;
+    const resp = await fetch(url, {
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+      },
+    });
+    if (!resp.ok) {
+      console.log(`Image download: HTTP ${resp.status} for ${url.substring(0, 80)}...`);
+      return null;
+    }
     const contentType = resp.headers.get("content-type") || "image/jpeg";
     const buffer = await resp.arrayBuffer();
-    if (buffer.byteLength > 4_000_000) return null;
+    const sizeMB = (buffer.byteLength / 1_000_000).toFixed(2);
+    if (buffer.byteLength > 5_000_000) {
+      console.log(`Image download: Skipped ${sizeMB}MB image (over 5MB cap): ${url.substring(0, 80)}...`);
+      return null;
+    }
     const base64 = Buffer.from(buffer).toString("base64");
     return { data: base64, mimeType: contentType.split(";")[0] };
-  } catch {
+  } catch (err) {
+    console.log(`Image download: Failed for ${url.substring(0, 80)}... — ${err instanceof Error ? err.message : "unknown error"}`);
     return null;
   }
 }
@@ -604,12 +617,14 @@ function buildVisualPrompt(data: AppData): string {
   p += `    ],\n`;
 
   p += `    "missingSlots": [\n`;
+  p += `      // IMPORTANT: Only suggest features you can confirm from the app description or existing screenshots.\n`;
+  p += `      // If you're guessing about a feature, add "(if available)" to whatToShow.\n`;
   const startSlot = imgCount + 1;
   const endSlot = Math.min(imgCount + 4, screenshotMax);
   for (let i = startSlot; i <= endSlot; i++) {
     p += `      {\n`;
     p += `        "slot": ${i},\n`;
-    p += `        "whatToShow": "What this new screenshot should display based on the app",\n`;
+    p += `        "whatToShow": "What this new screenshot should display — add '(if available)' for features not confirmed in description",\n`;
     p += `        "captionSuggestion": "2-5 Word Caption",\n`;
     p += `        "recommendedStyle": "device-frame-with-caption"\n`;
     p += `      }${i < endSlot ? "," : ""}\n`;
@@ -747,7 +762,8 @@ export async function analyzeWithAI(appData: AppData): Promise<AIAnalysis | null
   }
 
   let totalImageBytes = 0;
-  const MAX_TOTAL_IMAGE_BYTES = 12_000_000; // 12MB — visual call gets its own budget
+  const MAX_TOTAL_IMAGE_BYTES = 12_000_000;
+  let attachedCount = 0;
 
   if (imageUrls.length > 0) {
     const downloads = await Promise.all(
@@ -755,7 +771,6 @@ export async function analyzeWithAI(appData: AppData): Promise<AIAnalysis | null
     );
 
     const imgTime = Date.now() - t0;
-    let attached = 0;
     let skipped = 0;
 
     for (let i = 0; i < downloads.length; i++) {
@@ -772,29 +787,41 @@ export async function analyzeWithAI(appData: AppData): Promise<AIAnalysis | null
         visualParts.push({
           inlineData: { mimeType: img.mimeType, data: img.data },
         });
-        attached++;
+        attachedCount++;
       } else {
         console.log(`AI [VISUAL]: Failed to download ${imageUrls[i].label}`);
         skipped++;
       }
     }
 
-    console.log(`AI [VISUAL]: ${attached} images attached, ${skipped} skipped, ${(totalImageBytes / 1_000_000).toFixed(1)}MB total, download took ${imgTime}ms`);
+    console.log(`AI [VISUAL]: ${attachedCount} images attached, ${skipped} skipped, ${(totalImageBytes / 1_000_000).toFixed(1)}MB total, download took ${imgTime}ms`);
+  } else {
+    console.log("AI [VISUAL]: No image URLs available — skipping visual call");
   }
 
-  const visualCall = callGemini(apiKey, {
-    systemPrompt: VISUAL_SYSTEM_PROMPT,
-    parts: visualParts,
-    maxOutputTokens: 12288,
-    timeoutMs: 90000,
-    label: "VISUAL",
-  });
+  const visualCall = attachedCount > 0
+    ? callGemini(apiKey, {
+        systemPrompt: VISUAL_SYSTEM_PROMPT,
+        parts: visualParts,
+        maxOutputTokens: 12288,
+        timeoutMs: 90000,
+        label: "VISUAL",
+      })
+    : Promise.resolve(null);
 
   // ── Run both in parallel ──────────────────────────────────────────
   const [textResult, visualResult] = await Promise.all([textCall, visualCall]);
 
   const elapsed = Date.now() - t0;
   console.log(`AI: Both calls complete in ${elapsed}ms — text: ${textResult ? "OK" : "FAILED"}, visual: ${visualResult ? "OK" : "FAILED"}`);
+
+  if (visualResult) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const vr = visualResult as any;
+    const ssCount = vr.screenshots?.perScreenshot?.length ?? "missing";
+    const iconPresent = !!vr.icon;
+    console.log(`AI [VISUAL]: screenshots.perScreenshot: ${ssCount}, icon: ${iconPresent}, keys: ${Object.keys(visualResult).join(", ")}`);
+  }
 
   if (!textResult && !visualResult) {
     console.error("AI: Both calls failed — returning null");
@@ -936,12 +963,13 @@ function buildScreenshotsDeepDivePrompt(data: AppData): string {
   p += `  ],\n`;
 
   p += `  "missingSlots": [\n`;
+  p += `    // Only suggest features confirmed in the description. Add "(if available)" for uncertain features.\n`;
   const startSlot = imgCount + 1;
   const endSlot = Math.min(imgCount + (screenshotMax - imgCount), screenshotMax);
   for (let i = startSlot; i <= endSlot; i++) {
     p += `    {\n`;
     p += `      "slot": ${i},\n`;
-    p += `      "whatToShow": "What this new screenshot should display",\n`;
+    p += `      "whatToShow": "What this new screenshot should display — add '(if available)' for unconfirmed features",\n`;
     p += `      "captionSuggestion": "2-5 Word Caption",\n`;
     p += `      "recommendedStyle": "device-frame-with-caption",\n`;
     p += `      "designBrief": "Full design brief for a designer to create this screenshot"\n`;

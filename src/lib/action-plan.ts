@@ -289,7 +289,7 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
           .join(" ")
           .toLowerCase()
           .split(/[\s\-:|–—&+,()]+/)
-          .filter(w => w.length > 2 && !titleWords.has(w) && !p.brand.toLowerCase().split(/\s+/).includes(w))
+          .filter(w => w.length > 2 && !isGarbage(w) && !titleWords.has(w) && !p.brand.toLowerCase().split(/\s+/).includes(w))
       )].slice(0, 5)
     : available.slice(0, 4);
 
@@ -1108,14 +1108,14 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
     const isHighEffort = needsRedo || data.screenshotCount < 4;
     const isCritical = data.screenshotCount < 3 || (needsDeviceFrameUpdate && needsUIUpdate);
 
-    // Collect AI caption suggestions as one-click copy options
+    // Collect AI caption suggestions as one-click copy options (just the caption text)
     const captionCopyOptions: string[] = [];
     if (hasAiScreenshots) {
       for (const ss of ai!.screenshots.perScreenshot) {
-        if (ss.captionSuggestion) captionCopyOptions.push(`Slot ${ss.slot}: "${ss.captionSuggestion}"`);
+        if (ss.captionSuggestion) captionCopyOptions.push(ss.captionSuggestion);
       }
       for (const ms of ai!.screenshots.missingSlots) {
-        if (ms.captionSuggestion) captionCopyOptions.push(`Slot ${ms.slot} (new): "${ms.captionSuggestion}"`);
+        if (ms.captionSuggestion) captionCopyOptions.push(ms.captionSuggestion);
       }
     }
 
