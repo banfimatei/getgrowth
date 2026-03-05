@@ -295,8 +295,10 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
     b += `  \u2022 "Brand: Keyword Phrase" \u2014 common alternative\n`;
   } else if (needsFront) {
     b += `"${p.brand}" occupies the first 15 characters \u2014 the most visible and heavily weighted zone. Unless it's a household name, move keywords first.\n`;
-  } else {
+  } else if (remaining > 0) {
     b += `You have ${remaining} unused characters in your most valuable metadata field. Every unused character is a missed ranking opportunity.\n`;
+  } else if (hasAiTitle) {
+    b += `Your title uses all 30 characters, but keyword selection can be improved. Swapping low-value terms for higher-volume alternatives can boost rankings without changing length.\n`;
   }
 
   b += `\n**Rules:**\n`;
@@ -311,7 +313,7 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
     priority: needsKw ? "critical" : "high",
     effort: "quick",
     category: "Title",
-    title: needsKw ? "Restructure title with high-value keywords" : needsFront ? "Front-load keywords before brand name" : `Fill ${remaining} unused title characters`,
+    title: needsKw ? "Restructure title with high-value keywords" : needsFront ? "Front-load keywords before brand name" : remaining > 0 ? `Fill ${remaining} unused title characters` : "Optimize title keyword strategy",
     currentState: `"${data.title}" (${data.title.length}/30 chars)`,
     action: b, brief: b,
     copyOptions: validOpts.length > 0 ? validOpts : undefined,
@@ -1059,8 +1061,13 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
     deliverables.push("Set up A/B test with current vs new screenshots");
 
     // Build a title that reflects the actual scope
+    const reshootAll = needsDeviceFrameUpdate || needsUIUpdate;
     let actionTitle: string;
-    if (needsRedo && needsNew) {
+    if (reshootAll && needsNew) {
+      actionTitle = `Reshoot all ${data.screenshotCount} screenshots + design ${max - data.screenshotCount} new`;
+    } else if (reshootAll) {
+      actionTitle = `Reshoot all ${data.screenshotCount} screenshots with modern device frames`;
+    } else if (needsRedo && needsNew) {
       actionTitle = `Redo ${slotsToRedo.length} existing + design ${max - data.screenshotCount} new screenshots`;
     } else if (needsRedo) {
       actionTitle = `Redo ${slotsToRedo.length} screenshots (outdated) + optimize all captions`;

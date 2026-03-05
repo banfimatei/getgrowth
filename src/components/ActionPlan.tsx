@@ -113,28 +113,28 @@ function ActionCard({ action, onDeepDive, isLoading }: {
           {pConfig.label}
         </span>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-start gap-1.5 flex-wrap">
             <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
               {action.title}
+              {action.aiStatus === "reviewed" && (
+                <span
+                  className="inline-block ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none align-middle"
+                  style={{ background: "linear-gradient(135deg, #7c3aed, #6366f1)", color: "#fff" }}
+                  title="Analyzed by AI"
+                >
+                  AI
+                </span>
+              )}
+              {action.aiStatus === "available" && (
+                <span
+                  className="inline-block ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium leading-none align-middle"
+                  style={{ backgroundColor: "var(--bg-inset)", color: "var(--text-tertiary)", border: "1px dashed var(--border)" }}
+                  title="AI analysis available"
+                >
+                  ✦ AI
+                </span>
+              )}
             </p>
-            {action.aiStatus === "reviewed" && (
-              <span
-                className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none"
-                style={{ background: "linear-gradient(135deg, #7c3aed, #6366f1)", color: "#fff" }}
-                title="Analyzed by AI"
-              >
-                AI
-              </span>
-            )}
-            {action.aiStatus === "available" && (
-              <span
-                className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium leading-none"
-                style={{ backgroundColor: "var(--bg-inset)", color: "var(--text-tertiary)", border: "1px dashed var(--border)" }}
-                title="AI analysis available"
-              >
-                ✦ AI
-              </span>
-            )}
           </div>
           <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>
             {action.category} {"\u00B7"} <span style={{ color: eConfig.color }}>{eConfig.label}</span> {"\u00B7"} {action.scoreBoost}
