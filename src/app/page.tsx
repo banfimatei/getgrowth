@@ -74,6 +74,11 @@ function formatDeepDiveResult(section: string, analysis: any): string {
     if (analysis.recommendation) out += `**Recommendation:** ${analysis.recommendation}\n`;
   } else if (section === "icon") {
     if (analysis.assessment) out += `**Assessment:** ${analysis.assessment}\n\n`;
+    if (analysis.issues?.length) {
+      out += `**Issues:**\n`;
+      for (const issue of analysis.issues) out += `  \u274C ${issue}\n`;
+      out += "\n";
+    }
     if (analysis.colorAnalysis) out += `**Colors:** ${analysis.colorAnalysis}\n\n`;
     if (analysis.competitorComparison) out += `**vs Competitors:** ${analysis.competitorComparison}\n\n`;
     if (analysis.redesignBrief) out += `**Design Brief:** ${analysis.redesignBrief}\n\n`;
@@ -104,6 +109,7 @@ interface CachedAppData {
   subtitle?: string;
   shortDescription?: string;
   description: string;
+  keywordField?: string;
   developerName: string;
   category: string;
   rating: number;
@@ -113,6 +119,9 @@ interface CachedAppData {
   screenshotCount: number;
   hasVideo: boolean;
   price: string;
+  size?: string;
+  contentRating?: string;
+  installs?: string;
   url: string;
   iconUrl?: string;
   screenshots?: string[];
@@ -160,11 +169,14 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ appData: report.appData, section }),
       });
-      if (!resp.ok) return null;
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => null);
+        return `__ERROR__${errData?.error || `AI analysis failed (${resp.status})`}`;
+      }
       const data = await resp.json();
       return formatDeepDiveResult(section, data.analysis);
     } catch {
-      return null;
+      return "__ERROR__Network error — please try again";
     } finally {
       setDeepDiveLoading(null);
     }

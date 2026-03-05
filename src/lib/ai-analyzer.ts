@@ -1,4 +1,5 @@
 import type { AppData } from "./aso-rules";
+import type { DeepDiveSection } from "./action-plan";
 
 const GEMINI_MODEL = "gemini-3-flash-preview";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
@@ -849,7 +850,7 @@ export async function analyzeWithAI(appData: AppData): Promise<AIAnalysis | null
 // Deep-dive: section-specific focused AI calls with higher token budgets
 // ---------------------------------------------------------------------------
 
-export type DeepDiveSection = "title" | "subtitle" | "keywords" | "shortDescription" | "description" | "screenshots" | "icon" | "ratings" | "video" | "maintenance" | "localization";
+export type { DeepDiveSection };
 
 function buildDescriptionDeepDivePrompt(data: AppData): string {
   const isIOS = data.platform === "ios";
@@ -960,7 +961,14 @@ function buildTitleDeepDivePrompt(data: AppData): string {
   const titleMax = isIOS ? 30 : 50;
   let p = `You are a senior ASO consultant. Provide an exhaustive title optimization analysis.\n\n`;
   p += `**Current title:** "${data.title}" (${data.title.length}/${titleMax} chars)\n`;
-  if (isIOS && data.subtitle) p += `**Current subtitle:** "${data.subtitle}" (${data.subtitle.length}/30 chars)\n`;
+  if (isIOS) {
+    p += data.subtitle
+      ? `**Current subtitle:** "${data.subtitle}" (${data.subtitle.length}/30 chars)\n`
+      : `**Current subtitle:** (not set — empty, 30 chars available)\n`;
+  }
+  if (!isIOS && data.shortDescription) {
+    p += `**Short description:** "${data.shortDescription}" (${data.shortDescription.length}/80 chars)\n`;
+  }
   p += `**Category:** ${data.category}\n`;
   p += `**Platform:** ${isIOS ? "iOS" : "Android"}\n\n`;
   p += `**Description excerpt:** ${data.description.substring(0, 800)}\n\n`;
@@ -971,7 +979,7 @@ function buildTitleDeepDivePrompt(data: AppData): string {
   for (let i = 1; i <= 8; i++) {
     p += `    {\n`;
     p += `      "title": "Title variant ${i} (≤${titleMax} chars)",\n`;
-    p += `      "charCount": ${titleMax},\n`;
+    p += `      "charCount": 0,\n`;
     p += `      "strategy": "keyword-first | brand-first | hybrid",\n`;
     p += `      "reasoning": "Why this variant works"\n`;
     p += `    }${i < 8 ? "," : ""}\n`;
@@ -981,7 +989,8 @@ function buildTitleDeepDivePrompt(data: AppData): string {
   p += `    { "keyword": "target keyword", "presentIn": ["variant 1", "variant 3"], "searchVolume": "high | medium | low" }\n`;
   p += `  ],\n`;
   p += `  "recommendation": "Which variant is the top recommendation and why"\n`;
-  p += `}`;
+  p += `}\n\n`;
+  p += `IMPORTANT: "charCount" must be the ACTUAL character count of each title variant you write, not the maximum limit.`;
   return p;
 }
 

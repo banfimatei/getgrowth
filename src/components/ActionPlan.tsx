@@ -84,6 +84,7 @@ function ActionCard({ action, onDeepDive, isLoading }: {
 }) {
   const [expanded, setExpanded] = useState(false);
   const [deepDiveResult, setDeepDiveResult] = useState<string | null>(null);
+  const [deepDiveError, setDeepDiveError] = useState<string | null>(null);
   const pConfig = priorityConfig[action.priority];
   const eConfig = effortConfig[action.effort];
 
@@ -212,6 +213,20 @@ function ActionCard({ action, onDeepDive, isLoading }: {
                   <span className="inline-block w-3.5 h-3.5 border-2 rounded-full animate-spin" style={{ borderColor: "var(--info-border)", borderTopColor: "var(--info-text)" }} />
                   Running deep AI analysis on {action.deepDiveSection}...
                 </div>
+              ) : deepDiveError ? (
+                <div className="flex items-center gap-2 text-xs py-1.5">
+                  <span style={{ color: "var(--fail-text)" }}>{deepDiveError}</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeepDiveError(null);
+                    }}
+                    className="text-xs underline cursor-pointer"
+                    style={{ color: "var(--text-tertiary)" }}
+                  >
+                    Retry
+                  </button>
+                </div>
               ) : deepDiveResult ? (
                 <div className="space-y-1">
                   <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--info-text)" }}>
@@ -225,7 +240,11 @@ function ActionCard({ action, onDeepDive, isLoading }: {
                     e.stopPropagation();
                     if (onDeepDive && action.deepDiveSection) {
                       const result = await onDeepDive(action.deepDiveSection, action.id);
-                      if (result) setDeepDiveResult(result);
+                      if (result?.startsWith("__ERROR__")) {
+                        setDeepDiveError(result.replace("__ERROR__", ""));
+                      } else if (result) {
+                        setDeepDiveResult(result);
+                      }
                     }
                   }}
                   className="flex items-center gap-1.5 text-xs font-medium py-1.5 px-3 rounded cursor-pointer transition-colors"
