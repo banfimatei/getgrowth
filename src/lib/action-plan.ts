@@ -281,14 +281,27 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
     for (const issue of ai!.title.issues) b += `  \u2022 ${issue}\n`;
     b += `\n${ai!.title.reasoning}\n\n`;
   }
+  // When AI has analyzed the title, extract keyword targets from its suggestions instead of
+  // using the noisy deterministic extractKeywords output (which can surface junk like "itunes").
+  const aiDerivedKeywords = hasAiTitle
+    ? [...new Set(
+        ai!.title.suggestions
+          .join(" ")
+          .toLowerCase()
+          .split(/[\s\-:|–—&+,()]+/)
+          .filter(w => w.length > 2 && !titleWords.has(w) && !p.brand.toLowerCase().split(/\s+/).includes(w))
+      )].slice(0, 5)
+    : available.slice(0, 4);
+
   b += `**Current:** "${data.title}" (${data.title.length}/30 chars)\n`;
-  b += `**Brand:** "${p.brand}" | **Descriptive keywords:** ${[...titleWords].filter(w => w.length > 2 && !p.brand.toLowerCase().includes(w)).map(w => `"${w}"`).join(", ") || "none"}\n`;
-  b += `**Missing high-value keywords:** ${available.slice(0, 4).map(w => `"${w}"`).join(", ")}\n\n`;
+  b += `**Brand:** "${p.brand}" | **Descriptive keywords in title:** ${[...titleWords].filter(w => w.length > 2 && !p.brand.toLowerCase().includes(w)).map(w => `"${w}"`).join(", ") || "none"}\n`;
+  const kwLabel = hasAiTitle ? "Target keywords (from AI-suggested titles)" : "Missing high-value keywords";
+  b += `**${kwLabel}:** ${aiDerivedKeywords.map(w => '"' + w + '"').join(", ")}\n\n`;
 
   // Per ASO skill: "Front-load keywords in title (first 15 chars most important)"
   // Per ASO skill: "Write for humans first, SEO second"
   if (needsKw) {
-    b += `Your title is brand-heavy with limited keyword coverage. Users searching for "${available[0] || data.category.toLowerCase()}" won't find your app unless those terms appear in the title or subtitle.\n\n`;
+    b += `Your title is brand-heavy with limited keyword coverage. Users searching for "${aiDerivedKeywords[0] || data.category.toLowerCase()}" won't find your app unless those terms appear in the title or subtitle.\n\n`;
     b += `**Title format options** (per ASO best practice: "Brand \u2013 Keyword Phrase"):\n`;
     b += `  \u2022 "Brand \u2013 Keyword Phrase" \u2014 safe, clear separation\n`;
     b += `  \u2022 "Keyword Phrase \u2013 Brand" \u2014 if brand isn't a household name, this front-loads search terms\n`;
@@ -843,7 +856,7 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
       }
 
       if (ai!.screenshots.missingSlots.length > 0) {
-        b += `\n**Missing screenshots to add:**\n`;
+        b += `\n**Missing screenshots to add** *(verify each feature is live in your app before shooting)*:\n`;
         for (const ms of ai!.screenshots.missingSlots) {
           b += `\n  \u274C **Slot ${ms.slot}:**\n`;
           b += `     What to show: ${ms.whatToShow}\n`;
@@ -855,6 +868,19 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
       if (ai!.screenshots.commonMistakesFound && ai!.screenshots.commonMistakesFound.length > 0) {
         b += `\n**Common mistakes detected:**\n`;
         for (const m of ai!.screenshots.commonMistakesFound) b += `  \u274C ${m}\n`;
+      }
+
+      // Compact reference section (replaces the long generic blocks)
+      b += `\n**Caption guide:** 2-5 words \u2022 benefit-focused \u2022 40pt+ bold sans-serif \u2022 keyword-aware\n`;
+      if (data.platform === "ios") {
+        b += `**iOS OCR:** Apple indexes caption text as keywords \u2014 first 3 screenshots carry most weight. Align captions with your title + subtitle keywords. OCR check: zoom to 25% and verify readability.\n`;
+        b += `**Design specs:** 1320\u00D72868px (6.9\") | 1290\u00D72796px (6.7\") | 1242\u00D72208px (5.5\") \u2014 upload 6.9\" and Apple scales down.\n`;
+        b += `**Device frame:** iPhone 16 Pro (Dynamic Island, no home button)\n`;
+        b += `**A/B test:** Apple PPO supports up to 3 treatments. Test screenshot order, caption copy, and visual style.\n`;
+      } else {
+        b += `**Android note:** Keep promo text under 20% of image. Vary composition. Use Store Listing Experiments (7+ days, 50%+ traffic).\n`;
+        b += `**Design specs:** 1080\u00D71920px (standard) | 1440\u00D72560px (high-res) | Feature graphic: 1024\u00D7500px\n`;
+        b += `**Device frame:** Pixel 9 or current flagship Android device\n`;
       }
     } else {
       b += `\u26A0\uFE0F **Note:** AI vision analysis was unavailable for this audit. The captions below are auto-generated from your description text \u2014 not from actual screenshot analysis. Re-run the audit if AI was expected.\n\n`;
@@ -874,7 +900,8 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
       }
     }
 
-    // Per screenshots skill: Caption Writing rules with examples
+    // Full reference guide — only shown when AI analysis wasn't available
+    if (!hasAiScreenshots) {
     b += `\n\n**Caption writing rules** (per screenshots skill):\n`;
     b += `  \u2022 **2-5 words** per caption (readable at thumbnail size)\n`;
     b += `  \u2022 **Benefit-focused**, not feature-focused\n`;
@@ -1008,6 +1035,7 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
       b += `  \u2022 Align CPP screenshots with the target keywords for OCR\n`;
       b += `  \u2022 Link CPPs to Apple Search Ads campaigns for keyword-specific landing pages\n`;
     }
+    } // end if (!hasAiScreenshots)
 
     // Build deliverables dynamically from AI findings
     const deliverables: string[] = [];
@@ -1080,6 +1108,17 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
     const isHighEffort = needsRedo || data.screenshotCount < 4;
     const isCritical = data.screenshotCount < 3 || (needsDeviceFrameUpdate && needsUIUpdate);
 
+    // Collect AI caption suggestions as one-click copy options
+    const captionCopyOptions: string[] = [];
+    if (hasAiScreenshots) {
+      for (const ss of ai!.screenshots.perScreenshot) {
+        if (ss.captionSuggestion) captionCopyOptions.push(`Slot ${ss.slot}: "${ss.captionSuggestion}"`);
+      }
+      for (const ms of ai!.screenshots.missingSlots) {
+        if (ms.captionSuggestion) captionCopyOptions.push(`Slot ${ms.slot} (new): "${ms.captionSuggestion}"`);
+      }
+    }
+
     actions.push({
       id: "screenshots-optimize",
       priority: isCritical ? "critical" : "high",
@@ -1088,6 +1127,7 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
       title: actionTitle,
       currentState: `${data.screenshotCount}/${max} screenshots`,
       action: b, brief: b, deliverables,
+      copyOptions: captionCopyOptions.length > 0 ? captionCopyOptions : undefined,
       impact: "Screenshots are the #1 conversion driver" + (data.platform === "ios" ? " \u2014 captions are also a keyword ranking signal via OCR" : ""),
       scoreBoost: "+15-30 on Visual Assets score",
       aiStatus: hasAiScreenshots ? "reviewed" : "available",
