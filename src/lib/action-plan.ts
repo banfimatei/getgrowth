@@ -246,7 +246,8 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
   const lengthR = cat.results.find(r => r.ruleId === "title-length");
   const kwR = cat.results.find(r => r.ruleId === "title-keywords");
   const frontR = cat.results.find(r => r.ruleId === "title-frontload");
-  const remaining = 30 - data.title.length;
+  const titleMax = data.platform === "ios" ? 30 : 50;
+  const remaining = titleMax - data.title.length;
   const needsKw = kwR && kwR.score < 60;
   const needsLen = lengthR && lengthR.score < 90 && remaining > 3;
   const needsFront = frontR && frontR.score < 60;
@@ -258,22 +259,21 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
 
   const opts: string[] = [];
   if (needsKw && available.length >= 2) {
-    opts.push(`${p.brand} - ${tc(available[0])} & ${tc(available[1])}`.substring(0, 30));
-    opts.push(`${tc(available[0])} ${tc(available[1])} - ${p.brand}`.substring(0, 30));
-    opts.push(`${p.brand}: ${tc(available[0])} ${tc(available[1])}`.substring(0, 30));
+    opts.push(`${p.brand} - ${tc(available[0])} & ${tc(available[1])}`.substring(0, titleMax));
+    opts.push(`${tc(available[0])} ${tc(available[1])} - ${p.brand}`.substring(0, titleMax));
+    opts.push(`${p.brand}: ${tc(available[0])} ${tc(available[1])}`.substring(0, titleMax));
   } else if (needsFront && available.length >= 1) {
-    opts.push(`${tc(available[0])} - ${p.brand}`.substring(0, 30));
-    opts.push(`${tc(p.coreFunction)} | ${p.brand}`.substring(0, 30));
+    opts.push(`${tc(available[0])} - ${p.brand}`.substring(0, titleMax));
+    opts.push(`${tc(p.coreFunction)} | ${p.brand}`.substring(0, titleMax));
   } else if (needsLen && available[0]) {
-    opts.push(`${data.title} & ${tc(available[0])}`.substring(0, 30));
+    opts.push(`${data.title} & ${tc(available[0])}`.substring(0, titleMax));
   }
-  // AI suggestions override deterministic ones when available
   if (hasAiTitle) {
     for (const s of ai!.title.suggestions) {
-      if (s.length <= 30 && s.length > 0) opts.push(s);
+      if (s.length <= titleMax && s.length > 0) opts.push(s);
     }
   }
-  const validOpts = [...new Set(opts)].filter(o => o.length > 0 && o.length <= 30);
+  const validOpts = [...new Set(opts)].filter(o => o.length > 0 && o.length <= titleMax);
 
   let b = "";
   if (hasAiTitle) {
@@ -293,7 +293,7 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
       )].slice(0, 5)
     : available.slice(0, 4);
 
-  b += `**Current:** "${data.title}" (${data.title.length}/30 chars)\n`;
+  b += `**Current:** "${data.title}" (${data.title.length}/${titleMax} chars)\n`;
   b += `**Brand:** "${p.brand}" | **Descriptive keywords in title:** ${[...titleWords].filter(w => w.length > 2 && !p.brand.toLowerCase().includes(w)).map(w => `"${w}"`).join(", ") || "none"}\n`;
   const kwLabel = hasAiTitle ? "Target keywords (from AI-suggested titles)" : "Missing high-value keywords";
   b += `**${kwLabel}:** ${aiDerivedKeywords.map(w => '"' + w + '"').join(", ")}\n\n`;
@@ -311,11 +311,11 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
   } else if (remaining > 0) {
     b += `You have ${remaining} unused characters in your most valuable metadata field. Every unused character is a missed ranking opportunity.\n`;
   } else if (hasAiTitle) {
-    b += `Your title uses all 30 characters, but keyword selection can be improved. Swapping low-value terms for higher-volume alternatives can boost rankings without changing length.\n`;
+    b += `Your title uses all ${titleMax} characters, but keyword selection can be improved. Swapping low-value terms for higher-volume alternatives can boost rankings without changing length.\n`;
   }
 
   b += `\n**Rules:**\n`;
-  b += `  \u2022 Use every available character (30 max)\n`;
+  b += `  \u2022 Use every available character (${titleMax} max)\n`;
   b += `  \u2022 Front-load keywords in first 15 chars (most weight, always visible in search)\n`;
   b += `  \u2022 Write for humans first, SEO second \u2014 it must read naturally\n`;
   b += `  \u2022 No superlatives ("#1", "best", "top") \u2014 stores reject these\n`;
@@ -327,11 +327,11 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
     effort: "quick",
     category: "Title",
     title: needsKw ? "Restructure title with high-value keywords" : needsFront ? "Front-load keywords before brand name" : remaining > 0 ? `Fill ${remaining} unused title characters` : "Optimize title keyword strategy",
-    currentState: `"${data.title}" (${data.title.length}/30 chars)`,
+    currentState: `"${data.title}" (${data.title.length}/${titleMax} chars)`,
     action: b, brief: b,
     copyOptions: validOpts.length > 0 ? validOpts : undefined,
     deliverables: [
-      "Draft 2-3 title variants (30 chars max each)",
+      `Draft 2-3 title variants (${titleMax} chars max each)`,
       `Update in ${data.platform === "ios" ? "App Store Connect" : "Google Play Console"}`,
       data.platform === "ios" ? "Requires app update submission \u2014 coordinate with next release" : "Takes effect immediately",
       "A/B test for 7+ days before committing (Apple PPO or Google Play Experiments)",

@@ -426,9 +426,10 @@ function buildTextPrompt(data: AppData): string {
   const titleMax = isIOS ? 30 : 50;
 
   let p = `Analyze this ${isIOS ? "iOS App Store" : "Google Play"} listing metadata comprehensively.\n\n`;
+  p += `**IMPORTANT: This is a ${isIOS ? "iOS" : "Android"} app. The title character limit is ${titleMax} characters (NOT ${isIOS ? "50" : "30"}). All title suggestions MUST be ≤${titleMax} chars.**\n\n`;
 
   p += `## METADATA\n`;
-  p += `**Title:** "${data.title}" (${data.title.length}/${titleMax} chars)\n`;
+  p += `**Title:** "${data.title}" (${data.title.length}/${titleMax} chars — limit is ${titleMax})\n`;
   if (isIOS && data.subtitle) p += `**Subtitle:** "${data.subtitle}" (${data.subtitle.length}/30 chars)\n`;
   else if (isIOS) p += `**Subtitle:** (not set — empty)\n`;
   if (!isIOS && data.shortDescription) p += `**Short description:** "${data.shortDescription}" (${data.shortDescription.length}/80 chars)\n`;
@@ -455,8 +456,8 @@ function buildTextPrompt(data: AppData): string {
 
   p += `Return JSON matching this exact structure:\n{\n`;
   p += `  "title": {\n`;
-  p += `    "issues": ["specific issue observed in the current title"],\n`;
-  p += `    "suggestions": ["Title Option 1 (≤${titleMax}ch)", "Title Option 2", "Title Option 3"],\n`;
+  p += `    "issues": ["specific issue — when referencing char limits, use ${titleMax} (the ${isIOS ? "iOS" : "Android"} limit), NOT ${isIOS ? "50" : "30"}"],\n`;
+  p += `    "suggestions": ["Title Option 1 (MUST be ≤${titleMax} chars)", "Title Option 2 (≤${titleMax}ch)", "Title Option 3 (≤${titleMax}ch)"],\n`;
   p += `    "reasoning": "Why these changes improve ranking and conversion"\n`;
   p += `  },\n`;
 
