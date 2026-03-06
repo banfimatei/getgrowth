@@ -27,7 +27,7 @@ function formatDeepDiveResult(section: string, analysis: any, platform?: string)
   if (section === "screenshots") {
     return formatScreenshotsDeepDive(analysis, platform || "ios");
   } else if (section === "description") {
-    return formatDescriptionDeepDive(analysis);
+    return formatDescriptionDeepDive(analysis, platform || "ios");
   } else if (section === "title" || section === "subtitle" || section === "keywords" || section === "shortDescription") {
     return formatTitleDeepDive(analysis);
   } else if (section === "icon") {
@@ -137,8 +137,14 @@ function formatScreenshotsDeepDive(ai: any, platform: string): DeepDiveEnhanceme
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function formatDescriptionDeepDive(ai: any): DeepDiveEnhancement {
+function formatDescriptionDeepDive(ai: any, platform: string): DeepDiveEnhancement {
+  const isAndroid = platform === "android";
   let b = "**AI Description Analysis** (deep-dive):\n\n";
+
+  // Keyword gaps from current description
+  if (ai.keywordGaps?.length) {
+    b += `**Missing keywords in current description:** ${ai.keywordGaps.map((w: string) => `"${w}"`).join(", ")}\n\n`;
+  }
 
   if (ai.keywordStrategy) b += `**Keyword Strategy:**\n${ai.keywordStrategy}\n\n`;
 
@@ -150,11 +156,23 @@ function formatDescriptionDeepDive(ai: any): DeepDiveEnhancement {
 
   const copyOptions: string[] = [];
 
+  // Primary rewrite — shown inline with breakdown
   if (ai.primaryRewrite) {
     b += `---\n\n`;
     b += `**Recommended Description** (${ai.charCounts?.primary || "?"} chars, ready to copy-paste):\n\n`;
     b += `${ai.primaryRewrite}\n\n`;
     copyOptions.push(ai.primaryRewrite);
+
+    // Breakdown of the rewrite
+    b += `---\n\n`;
+    b += `**Breakdown of the recommended rewrite:**\n\n`;
+    if (ai.openingHook) b += `**Opening hook:** ${ai.openingHook}\n\n`;
+    if (ai.featureBullets?.length) {
+      b += `**Feature bullets:**\n`;
+      for (const bullet of ai.featureBullets) b += `${bullet}\n`;
+      b += "\n";
+    }
+    if (ai.cta) b += `**CTA:** ${ai.cta}\n\n`;
   }
 
   if (ai.alternativeA) {
@@ -171,12 +189,23 @@ function formatDescriptionDeepDive(ai: any): DeepDiveEnhancement {
     copyOptions.push(ai.alternativeB);
   }
 
+  // Platform-specific notes
+  if (isAndroid) {
+    b += `---\n\n`;
+    b += `**Note:** Google Play indexes the full description \u2014 keyword density and placement directly affect rankings.\n`;
+  } else {
+    b += `---\n\n`;
+    b += `**Note:** iOS description is NOT indexed for search, but it directly impacts conversion rate and is indexed by web search engines.\n`;
+  }
+
   const deliverables = [
-    "Choose preferred description variant (or combine best elements)",
-    "Paste into store listing and verify character count",
+    "Review the AI-written description and adapt for brand voice",
+    `Paste into ${isAndroid ? "Google Play Console \u203A Full description" : "App Store Connect \u203A Description"}`,
+    "Verify character count meets platform requirements",
     "Run keyword density check on final version",
     "Set up A/B test (current vs new description)",
   ];
+  if (!isAndroid) deliverables.push("Requires app update submission to take effect on iOS");
 
   return { brief: b, copyOptions: copyOptions.length > 0 ? copyOptions : undefined, deliverables };
 }
