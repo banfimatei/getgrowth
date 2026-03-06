@@ -1427,7 +1427,6 @@ function featureGraphicBrief(data: AppData, p: AppProfile, ai?: AIAnalysis | nul
     impact: "Required for Google Play editorial featuring; appears as hero banner on listing page",
     scoreBoost: "+10-20 on Conversion score",
     aiStatus: hasAiFg ? "reviewed" : "available",
-    deepDiveSection: "icon",
   }];
 }
 
@@ -1491,7 +1490,6 @@ function conversionBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai
     impact: "First text users read on your store page \u2014 above the description",
     scoreBoost: "+15-25 on Conversion score",
     aiStatus: hasAiPromo ? "reviewed" : "available",
-    deepDiveSection: "title",
   }];
 }
 
@@ -1652,7 +1650,6 @@ function abTestingBrief(data: AppData, _p: AppProfile, ai?: AIAnalysis | null): 
     impact: "A/B testing removes guesswork \u2014 data-driven decisions improve conversion",
     scoreBoost: "Depends on experiment outcomes",
     aiStatus: "reviewed",
-    deepDiveSection: "title",
   }];
 }
 
