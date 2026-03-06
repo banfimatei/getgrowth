@@ -23,17 +23,31 @@ interface VisualConceptResult {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatDeepDiveResult(section: string, analysis: any, platform?: string): DeepDiveEnhancement | null {
   if (!analysis) return null;
+  const p = platform || "ios";
 
-  if (section === "screenshots") {
-    return formatScreenshotsDeepDive(analysis, platform || "ios");
-  } else if (section === "description") {
-    return formatDescriptionDeepDive(analysis, platform || "ios");
-  } else if (section === "title" || section === "subtitle" || section === "keywords" || section === "shortDescription") {
-    return formatTitleDeepDive(analysis);
-  } else if (section === "icon") {
-    return formatIconDeepDive(analysis, platform || "ios");
+  switch (section) {
+    case "screenshots":
+      return formatScreenshotsDeepDive(analysis, p);
+    case "description":
+      return formatDescriptionDeepDive(analysis, p);
+    case "title":
+    case "subtitle":
+    case "keywords":
+    case "shortDescription":
+      return formatTitleDeepDive(analysis);
+    case "icon":
+      return formatIconDeepDive(analysis, p);
+    case "video":
+      return formatVideoDeepDive(analysis, p);
+    case "ratings":
+      return formatRatingsDeepDive(analysis, p);
+    case "maintenance":
+      return formatMaintenanceDeepDive(analysis, p);
+    case "localization":
+      return formatLocalizationDeepDive(analysis);
+    default:
+      return { brief: JSON.stringify(analysis, null, 2) };
   }
-  return { brief: JSON.stringify(analysis, null, 2) };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -269,6 +283,215 @@ function formatIconDeepDive(ai: any, platform: string): DeepDiveEnhancement {
     "Test at 60x60px, 120x120px, and 1024x1024px sizes",
     `Upload to ${platform === "ios" ? "App Store Connect" : "Google Play Console"}`,
     `A/B test with ${platform === "ios" ? "Apple PPO" : "Google Play Store Listing Experiments"}`,
+  ];
+
+  return { brief: b, deliverables };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatVideoDeepDive(ai: any, platform: string): DeepDiveEnhancement {
+  const isIOS = platform === "ios";
+  let b = "**AI Video Strategy** (deep-dive):\n\n";
+
+  if (ai.assessment) b += `${ai.assessment}\n\n`;
+
+  if (ai.hookStrategy) b += `**Hook strategy (first 3 seconds):** ${ai.hookStrategy}\n\n`;
+
+  if (ai.storyboard?.length) {
+    b += `**Video storyboard:**\n\n`;
+    for (const seg of ai.storyboard) {
+      b += `  \u2022 **${seg.duration} \u2014 ${seg.segment}:** ${seg.content}\n`;
+      if (seg.caption) b += `    Caption: "${seg.caption}"\n`;
+      if (seg.whyItWorks) b += `    Why: ${seg.whyItWorks}\n`;
+    }
+    b += "\n";
+  }
+
+  if (ai.posterFrame) b += `**Poster frame / thumbnail:** ${ai.posterFrame}\n\n`;
+  if (ai.musicDirection) b += `**Music direction:** ${ai.musicDirection}\n\n`;
+  if (ai.transitionStyle) b += `**Transition style:** ${ai.transitionStyle}\n\n`;
+
+  if (ai.keyMessages?.length) {
+    b += `**Key messages to convey:**\n`;
+    for (const msg of ai.keyMessages) b += `  \u2022 ${msg}\n`;
+    b += "\n";
+  }
+
+  if (ai.commonMistakes?.length) {
+    b += `**Mistakes to avoid:**\n`;
+    for (const m of ai.commonMistakes) b += `  \u274C ${m}\n`;
+    b += "\n";
+  }
+
+  // Platform-specific specs
+  b += `---\n\n`;
+  if (isIOS) {
+    b += `**Specs:** 15-30s, H.264 .mov or .mp4, no letterboxing\n`;
+    b += `**Sizes:** 886\u00D71920 (5.5") | 1080\u00D71920 (6.1") | 1284\u00D72778 (6.5") | 1290\u00D72796 (6.7") | 1320\u00D72868 (6.9")\n`;
+    b += `**Rules:** Real app footage only (no renders), no people outside the device, loops silently in store\n`;
+  } else {
+    b += `**Specs:** 30s-2min YouTube video, landscape preferred\n`;
+    b += `**Upload:** YouTube URL in Google Play Console \u203A Promo video\n`;
+    b += `**Rules:** Can mix in-app footage with motion graphics and text overlays\n`;
+  }
+
+  const deliverables = [
+    "Write final video script based on storyboard above",
+    "Record in-app screen captures for each segment with real content",
+    isIOS ? "Edit to 15-30s, export H.264 .mov for all device sizes" : "Edit to 30-60s, export and upload to YouTube",
+    "Add caption overlays for silent autoplay",
+    "Add background music (royalty-free) matching the recommended mood",
+    "Select poster frame / thumbnail",
+    isIOS ? "Upload to App Store Connect \u203A App Preview" : "Add YouTube URL to Google Play Console",
+  ];
+
+  return { brief: b, deliverables };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatRatingsDeepDive(ai: any, platform: string): DeepDiveEnhancement {
+  const isIOS = platform === "ios";
+  let b = "**AI Ratings & Reviews Analysis** (deep-dive):\n\n";
+
+  if (ai.assessment) b += `${ai.assessment}\n\n`;
+  if (ai.ratingAnalysis) b += `**Rating signal:** ${ai.ratingAnalysis}\n\n`;
+  if (ai.volumeAnalysis) b += `**Volume signal:** ${ai.volumeAnalysis}\n\n`;
+  if (ai.competitorBenchmark) b += `**Category benchmark:** ${ai.competitorBenchmark}\n\n`;
+
+  if (ai.promptStrategy) {
+    b += `---\n\n**Review prompt strategy:**\n\n`;
+    if (ai.promptStrategy.bestMoments?.length) {
+      b += `**Best moments to prompt:**\n`;
+      for (const m of ai.promptStrategy.bestMoments) b += `  \u2705 ${m}\n`;
+      b += "\n";
+    }
+    if (ai.promptStrategy.worstMoments?.length) {
+      b += `**Never prompt after:**\n`;
+      for (const m of ai.promptStrategy.worstMoments) b += `  \u274C ${m}\n`;
+      b += "\n";
+    }
+    if (ai.promptStrategy.implementation) b += `**Implementation:** ${ai.promptStrategy.implementation}\n\n`;
+  }
+
+  if (ai.negativeReviewStrategy) b += `**Negative review strategy:** ${ai.negativeReviewStrategy}\n\n`;
+
+  if (ai.suggestions?.length) {
+    b += `**Recommendations:**\n`;
+    for (const s of ai.suggestions) b += `  \u2022 ${s}\n`;
+    b += "\n";
+  }
+
+  const deliverables = [
+    "Export and categorize recent negative reviews (top 3 complaint themes)",
+    "Prioritize fixes by frequency × severity",
+    `Implement ${isIOS ? "SKStoreReviewController" : "In-App Review API"} with the trigger moments above`,
+    "Set up review monitoring and response workflow (24-48h SLA)",
+    "Ship fix for #1 complaint and mention in release notes",
+  ];
+
+  return { brief: b, deliverables };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatMaintenanceDeepDive(ai: any, platform: string): DeepDiveEnhancement {
+  let b = "**AI Maintenance Analysis** (deep-dive):\n\n";
+
+  if (ai.assessment) b += `${ai.assessment}\n\n`;
+  if (ai.releaseNotesQuality) b += `**Release notes quality:** ${ai.releaseNotesQuality}\n\n`;
+  if (ai.updateCadence) b += `**Recommended cadence:** ${ai.updateCadence}\n\n`;
+
+  if (ai.seasonalOpportunities?.length) {
+    b += `**Seasonal opportunities:**\n`;
+    for (const s of ai.seasonalOpportunities) b += `  \u2022 ${s}\n`;
+    b += "\n";
+  }
+
+  if (ai.metadataRefreshPlan) b += `**Metadata refresh plan:** ${ai.metadataRefreshPlan}\n\n`;
+
+  if (ai.suggestions?.length) {
+    b += `**Recommendations:**\n`;
+    for (const s of ai.suggestions) b += `  \u2022 ${s}\n`;
+    b += "\n";
+  }
+
+  const copyOptions: string[] = [];
+  if (ai.releaseNotesSuggestions?.length) {
+    for (const rn of ai.releaseNotesSuggestions) copyOptions.push(rn);
+  }
+
+  const deliverables = [
+    "Prepare new build with improvements",
+    "Write release notes using AI suggestions above",
+    `Refresh ASO metadata alongside the update`,
+    `Submit to ${platform === "ios" ? "App Store Connect" : "Google Play Console"}`,
+    "Monitor ranking and conversion metrics daily for 2 weeks post-update",
+  ];
+
+  return { brief: b, copyOptions: copyOptions.length > 0 ? copyOptions : undefined, deliverables };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatLocalizationDeepDive(ai: any): DeepDiveEnhancement {
+  let b = "**AI Localization Strategy** (deep-dive):\n\n";
+
+  if (ai.assessment) b += `${ai.assessment}\n\n`;
+  if (ai.priority) b += `**Priority level:** ${ai.priority}\n`;
+  if (ai.reasoning) b += `${ai.reasoning}\n\n`;
+
+  if (ai.tier1Markets?.length) {
+    b += `---\n\n**Tier 1 markets** (full localization \u2014 screenshots + metadata + local keywords):\n\n`;
+    for (const m of ai.tier1Markets) {
+      if (typeof m === "string") {
+        b += `  \u2022 ${m}\n`;
+      } else {
+        b += `  \u2022 **${m.market}:** ${m.reasoning}`;
+        if (m.expectedLift) b += ` (expected: ${m.expectedLift})`;
+        b += "\n";
+      }
+    }
+    b += "\n";
+  }
+
+  if (ai.tier2Markets?.length) {
+    b += `**Tier 2 markets** (translated captions + metadata only):\n\n`;
+    for (const m of ai.tier2Markets) {
+      if (typeof m === "string") {
+        b += `  \u2022 ${m}\n`;
+      } else {
+        b += `  \u2022 **${m.market}:** ${m.reasoning}\n`;
+      }
+    }
+    b += "\n";
+  }
+
+  if (ai.localizationChecklist?.length) {
+    b += `---\n\n**What to localize** (priority order):\n`;
+    for (let i = 0; i < ai.localizationChecklist.length; i++) {
+      b += `  ${i + 1}. ${ai.localizationChecklist[i]}\n`;
+    }
+    b += "\n";
+  }
+
+  if (ai.culturalConsiderations?.length) {
+    b += `**Cultural considerations:**\n`;
+    for (const c of ai.culturalConsiderations) b += `  \u2022 ${c}\n`;
+    b += "\n";
+  }
+
+  if (ai.keywordStrategy) b += `**Keyword strategy:** ${ai.keywordStrategy}\n\n`;
+
+  if (ai.suggestions?.length) {
+    b += `**Recommendations:**\n`;
+    for (const s of ai.suggestions) b += `  \u2022 ${s}\n`;
+    b += "\n";
+  }
+
+  const deliverables = [
+    "Identify top target markets using category download data",
+    "Research local ASO keywords per market (not just translations)",
+    "Localize title + subtitle + keyword field for Tier 1 markets",
+    "Translate screenshot captions with local keywords",
+    "Set up per-market keyword tracking",
   ];
 
   return { brief: b, deliverables };

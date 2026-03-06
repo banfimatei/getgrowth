@@ -1044,6 +1044,166 @@ function buildTitleDeepDivePrompt(data: AppData): string {
   return p;
 }
 
+function buildVideoDeepDivePrompt(data: AppData): string {
+  const isIOS = data.platform === "ios";
+  let p = `You are a senior ASO and app marketing consultant specializing in app store video assets. Provide a comprehensive App Preview / Promo Video strategy.\n\n`;
+
+  p += `## APP CONTEXT\n`;
+  p += `**App:** ${data.title}\n`;
+  p += `**Category:** ${data.category}\n`;
+  p += `**Platform:** ${isIOS ? "iOS" : "Android"}\n`;
+  if (data.subtitle) p += `**Subtitle:** ${data.subtitle}\n`;
+  p += `**Rating:** ${data.rating > 0 ? `${data.rating.toFixed(1)}★ (${data.ratingsCount.toLocaleString()})` : "No rating"}\n`;
+  p += `**Has video:** ${data.hasVideo ? "Yes" : "No"}\n\n`;
+
+  p += `## CURRENT DESCRIPTION (for feature context)\n`;
+  p += `${data.description.substring(0, 3000)}\n\n`;
+
+  p += `## REQUIREMENTS\n`;
+  if (isIOS) {
+    p += `- This is an iOS App Preview video (15-30 seconds)\n`;
+    p += `- Must use REAL in-app footage only (no renders, no live-action outside device)\n`;
+    p += `- Auto-plays silently on the App Store — first 3 seconds are critical\n`;
+    p += `- Poster frame (first frame) replaces the first screenshot slot if no screenshots precede it\n`;
+    p += `- Specs: H.264 .mov or .mp4, no letterboxing\n`;
+    p += `- Sizes: 886x1920 (5.5"), 1080x1920 (6.1"), 1284x2778 (6.5"), 1290x2796 (6.7"), 1320x2868 (6.9")\n`;
+  } else {
+    p += `- This is a Google Play Promo Video (30s-2min, hosted on YouTube)\n`;
+    p += `- Can mix in-app footage with motion graphics and text overlays\n`;
+    p += `- Appears as hero video at top of listing — thumbnail is the first impression\n`;
+    p += `- Landscape preferred but vertical supported\n`;
+  }
+  p += `- The hook (first 3 seconds) determines if users watch or scroll — show the core outcome immediately\n`;
+  p += `- Each segment must reference REAL features from this specific app\n`;
+  p += `- Include text overlays / captions for silent autoplay\n\n`;
+
+  p += `Return JSON:\n{\n`;
+  p += `  "assessment": "Why this app needs a video and what the strategic goal should be",\n`;
+  p += `  "hookStrategy": "Specific description of what the first 3 seconds should show and why",\n`;
+  p += `  "storyboard": [\n`;
+  p += `    { "segment": "Hook", "duration": "0-3s", "content": "Exact scene description using real app features", "caption": "Text overlay for silent viewing", "whyItWorks": "Conversion psychology" },\n`;
+  p += `    { "segment": "Feature 1", "duration": "3-10s", "content": "...", "caption": "...", "whyItWorks": "..." },\n`;
+  p += `    { "segment": "Feature 2", "duration": "10-18s", "content": "...", "caption": "...", "whyItWorks": "..." },\n`;
+  p += `    { "segment": "Feature 3", "duration": "18-25s", "content": "...", "caption": "...", "whyItWorks": "..." },\n`;
+  p += `    { "segment": "CTA", "duration": "25-30s", "content": "...", "caption": "...", "whyItWorks": "..." }\n`;
+  p += `  ],\n`;
+  p += `  "posterFrame": "Description of ideal poster frame / thumbnail — this is the user's first impression",\n`;
+  p += `  "musicDirection": "Recommended music style/mood and why (royalty-free)",\n`;
+  p += `  "transitionStyle": "Recommended transition style between segments",\n`;
+  p += `  "keyMessages": ["Key message 1 to convey", "Message 2", "Message 3"],\n`;
+  p += `  "commonMistakes": ["Mistake to avoid for THIS specific app type"]\n`;
+  p += `}`;
+  return p;
+}
+
+function buildRatingsDeepDivePrompt(data: AppData): string {
+  const isIOS = data.platform === "ios";
+  let p = `You are a senior mobile growth consultant specializing in ratings and review management. Provide a deep analysis and strategy.\n\n`;
+
+  p += `## APP CONTEXT\n`;
+  p += `**App:** ${data.title}\n`;
+  p += `**Category:** ${data.category}\n`;
+  p += `**Platform:** ${isIOS ? "iOS" : "Android"}\n`;
+  p += `**Rating:** ${data.rating > 0 ? `${data.rating.toFixed(1)}★` : "No rating"}\n`;
+  p += `**Ratings count:** ${data.ratingsCount.toLocaleString()}\n`;
+  p += `**Installs:** ${(data as unknown as Record<string, unknown>).installs || "Unknown"}\n\n`;
+
+  p += `## CURRENT DESCRIPTION (for feature context)\n`;
+  p += `${data.description.substring(0, 2000)}\n\n`;
+
+  p += `## REQUIREMENTS\n`;
+  p += `- Analyze the current rating and volume in context of the app's category and competition\n`;
+  p += `- Provide specific, actionable strategies to improve rating and volume\n`;
+  p += `- Include platform-specific implementation details\n`;
+  p += `- Focus on sustainable strategies, not manipulation\n\n`;
+
+  p += `Return JSON:\n{\n`;
+  p += `  "assessment": "Detailed analysis of current ratings situation in context of category benchmarks",\n`;
+  p += `  "ratingAnalysis": "What the current rating signals to potential users and to the algorithm",\n`;
+  p += `  "volumeAnalysis": "Whether the volume is sufficient for social proof and algorithmic trust",\n`;
+  p += `  "promptStrategy": {\n`;
+  p += `    "bestMoments": ["Specific in-app moment 1 to trigger review prompt", "Moment 2", "Moment 3"],\n`;
+  p += `    "worstMoments": ["When NOT to prompt — specific to this app"],\n`;
+  p += `    "implementation": "Platform-specific implementation guide (${isIOS ? "SKStoreReviewController" : "In-App Review API"})"\n`;
+  p += `  },\n`;
+  p += `  "negativeReviewStrategy": "How to analyze and respond to negative reviews for this app type",\n`;
+  p += `  "competitorBenchmark": "How this app's rating compares to typical ${data.category} apps",\n`;
+  p += `  "suggestions": ["Specific actionable suggestion 1", "Suggestion 2", "Suggestion 3"]\n`;
+  p += `}`;
+  return p;
+}
+
+function buildMaintenanceDeepDivePrompt(data: AppData): string {
+  const isIOS = data.platform === "ios";
+  let p = `You are a senior ASO consultant. Provide a deep analysis of the app's update and maintenance strategy.\n\n`;
+
+  p += `## APP CONTEXT\n`;
+  p += `**App:** ${data.title}\n`;
+  p += `**Category:** ${data.category}\n`;
+  p += `**Platform:** ${isIOS ? "iOS" : "Android"}\n`;
+  p += `**Version:** ${data.version || "Unknown"}\n`;
+  p += `**Rating:** ${data.rating > 0 ? `${data.rating.toFixed(1)}★ (${data.ratingsCount.toLocaleString()})` : "No rating"}\n\n`;
+
+  if (data.whatsNew) {
+    p += `## CURRENT RELEASE NOTES\n${data.whatsNew.substring(0, 1500)}\n\n`;
+  }
+
+  p += `## CURRENT DESCRIPTION (for feature context)\n`;
+  p += `${data.description.substring(0, 2000)}\n\n`;
+
+  p += `## REQUIREMENTS\n`;
+  p += `- Assess how the update frequency and release notes quality affect rankings\n`;
+  p += `- Provide specific seasonal and category-relevant update opportunities\n`;
+  p += `- Suggest a concrete release cadence and metadata refresh plan\n\n`;
+
+  p += `Return JSON:\n{\n`;
+  p += `  "assessment": "Overall maintenance health assessment — how recency affects this app's rankings",\n`;
+  p += `  "releaseNotesQuality": "Assessment of current What's New text quality and effectiveness",\n`;
+  p += `  "updateCadence": "Recommended update frequency and why, based on category norms",\n`;
+  p += `  "seasonalOpportunities": ["Specific seasonal event or trend relevant to this app and when to target it"],\n`;
+  p += `  "metadataRefreshPlan": "What metadata to refresh with each update cycle",\n`;
+  p += `  "releaseNotesSuggestions": ["Example release notes copy option 1 for next update", "Option 2"],\n`;
+  p += `  "suggestions": ["Specific maintenance strategy suggestion 1", "Suggestion 2"]\n`;
+  p += `}`;
+  return p;
+}
+
+function buildLocalizationDeepDivePrompt(data: AppData): string {
+  let p = `You are a senior ASO consultant specializing in international app growth and localization. Provide a deep localization strategy.\n\n`;
+
+  p += `## APP CONTEXT\n`;
+  p += `**App:** ${data.title}\n`;
+  p += `**Category:** ${data.category}\n`;
+  p += `**Platform:** ${data.platform === "ios" ? "iOS" : "Android"}\n`;
+  p += `**Rating:** ${data.rating > 0 ? `${data.rating.toFixed(1)}★ (${data.ratingsCount.toLocaleString()})` : "No rating"}\n\n`;
+
+  p += `## CURRENT DESCRIPTION (for understanding the app)\n`;
+  p += `${data.description.substring(0, 2000)}\n\n`;
+
+  p += `## REQUIREMENTS\n`;
+  p += `- Identify the highest-ROI markets for this specific app category\n`;
+  p += `- Provide a tiered localization roadmap (full vs. partial vs. metadata-only)\n`;
+  p += `- Include specific cultural considerations per market\n`;
+  p += `- Estimate effort and expected impact\n\n`;
+
+  p += `Return JSON:\n{\n`;
+  p += `  "assessment": "Overall localization opportunity assessment for this specific app and category",\n`;
+  p += `  "priority": "high | medium | low — how important is localization for THIS app's growth",\n`;
+  p += `  "reasoning": "Why this priority level, with category-specific data",\n`;
+  p += `  "tier1Markets": [\n`;
+  p += `    { "market": "Country/Language", "reasoning": "Why this market for this app", "effort": "estimated effort", "expectedLift": "expected download increase" }\n`;
+  p += `  ],\n`;
+  p += `  "tier2Markets": [\n`;
+  p += `    { "market": "Country/Language", "reasoning": "Why", "effort": "estimated effort" }\n`;
+  p += `  ],\n`;
+  p += `  "localizationChecklist": ["What to localize first", "Second priority", "Third"],\n`;
+  p += `  "culturalConsiderations": ["Cultural adaptation note 1 for a specific market", "Note 2"],\n`;
+  p += `  "keywordStrategy": "How to approach keyword research in non-English markets (not just translation)",\n`;
+  p += `  "suggestions": ["Specific localization action 1", "Action 2"]\n`;
+  p += `}`;
+  return p;
+}
+
 function getDeepDivePromptAndConfig(section: DeepDiveSection, data: AppData): {
   systemPrompt: string;
   prompt: string;
@@ -1081,6 +1241,34 @@ function getDeepDivePromptAndConfig(section: DeepDiveSection, data: AppData): {
         prompt: `Provide a deep-dive icon analysis for "${data.title}" (${data.category}, ${data.platform}).\n\nReturn JSON:\n{\n  "assessment": "Detailed assessment of the icon",\n  "issues": ["list every issue"],\n  "colorAnalysis": "Color palette assessment — contrast, visibility on light/dark backgrounds",\n  "competitorComparison": "How this icon compares to typical icons in ${data.category} category",\n  "redesignBrief": "Detailed brief for a designer to improve the icon",\n  "suggestions": ["specific improvement 1", "improvement 2", "improvement 3"]\n}`,
         maxOutputTokens: 4096,
         needsImages: true,
+      };
+    case "video":
+      return {
+        systemPrompt: TEXT_SYSTEM_PROMPT,
+        prompt: buildVideoDeepDivePrompt(data),
+        maxOutputTokens: 8192,
+        needsImages: false,
+      };
+    case "ratings":
+      return {
+        systemPrompt: TEXT_SYSTEM_PROMPT,
+        prompt: buildRatingsDeepDivePrompt(data),
+        maxOutputTokens: 8192,
+        needsImages: false,
+      };
+    case "maintenance":
+      return {
+        systemPrompt: TEXT_SYSTEM_PROMPT,
+        prompt: buildMaintenanceDeepDivePrompt(data),
+        maxOutputTokens: 8192,
+        needsImages: false,
+      };
+    case "localization":
+      return {
+        systemPrompt: TEXT_SYSTEM_PROMPT,
+        prompt: buildLocalizationDeepDivePrompt(data),
+        maxOutputTokens: 8192,
+        needsImages: false,
       };
     default:
       return {

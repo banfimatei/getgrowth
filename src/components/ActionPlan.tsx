@@ -108,8 +108,7 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize }: {
   const eConfig = effortConfig[action.effort];
 
   const canDeepDive = !!action.deepDiveSection && !!onDeepDive;
-  const deepDiveSections: DeepDiveSection[] = ["description", "screenshots", "title", "subtitle", "icon"];
-  const showDeepDive = canDeepDive && deepDiveSections.includes(action.deepDiveSection!);
+  const showDeepDive = canDeepDive;
 
   const isEnhanced = !!enhanced;
   const activeBrief = enhanced?.brief || action.brief;
