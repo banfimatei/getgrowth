@@ -666,7 +666,7 @@ interface GeminiCallOptions {
   label: string;
 }
 
-async function callGemini(apiKey: string, opts: GeminiCallOptions): Promise<Record<string, unknown> | null> {
+async function callGemini(apiKey: string, opts: GeminiCallOptions & { throwOnError?: boolean }): Promise<Record<string, unknown> | null> {
   const t0 = Date.now();
 
   const body = {
@@ -682,6 +682,11 @@ async function callGemini(apiKey: string, opts: GeminiCallOptions): Promise<Reco
   const bodyJson = JSON.stringify(body);
   console.log(`AI [${opts.label}]: Request body ${(bodyJson.length / 1_000_000).toFixed(2)}MB, sending...`);
 
+  const fail = (msg: string) => {
+    if (opts.throwOnError) throw new Error(msg);
+    return null;
+  };
+
   try {
     const resp = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
       method: "POST",
@@ -694,8 +699,9 @@ async function callGemini(apiKey: string, opts: GeminiCallOptions): Promise<Reco
 
     if (!resp.ok) {
       const err = await resp.text();
-      console.error(`AI [${opts.label}]: Gemini ${resp.status} after ${elapsed}ms:`, err.substring(0, 500));
-      return null;
+      const short = err.substring(0, 300);
+      console.error(`AI [${opts.label}]: Gemini ${resp.status} after ${elapsed}ms:`, short);
+      return fail(`Gemini API returned ${resp.status} after ${elapsed}ms: ${short}`);
     }
 
     const result = await resp.json();
@@ -704,7 +710,7 @@ async function callGemini(apiKey: string, opts: GeminiCallOptions): Promise<Reco
       const finishReason = result?.candidates?.[0]?.finishReason;
       const safetyRatings = result?.candidates?.[0]?.safetyRatings;
       console.error(`AI [${opts.label}]: No text after ${elapsed}ms. finishReason=${finishReason}`, JSON.stringify(safetyRatings));
-      return null;
+      return fail(`Gemini returned no text (finishReason=${finishReason})`);
     }
 
     const finishReason = result?.candidates?.[0]?.finishReason;
@@ -717,7 +723,9 @@ async function callGemini(apiKey: string, opts: GeminiCallOptions): Promise<Reco
     return JSON.parse(text);
   } catch (error) {
     const elapsed = Date.now() - t0;
-    console.error(`AI [${opts.label}]: Failed after ${elapsed}ms:`, error instanceof Error ? error.message : error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(`AI [${opts.label}]: Failed after ${elapsed}ms:`, msg);
+    if (opts.throwOnError) throw error;
     return null;
   }
 }
@@ -1080,8 +1088,11 @@ export async function runDeepDive(
     return null;
   }
 
+  console.log(`Deep-dive [${section}]: Starting — iconUrl=${!!appData.iconUrl}, screenshots=${appData.screenshots?.length ?? 0}`);
+
   const config = getDeepDivePromptAndConfig(section, appData);
   const parts: Record<string, unknown>[] = [{ text: config.prompt }];
+  let attachedImages = 0;
 
   if (config.needsImages) {
     const imageUrls: { url: string; label: string }[] = [];
@@ -1100,6 +1111,8 @@ export async function runDeepDive(
       }
     }
 
+    console.log(`Deep-dive [${section}]: ${imageUrls.length} image URLs to download`);
+
     if (imageUrls.length > 0) {
       const downloads = await Promise.all(imageUrls.map(({ url }) => downloadImageAsBase64(url)));
       let totalBytes = 0;
@@ -1107,21 +1120,35 @@ export async function runDeepDive(
         const img = downloads[i];
         if (img) {
           const imgBytes = img.data.length * 0.75;
-          if (totalBytes + imgBytes > 12_000_000) break;
+          if (totalBytes + imgBytes > 12_000_000) {
+            console.log(`Deep-dive [${section}]: Skipping ${imageUrls[i].label} — would exceed 12MB cap`);
+            break;
+          }
           totalBytes += imgBytes;
           parts.push({ text: imageUrls[i].label });
           parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
+          attachedImages++;
+        } else {
+          console.log(`Deep-dive [${section}]: Failed to download ${imageUrls[i].label} — ${imageUrls[i].url.substring(0, 80)}`);
         }
       }
-      console.log(`Deep-dive [${section}]: ${downloads.filter(Boolean).length} images, ${(totalBytes / 1_000_000).toFixed(1)}MB`);
+      console.log(`Deep-dive [${section}]: ${attachedImages}/${downloads.length} images attached, ${(totalBytes / 1_000_000).toFixed(1)}MB`);
+    }
+
+    if (attachedImages === 0 && config.needsImages) {
+      console.error(`Deep-dive [${section}]: No images attached but visual analysis required — this will likely produce poor results`);
     }
   }
 
-  return callGemini(apiKey, {
+  const result = await callGemini(apiKey, {
     systemPrompt: config.systemPrompt,
     parts,
     maxOutputTokens: config.maxOutputTokens,
     timeoutMs: 90000,
     label: `DEEP-DIVE-${section.toUpperCase()}`,
+    throwOnError: true,
   });
+
+  console.log(`Deep-dive [${section}]: ${result ? "SUCCESS" : "FAILED"}`);
+  return result;
 }

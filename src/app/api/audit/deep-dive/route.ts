@@ -32,11 +32,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "AI not configured — GEMINI_API_KEY missing from environment" },
+        { status: 503 },
+      );
+    }
+
     const result = await runDeepDive(appData, section);
 
     if (!result) {
       return NextResponse.json(
-        { error: "AI analysis failed — check server logs" },
+        { error: `AI analysis for "${section}" returned no result — the Gemini API may have returned an error or timed out. Check Vercel function logs for details.` },
         { status: 502 },
       );
     }
@@ -44,8 +52,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ section, analysis: result });
   } catch (error) {
     console.error("Deep-dive error:", error);
+    const msg = error instanceof Error ? error.message : "Deep-dive failed";
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Deep-dive failed" },
+      { error: `Deep-dive crashed: ${msg}` },
       { status: 500 },
     );
   }
