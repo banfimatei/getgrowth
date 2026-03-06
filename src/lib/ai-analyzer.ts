@@ -2,10 +2,13 @@ import type { AppData } from "./aso-rules";
 import type { DeepDiveSection } from "./action-plan";
 
 const GEMINI_MODEL = "gemini-3-flash-preview";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const GEMINI_MODEL_LITE = "gemini-3.1-flash-lite-preview";
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+const GEMINI_URL = `${GEMINI_BASE}/${GEMINI_MODEL}:generateContent`;
+const GEMINI_URL_LITE = `${GEMINI_BASE}/${GEMINI_MODEL_LITE}:generateContent`;
 
 const IMAGE_GEN_MODEL = "gemini-3.1-flash-image-preview";
-const IMAGE_GEN_URL = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_GEN_MODEL}:generateContent`;
+const IMAGE_GEN_URL = `${GEMINI_BASE}/${IMAGE_GEN_MODEL}:generateContent`;
 
 // ---------------------------------------------------------------------------
 // AIAnalysis — covers every audit area, all optional for resilience
@@ -677,10 +680,12 @@ interface GeminiCallOptions {
   maxOutputTokens: number;
   timeoutMs: number;
   label: string;
+  modelUrl?: string;
 }
 
 async function callGemini(apiKey: string, opts: GeminiCallOptions & { throwOnError?: boolean }): Promise<Record<string, unknown> | null> {
   const t0 = Date.now();
+  const url = opts.modelUrl || GEMINI_URL;
 
   const body = {
     system_instruction: { parts: [{ text: opts.systemPrompt }] },
@@ -693,7 +698,7 @@ async function callGemini(apiKey: string, opts: GeminiCallOptions & { throwOnErr
   };
 
   const bodyJson = JSON.stringify(body);
-  console.log(`AI [${opts.label}]: Request body ${(bodyJson.length / 1_000_000).toFixed(2)}MB, sending...`);
+  console.log(`AI [${opts.label}]: Request body ${(bodyJson.length / 1_000_000).toFixed(2)}MB, sending to ${url.includes("lite") ? "LITE" : "PRIMARY"}...`);
 
   const fail = (msg: string) => {
     if (opts.throwOnError) throw new Error(msg);
@@ -701,7 +706,7 @@ async function callGemini(apiKey: string, opts: GeminiCallOptions & { throwOnErr
   };
 
   try {
-    const resp = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+    const resp = await fetch(`${url}?key=${apiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: bodyJson,
@@ -743,6 +748,40 @@ async function callGemini(apiKey: string, opts: GeminiCallOptions & { throwOnErr
   }
 }
 
+async function callGeminiWithFallback(
+  apiKey: string,
+  opts: GeminiCallOptions & { throwOnError?: boolean },
+): Promise<Record<string, unknown> | null> {
+  // Attempt 1: primary model
+  try {
+    const result = await callGemini(apiKey, opts);
+    if (result) return result;
+  } catch {
+    // primary failed — fall through to lite
+  }
+
+  // Attempt 2: lite model with same timeout
+  console.log(`AI [${opts.label}]: Primary failed, retrying with LITE model...`);
+  try {
+    const result = await callGemini(apiKey, {
+      ...opts,
+      modelUrl: GEMINI_URL_LITE,
+      label: `${opts.label}-LITE`,
+      throwOnError: false,
+    });
+    if (result) {
+      console.log(`AI [${opts.label}-LITE]: Fallback succeeded`);
+      return result;
+    }
+  } catch {
+    // lite also failed
+  }
+
+  console.error(`AI [${opts.label}]: Both primary and lite models failed`);
+  if (opts.throwOnError) throw new Error(`AI analysis failed on both primary and lite models`);
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Main entry point — two parallel calls, merged result
 // ---------------------------------------------------------------------------
@@ -757,7 +796,7 @@ export async function analyzeWithAI(appData: AppData): Promise<AIAnalysis | null
   const t0 = Date.now();
 
   // ── Text analysis call (no images, fast) ──────────────────────────
-  const textCall = callGemini(apiKey, {
+  const textCall = callGeminiWithFallback(apiKey, {
     systemPrompt: TEXT_SYSTEM_PROMPT,
     parts: [{ text: buildTextPrompt(appData) }],
     maxOutputTokens: 8192,
@@ -821,7 +860,7 @@ export async function analyzeWithAI(appData: AppData): Promise<AIAnalysis | null
   }
 
   const visualCall = attachedCount > 0
-    ? callGemini(apiKey, {
+    ? callGeminiWithFallback(apiKey, {
         systemPrompt: VISUAL_SYSTEM_PROMPT,
         parts: visualParts,
         maxOutputTokens: 12288,
@@ -1342,7 +1381,7 @@ export async function runDeepDive(
     }
   }
 
-  const result = await callGemini(apiKey, {
+  const result = await callGeminiWithFallback(apiKey, {
     systemPrompt: config.systemPrompt,
     parts,
     maxOutputTokens: config.maxOutputTokens,
