@@ -33,8 +33,9 @@ function formatDeepDiveResult(section: string, analysis: any, platform?: string)
     case "title":
     case "subtitle":
     case "keywords":
-    case "shortDescription":
       return formatTitleDeepDive(analysis);
+    case "shortDescription":
+      return formatShortDescriptionDeepDive(analysis);
     case "icon":
       return formatIconDeepDive(analysis, p);
     case "video":
@@ -248,6 +249,42 @@ function formatTitleDeepDive(ai: any): DeepDiveEnhancement {
   }
 
   return { brief: b, copyOptions: copyOptions.length > 0 ? copyOptions : undefined };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatShortDescriptionDeepDive(ai: any): DeepDiveEnhancement {
+  let b = "**AI Short Description Analysis** (deep-dive):\n\n";
+
+  if (ai.currentAnalysis) b += `${ai.currentAnalysis}\n\n`;
+
+  if (ai.variants?.length) {
+    b += `**Short Description Variants** (80 chars max):\n`;
+    for (const v of ai.variants) {
+      b += `  \u2022 "${v.text}" (${v.charCount}ch) \u2014 ${v.strategy}: ${v.reasoning}\n`;
+    }
+    b += "\n";
+  }
+
+  if (ai.keywordsTargeted?.length) {
+    b += `**Keywords targeted:** ${ai.keywordsTargeted.join(", ")}\n\n`;
+  }
+
+  if (ai.recommendation) b += `**Recommendation:** ${ai.recommendation}\n`;
+
+  const copyOptions: string[] = [];
+  if (ai.variants?.length) {
+    for (const v of ai.variants) {
+      if (v.text) copyOptions.push(v.text);
+    }
+  }
+
+  const deliverables = [
+    "Choose preferred short description variant",
+    "Update in Google Play Console \u203A Store Listing \u203A Short description",
+    "Run a Store Listing Experiment to A/B test top 2 variants",
+  ];
+
+  return { brief: b, copyOptions: copyOptions.length > 0 ? copyOptions : undefined, deliverables };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

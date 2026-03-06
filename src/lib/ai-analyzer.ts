@@ -1083,6 +1083,48 @@ function buildTitleDeepDivePrompt(data: AppData): string {
   return p;
 }
 
+function buildShortDescriptionDeepDivePrompt(data: AppData): string {
+  let p = `You are a senior ASO consultant specializing in Google Play optimization. Provide a comprehensive short description analysis and rewrite.\n\n`;
+
+  p += `## APP CONTEXT\n`;
+  p += `**App:** ${data.title}\n`;
+  p += `**Category:** ${data.category}\n`;
+  p += `**Platform:** Android (Google Play)\n`;
+  p += `**Rating:** ${data.rating > 0 ? `${data.rating.toFixed(1)}★ (${data.ratingsCount.toLocaleString()})` : "No rating"}\n\n`;
+
+  p += `**Current short description:** "${data.shortDescription || "(not set)"}"\n`;
+  p += `**Character count:** ${data.shortDescription?.length || 0}/80 chars\n\n`;
+
+  p += `**Full description excerpt:** ${data.description.substring(0, 1500)}\n\n`;
+
+  p += `## RULES\n`;
+  p += `- Google Play short description: 80 characters MAX\n`;
+  p += `- Front-load the most important keywords — Google indexes this field\n`;
+  p += `- This is the FIRST text users see below the screenshots — it must hook and convert\n`;
+  p += `- Each variant MUST be 80 characters or fewer — count carefully\n`;
+  p += `- Include a clear value proposition, not just a feature list\n`;
+  p += `- Avoid generic phrases like "the best app" or "download now"\n`;
+  p += `- Use natural language — no keyword stuffing\n\n`;
+
+  p += `Return JSON:\n{\n`;
+  p += `  "currentAnalysis": "Detailed analysis of current short description — keyword coverage, hook quality, character usage efficiency, what's missing",\n`;
+  p += `  "variants": [\n`;
+  for (let i = 1; i <= 6; i++) {
+    p += `    {\n`;
+    p += `      "text": "Short description variant ${i} (MUST be ≤80 chars)",\n`;
+    p += `      "charCount": 0,\n`;
+    p += `      "strategy": "keyword-first | benefit-first | social-proof",\n`;
+    p += `      "reasoning": "Why this variant works — what keywords it targets and what conversion angle it uses"\n`;
+    p += `    }${i < 6 ? "," : ""}\n`;
+  }
+  p += `  ],\n`;
+  p += `  "keywordsTargeted": ["keyword 1", "keyword 2"],\n`;
+  p += `  "recommendation": "Which variant is the top recommendation and why"\n`;
+  p += `}\n\n`;
+  p += `CRITICAL: Every variant MUST be ≤80 characters. "charCount" must be the ACTUAL character count. Double-check before responding.`;
+  return p;
+}
+
 function buildVideoDeepDivePrompt(data: AppData): string {
   const isIOS = data.platform === "ios";
   let p = `You are a senior ASO and app marketing consultant specializing in app store video assets. Provide a comprehensive App Preview / Promo Video strategy.\n\n`;
@@ -1267,11 +1309,17 @@ function getDeepDivePromptAndConfig(section: DeepDiveSection, data: AppData): {
     case "title":
     case "subtitle":
     case "keywords":
-    case "shortDescription":
       return {
         systemPrompt: TEXT_SYSTEM_PROMPT,
         prompt: buildTitleDeepDivePrompt(data),
         maxOutputTokens: 8192,
+        needsImages: false,
+      };
+    case "shortDescription":
+      return {
+        systemPrompt: TEXT_SYSTEM_PROMPT,
+        prompt: buildShortDescriptionDeepDivePrompt(data),
+        maxOutputTokens: 4096,
         needsImages: false,
       };
     case "icon":
