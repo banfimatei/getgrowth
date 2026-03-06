@@ -1247,7 +1247,9 @@ async function callGeminiImageGen(
       throw new Error("Image generation returned text but no image");
     }
 
-    console.log(`ImageGen [${label}]: Success in ${elapsed}ms, image ${(imageData.length * 0.75 / 1_000).toFixed(0)}KB, text ${text.length} chars`);
+    const rawBytes = imageData.length * 0.75;
+    console.log(`ImageGen [${label}]: Success in ${elapsed}ms, image ${(rawBytes / 1_000).toFixed(0)}KB, text ${text.length} chars`);
+
     return { imageData, imageMime, text };
   } catch (error) {
     const elapsed = Date.now() - t0;
@@ -1257,53 +1259,87 @@ async function callGeminiImageGen(
   }
 }
 
-function buildIconConceptPrompt(appName: string, category: string, brief: string): string {
-  return `You are an expert app icon designer. Generate a professional app icon concept.
-
-APP: ${appName}
-CATEGORY: ${category}
-
-DESIGN BRIEF:
-${brief}
-
-REQUIREMENTS:
-- Square app icon (1024x1024 logical size)
-- Simple, bold design that's recognizable at 60x60px
-- No text on the icon (brand name goes elsewhere)
-- Rich color palette appropriate for the category
-- Clean, modern style suitable for both App Store and Google Play
-- High contrast between foreground element and background
-- No rounded corners (the OS applies those automatically)
-- Professional quality — this should look like a real app icon from a top studio
-
-Generate exactly ONE icon concept. Make it distinctive and memorable.`;
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/[✅❌▢•]/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
-function buildScreenshotMoodboardPrompt(appName: string, platform: string, brief: string): string {
-  const isIOS = platform === "ios";
-  return `You are an expert app store screenshot designer. Create a gallery layout moodboard for an app store screenshot redesign.
+function extractDesignDirection(brief: string): string {
+  const cleaned = stripMarkdown(brief);
+  const lines = cleaned.split("\n").filter(l => l.trim().length > 0);
+  const designLines = lines.filter(l => {
+    const lower = l.toLowerCase();
+    return lower.includes("color") || lower.includes("design") || lower.includes("style")
+      || lower.includes("suggest") || lower.includes("issue") || lower.includes("improve")
+      || lower.includes("redesign") || lower.includes("contrast") || lower.includes("shape")
+      || lower.includes("visual") || lower.includes("compet") || lower.includes("assess")
+      || lower.includes("brand") || lower.includes("recogni") || lower.includes("palette");
+  });
+  return designLines.slice(0, 15).join("\n") || cleaned.substring(0, 1500);
+}
 
-APP: ${appName}
+function buildIconConceptPrompt(appData: AppData, brief: string): string {
+  const desc = (appData.description || "").substring(0, 300);
+  const designDirection = extractDesignDirection(brief);
+
+  return `You are a world-class app icon designer working at a top design studio. Generate a professional, production-quality app icon.
+
+APP NAME: ${appData.title}
+CATEGORY: ${appData.category || "Apps"}
+WHAT THE APP DOES: ${desc}
+${appData.subtitle ? `TAGLINE: ${appData.subtitle}` : ""}
+
+DESIGN ANALYSIS FROM OUR ASO AUDIT:
+${designDirection}
+
+ICON REQUIREMENTS:
+- Square 1024x1024px app icon
+- Must be instantly recognizable at 60x60px (thumbnail size in search results)
+- NO text, NO letters, NO words on the icon — text goes in the app name, not the icon
+- Strong visual metaphor that communicates what the app does at a glance
+- High contrast between the main element and the background
+- Professional quality indistinguishable from a real top-grossing app
+- No rounded corners (the operating system applies those)
+- Rich, intentional color palette — not generic gradients
+- Should feel distinctly different from the current icon while staying on-brand for the category
+
+Generate exactly ONE polished app icon concept.`;
+}
+
+function buildScreenshotMoodboardPrompt(appData: AppData, brief: string): string {
+  const isIOS = appData.platform === "ios";
+  const desc = (appData.description || "").substring(0, 300);
+  const designDirection = extractDesignDirection(brief);
+
+  return `You are an expert app store screenshot designer. Create a visual moodboard / layout guide for a complete screenshot gallery redesign.
+
+APP NAME: ${appData.title}
 PLATFORM: ${isIOS ? "iOS App Store" : "Google Play Store"}
+WHAT THE APP DOES: ${desc}
+${appData.subtitle ? `TAGLINE: ${appData.subtitle}` : ""}
 
-DESIGN BRIEF:
-${brief}
+DESIGN ANALYSIS FROM OUR ASO AUDIT:
+${designDirection}
 
-CREATE A MOODBOARD that shows:
-1. A horizontal strip showing ${isIOS ? "5" : "4"} thumbnail screenshot frames side by side (like a gallery preview)
-2. Each frame should show a rough layout: device frame outline, caption placement area at top, and a colored block representing the app UI area
-3. Include a color palette bar at the bottom showing 4-5 recommended colors
-4. Show the recommended typography style with a sample caption rendered clearly
-5. Include visual style indicators (arrows, labels) showing: caption placement zone, device frame style, background treatment
+CREATE A MOODBOARD IMAGE that shows:
+1. A horizontal strip of ${isIOS ? "5" : "4"} thumbnail screenshot frames side by side (like a gallery preview row)
+2. Each frame contains: a modern device frame outline, a caption zone in the top 1/3, and a colored block representing the app's UI
+3. A color palette strip at the bottom with 4-5 recommended brand colors
+4. A typography sample showing the recommended caption font style
+5. Visual annotations (arrows, labels) indicating: caption placement, background treatment, device frame style
 
-STYLE GUIDELINES:
-- Clean, professional design document / wireframe aesthetic
-- Use a dark background for the moodboard itself
-- Device frames should be modern (${isIOS ? "iPhone 16 Pro with Dynamic Island" : "Pixel 9 style"})
-- Captions should be in the top 1/3 of each screenshot frame
-- Show visual hierarchy clearly
+DESIGN REQUIREMENTS:
+- Professional design document aesthetic — clean, organized, easy to scan
+- Dark background for the moodboard itself
+- Device frames: ${isIOS ? "iPhone 16 Pro (Dynamic Island, no home button)" : "Pixel 9 style"}
+- Show captions in the top 1/3 of each frame — bold, benefit-focused, 2-5 words
+- Use colors that match the app's brand identity
+- This is creative direction for designers, not finished screenshots
 
-This is a creative direction document, not final screenshots. It should give a designer clear direction on visual style, layout, and color palette for the full gallery redesign.`;
+Generate ONE comprehensive moodboard image.`;
 }
 
 export async function generateVisualConcepts(
@@ -1336,7 +1372,7 @@ export async function generateVisualConcepts(
       prompts.map((p, i) =>
         callGeminiImageGen(
           apiKey,
-          buildIconConceptPrompt(appData.title, appData.category || "Apps", brief) + p.suffix,
+          buildIconConceptPrompt(appData, brief) + p.suffix,
           images,
           30000,
           `ICON-${i + 1}`,
@@ -1344,9 +1380,18 @@ export async function generateVisualConcepts(
       ),
     );
 
+    const MAX_TOTAL_B64 = 3_500_000;
+    let totalB64 = 0;
+
     for (let i = 0; i < results.length; i++) {
       const r = results[i];
       if (r.status === "fulfilled" && r.value) {
+        const imgSize = r.value.imageData.length;
+        if (totalB64 + imgSize > MAX_TOTAL_B64) {
+          console.log(`Icon concept ${i + 1}: Skipped (${(imgSize * 0.75 / 1_000_000).toFixed(1)}MB) — would exceed ${(MAX_TOTAL_B64 * 0.75 / 1_000_000).toFixed(1)}MB response cap`);
+          continue;
+        }
+        totalB64 += imgSize;
         concepts.push({
           data: r.value.imageData,
           mimeType: r.value.imageMime,
@@ -1378,7 +1423,7 @@ export async function generateVisualConcepts(
 
     const result = await callGeminiImageGen(
       apiKey,
-      buildScreenshotMoodboardPrompt(appData.title, appData.platform, brief),
+      buildScreenshotMoodboardPrompt(appData, brief),
       images,
       30000,
       "MOODBOARD",

@@ -39,7 +39,6 @@ function formatDeepDiveResult(section: string, analysis: any, platform?: string)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatScreenshotsDeepDive(ai: any, platform: string): DeepDiveEnhancement {
   const isIOS = platform === "ios";
-  const max = isIOS ? 10 : 8;
   let b = "";
 
   b += `**AI Screenshot Analysis** (deep-dive, vision-powered):\n`;
