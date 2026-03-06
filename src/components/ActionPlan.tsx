@@ -415,6 +415,10 @@ function BriefContent({ text }: { text: string }) {
           );
         }
 
+        if (trimmed === "---") {
+          return <hr key={i} className="my-3" style={{ borderColor: "var(--border)", borderStyle: "dashed" }} />;
+        }
+
         if (trimmed === "") {
           return <div key={i} className="h-2" />;
         }
@@ -490,8 +494,11 @@ function VisualConceptsGallery({ concepts, section }: {
 function CopyOption({ index, text }: { index: number; text: string }) {
   const [copied, setCopied] = useState(false);
   const charCount = text.length;
+  const isLong = charCount > 120;
+  const displayText = isLong ? text.substring(0, 100) + "\u2026" : text;
 
-  const handleCopy = async () => {
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -500,6 +507,40 @@ function CopyOption({ index, text }: { index: number; text: string }) {
       // Clipboard API may not be available in all contexts
     }
   };
+
+  if (isLong) {
+    return (
+      <div
+        className="rounded p-2.5"
+        style={{ backgroundColor: "var(--info-bg)", border: "1px solid var(--info-border)" }}
+      >
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <span className="text-xs font-bold" style={{ color: "var(--info-text)" }}>
+            Option {index}
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+              {charCount}ch
+            </span>
+            <button
+              onClick={handleCopy}
+              className="text-xs font-medium px-2 py-0.5 rounded cursor-pointer transition-colors"
+              style={{
+                backgroundColor: copied ? "var(--pass-bg)" : "transparent",
+                color: copied ? "var(--pass-text)" : "var(--info-text)",
+                border: `1px solid ${copied ? "var(--pass-border)" : "var(--info-border)"}`,
+              }}
+            >
+              {copied ? "\u2713 Copied" : "Copy full text"}
+            </button>
+          </div>
+        </div>
+        <p className="text-[11px] leading-relaxed" style={{ color: "var(--info-text)", fontFamily: "var(--font-mono)" }}>
+          {displayText}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div

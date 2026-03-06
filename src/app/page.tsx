@@ -151,15 +151,23 @@ function formatDescriptionDeepDive(ai: any): DeepDiveEnhancement {
   const copyOptions: string[] = [];
 
   if (ai.primaryRewrite) {
-    b += `**Recommended Description** (${ai.charCounts?.primary || "?"} chars):\n\nSee copy option 1 below for the full rewrite.\n\n`;
+    b += `---\n\n`;
+    b += `**Recommended Description** (${ai.charCounts?.primary || "?"} chars, ready to copy-paste):\n\n`;
+    b += `${ai.primaryRewrite}\n\n`;
     copyOptions.push(ai.primaryRewrite);
   }
+
   if (ai.alternativeA) {
-    b += `**Alternative A** (${ai.charCounts?.altA || "?"} chars):\n\nSee copy option ${copyOptions.length + 1} below.\n\n`;
+    b += `---\n\n`;
+    b += `**Alternative A** (${ai.charCounts?.altA || "?"} chars):\n\n`;
+    b += `${ai.alternativeA}\n\n`;
     copyOptions.push(ai.alternativeA);
   }
+
   if (ai.alternativeB) {
-    b += `**Alternative B** (${ai.charCounts?.altB || "?"} chars):\n\nSee copy option ${copyOptions.length + 1} below.\n\n`;
+    b += `---\n\n`;
+    b += `**Alternative B** (${ai.charCounts?.altB || "?"} chars):\n\n`;
+    b += `${ai.alternativeB}\n\n`;
     copyOptions.push(ai.alternativeB);
   }
 
