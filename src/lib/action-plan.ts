@@ -247,7 +247,7 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
   const lengthR = cat.results.find(r => r.ruleId === "title-length");
   const kwR = cat.results.find(r => r.ruleId === "title-keywords");
   const frontR = cat.results.find(r => r.ruleId === "title-frontload");
-  const titleMax = data.platform === "ios" ? 30 : 50;
+  const titleMax = 30;
   const remaining = titleMax - data.title.length;
   const needsKw = kwR && kwR.score < 60;
   const needsLen = lengthR && lengthR.score < 90 && remaining > 3;

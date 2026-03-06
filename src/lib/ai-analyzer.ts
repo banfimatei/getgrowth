@@ -154,7 +154,7 @@ const TEXT_SYSTEM_PROMPT = `You are a senior App Store Optimization (ASO) consul
 ### Google Play Store
 | Field | Limit | Notes |
 |-------|-------|-------|
-| Title | 50 chars | Most heavily weighted for search ranking |
+| Title | 30 chars | Most heavily weighted for search ranking |
 | Short Description | 80 chars | Second-most indexed field; appears in search results |
 | Full Description | 4,000 chars | Fully indexed for search — keyword density matters |
 
@@ -169,7 +169,7 @@ Google has no separate keyword field — keywords extracted from title and descr
 - Write for humans first, SEO second — must read naturally
 - No superlatives (#1, best, top) — stores reject these
 - Use every available character — unused chars = wasted ranking potential
-- iOS: 30 chars max | Android: 50 chars max
+- Both platforms: 30 chars max
 
 **Subtitle (iOS only, 30 chars):**
 - Second-most weighted field on iOS
@@ -239,7 +239,7 @@ Tier 3: English defaults
 You MUST return valid JSON. Every field must be:
 - SPECIFIC to THIS app (reference actual features, brand, category)
 - ACTIONABLE (provide actual copy a developer could implement, not vague advice)
-- Within character limits (iOS title ≤30, Android title ≤50, subtitle ≤30, short desc ≤80, promo text ≤170)
+- Within character limits (title ≤30 on BOTH platforms, subtitle ≤30, short desc ≤80, promo text ≤170)
 - BENEFIT-FOCUSED (user outcomes, not technical capabilities)
 - GROUNDED (reference what you actually observe in the listing data)
 
@@ -423,13 +423,13 @@ async function downloadImageAsBase64(
 
 function buildTextPrompt(data: AppData): string {
   const isIOS = data.platform === "ios";
-  const titleMax = isIOS ? 30 : 50;
+  const titleMax = 30;
 
   let p = `Analyze this ${isIOS ? "iOS App Store" : "Google Play"} listing metadata comprehensively.\n\n`;
-  p += `**IMPORTANT: This is a ${isIOS ? "iOS" : "Android"} app. The title character limit is ${titleMax} characters (NOT ${isIOS ? "50" : "30"}). All title suggestions MUST be ≤${titleMax} chars.**\n\n`;
+  p += `**IMPORTANT: This is a ${isIOS ? "iOS" : "Android"} app. The title character limit is 30 characters on BOTH platforms. All title suggestions MUST be ≤30 chars.**\n\n`;
 
   p += `## METADATA\n`;
-  p += `**Title:** "${data.title}" (${data.title.length}/${titleMax} chars — limit is ${titleMax})\n`;
+  p += `**Title:** "${data.title}" (${data.title.length}/30 chars)\n`;
   if (isIOS && data.subtitle) p += `**Subtitle:** "${data.subtitle}" (${data.subtitle.length}/30 chars)\n`;
   else if (isIOS) p += `**Subtitle:** (not set — empty)\n`;
   if (!isIOS && data.shortDescription) p += `**Short description:** "${data.shortDescription}" (${data.shortDescription.length}/80 chars)\n`;
@@ -456,7 +456,7 @@ function buildTextPrompt(data: AppData): string {
 
   p += `Return JSON matching this exact structure:\n{\n`;
   p += `  "title": {\n`;
-  p += `    "issues": ["specific issue — when referencing char limits, use ${titleMax} (the ${isIOS ? "iOS" : "Android"} limit), NOT ${isIOS ? "50" : "30"}"],\n`;
+  p += `    "issues": ["specific issue — title limit is 30 chars on BOTH iOS and Android"],\n`;
   p += `    "suggestions": ["Title Option 1 (MUST be ≤${titleMax} chars)", "Title Option 2 (≤${titleMax}ch)", "Title Option 3 (≤${titleMax}ch)"],\n`;
   p += `    "reasoning": "Why these changes improve ranking and conversion"\n`;
   p += `  },\n`;
@@ -1048,15 +1048,14 @@ function buildScreenshotsDeepDivePrompt(data: AppData): string {
 
 function buildTitleDeepDivePrompt(data: AppData): string {
   const isIOS = data.platform === "ios";
-  const titleMax = isIOS ? 30 : 50;
   let p = `You are a senior ASO consultant. Provide an exhaustive TITLE optimization analysis.\n\n`;
 
   p += `## FIELD BEING ANALYZED: APP TITLE\n`;
-  p += `**HARD CHARACTER LIMIT: ${titleMax} characters** (${isIOS ? "iOS App Store" : "Google Play Store"})\n`;
-  p += `**EVERY variant you suggest MUST be ≤${titleMax} characters. No exceptions.**\n\n`;
+  p += `**HARD CHARACTER LIMIT: 30 characters** (${isIOS ? "iOS App Store" : "Google Play Store"} — both platforms use 30 chars)\n`;
+  p += `**EVERY variant you suggest MUST be ≤30 characters. No exceptions.**\n\n`;
 
   p += `## CURRENT APP METADATA\n`;
-  p += `**Current title:** "${data.title}" (${data.title.length}/${titleMax} chars)\n`;
+  p += `**Current title:** "${data.title}" (${data.title.length}/30 chars)\n`;
   if (isIOS) {
     p += data.subtitle
       ? `**Current subtitle:** "${data.subtitle}" (${data.subtitle.length}/30 chars)\n`
@@ -1092,7 +1091,7 @@ function buildTitleDeepDivePrompt(data: AppData): string {
   p += `  "variants": [\n`;
   for (let i = 1; i <= 8; i++) {
     p += `    {\n`;
-    p += `      "title": "Title variant ${i} — MUST BE ≤${titleMax} CHARS, count carefully before writing",\n`;
+    p += `      "title": "Title variant ${i} — MUST BE ≤30 CHARS, count carefully before writing",\n`;
     p += `      "charCount": 0,\n`;
     p += `      "strategy": "keyword-first | brand-first | hybrid",\n`;
     p += `      "reasoning": "Why this variant improves on the current title"\n`;
@@ -1105,9 +1104,9 @@ function buildTitleDeepDivePrompt(data: AppData): string {
   p += `  "recommendation": "Which variant is the top recommendation and why"\n`;
   p += `}\n\n`;
   p += `CRITICAL RULES:\n`;
-  p += `1. "charCount" must be the ACTUAL character count you computed, NOT ${titleMax}\n`;
-  p += `2. EVERY title variant MUST be ≤${titleMax} characters — count BEFORE writing each one\n`;
-  p += `3. If a title exceeds ${titleMax} chars, it is INVALID and will be rejected by the store`;
+  p += `1. "charCount" must be the ACTUAL character count you computed, NOT 30\n`;
+  p += `2. EVERY title variant MUST be ≤30 characters — count BEFORE writing each one\n`;
+  p += `3. If a title exceeds 30 chars, it is INVALID and will be rejected by the store`;
   return p;
 }
 
