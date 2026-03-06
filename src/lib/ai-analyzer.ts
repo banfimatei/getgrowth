@@ -4,6 +4,9 @@ import type { DeepDiveSection } from "./action-plan";
 const GEMINI_MODEL = "gemini-3-flash-preview";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
+const IMAGE_GEN_MODEL = "gemini-3.1-flash-image-preview";
+const IMAGE_GEN_URL = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_GEN_MODEL}:generateContent`;
+
 // ---------------------------------------------------------------------------
 // AIAnalysis — covers every audit area, all optional for resilience
 // ---------------------------------------------------------------------------
@@ -1162,4 +1165,238 @@ export async function runDeepDive(
 
   console.log(`Deep-dive [${section}]: ${result ? "SUCCESS" : "FAILED"}`);
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Visual concept generation — gemini-3.1-flash-image-preview
+// ---------------------------------------------------------------------------
+
+export interface VisualConcept {
+  data: string;
+  mimeType: string;
+  label: string;
+  commentary: string;
+}
+
+async function callGeminiImageGen(
+  apiKey: string,
+  prompt: string,
+  images: { data: string; mimeType: string; label: string }[],
+  timeoutMs = 30000,
+  label = "IMG-GEN",
+): Promise<{ imageData: string; imageMime: string; text: string } | null> {
+  const t0 = Date.now();
+  const parts: Record<string, unknown>[] = [];
+
+  for (const img of images) {
+    parts.push({ text: img.label });
+    parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
+  }
+  parts.push({ text: prompt });
+
+  const body = {
+    contents: [{ parts }],
+    generationConfig: {
+      responseModalities: ["TEXT", "IMAGE"],
+      temperature: 0.8,
+    },
+  };
+
+  const bodyJson = JSON.stringify(body);
+  console.log(`ImageGen [${label}]: ${(bodyJson.length / 1_000_000).toFixed(2)}MB payload, sending...`);
+
+  try {
+    const resp = await fetch(`${IMAGE_GEN_URL}?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: bodyJson,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+
+    const elapsed = Date.now() - t0;
+
+    if (!resp.ok) {
+      const err = await resp.text();
+      console.error(`ImageGen [${label}]: ${resp.status} after ${elapsed}ms:`, err.substring(0, 300));
+      throw new Error(`Image generation API returned ${resp.status}: ${err.substring(0, 200)}`);
+    }
+
+    const result = await resp.json();
+    const candidateParts = result?.candidates?.[0]?.content?.parts;
+    if (!candidateParts?.length) {
+      console.error(`ImageGen [${label}]: No parts returned after ${elapsed}ms`);
+      throw new Error("Image generation returned no content");
+    }
+
+    let imageData = "";
+    let imageMime = "image/png";
+    let text = "";
+
+    for (const part of candidateParts) {
+      if (part.inlineData) {
+        imageData = part.inlineData.data;
+        imageMime = part.inlineData.mimeType || "image/png";
+      }
+      if (part.text) {
+        text += part.text;
+      }
+    }
+
+    if (!imageData) {
+      console.error(`ImageGen [${label}]: Response had parts but no image data after ${elapsed}ms`);
+      throw new Error("Image generation returned text but no image");
+    }
+
+    console.log(`ImageGen [${label}]: Success in ${elapsed}ms, image ${(imageData.length * 0.75 / 1_000).toFixed(0)}KB, text ${text.length} chars`);
+    return { imageData, imageMime, text };
+  } catch (error) {
+    const elapsed = Date.now() - t0;
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(`ImageGen [${label}]: Failed after ${elapsed}ms:`, msg);
+    throw error;
+  }
+}
+
+function buildIconConceptPrompt(appName: string, category: string, brief: string): string {
+  return `You are an expert app icon designer. Generate a professional app icon concept.
+
+APP: ${appName}
+CATEGORY: ${category}
+
+DESIGN BRIEF:
+${brief}
+
+REQUIREMENTS:
+- Square app icon (1024x1024 logical size)
+- Simple, bold design that's recognizable at 60x60px
+- No text on the icon (brand name goes elsewhere)
+- Rich color palette appropriate for the category
+- Clean, modern style suitable for both App Store and Google Play
+- High contrast between foreground element and background
+- No rounded corners (the OS applies those automatically)
+- Professional quality — this should look like a real app icon from a top studio
+
+Generate exactly ONE icon concept. Make it distinctive and memorable.`;
+}
+
+function buildScreenshotMoodboardPrompt(appName: string, platform: string, brief: string): string {
+  const isIOS = platform === "ios";
+  return `You are an expert app store screenshot designer. Create a gallery layout moodboard for an app store screenshot redesign.
+
+APP: ${appName}
+PLATFORM: ${isIOS ? "iOS App Store" : "Google Play Store"}
+
+DESIGN BRIEF:
+${brief}
+
+CREATE A MOODBOARD that shows:
+1. A horizontal strip showing ${isIOS ? "5" : "4"} thumbnail screenshot frames side by side (like a gallery preview)
+2. Each frame should show a rough layout: device frame outline, caption placement area at top, and a colored block representing the app UI area
+3. Include a color palette bar at the bottom showing 4-5 recommended colors
+4. Show the recommended typography style with a sample caption rendered clearly
+5. Include visual style indicators (arrows, labels) showing: caption placement zone, device frame style, background treatment
+
+STYLE GUIDELINES:
+- Clean, professional design document / wireframe aesthetic
+- Use a dark background for the moodboard itself
+- Device frames should be modern (${isIOS ? "iPhone 16 Pro with Dynamic Island" : "Pixel 9 style"})
+- Captions should be in the top 1/3 of each screenshot frame
+- Show visual hierarchy clearly
+
+This is a creative direction document, not final screenshots. It should give a designer clear direction on visual style, layout, and color palette for the full gallery redesign.`;
+}
+
+export async function generateVisualConcepts(
+  appData: AppData,
+  section: "icon" | "screenshots",
+  brief: string,
+): Promise<VisualConcept[]> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
+
+  const concepts: VisualConcept[] = [];
+
+  if (section === "icon") {
+    const images: { data: string; mimeType: string; label: string }[] = [];
+
+    if (appData.iconUrl) {
+      const icon = await downloadImageAsBase64(appData.iconUrl);
+      if (icon) {
+        images.push({ data: icon.data, mimeType: icon.mimeType, label: "Current app icon (for reference — the redesign should be distinctly different):" });
+      }
+    }
+
+    const prompts = [
+      { label: "Modern & Bold", suffix: "\n\nSTYLE DIRECTION: Modern, bold, and vibrant. Use strong geometric shapes and a contemporary color palette. Make it feel premium and current." },
+      { label: "Minimal & Clean", suffix: "\n\nSTYLE DIRECTION: Minimalist and clean. Focus on a single iconic element with lots of negative space. Subtle, refined color usage. Think Apple-level restraint." },
+      { label: "Distinctive & Expressive", suffix: "\n\nSTYLE DIRECTION: Distinctive and expressive. Push creative boundaries — use an unexpected metaphor, texture, or visual treatment that stands out in a crowded category grid. Bold and memorable." },
+    ];
+
+    const results = await Promise.allSettled(
+      prompts.map((p, i) =>
+        callGeminiImageGen(
+          apiKey,
+          buildIconConceptPrompt(appData.title, appData.category || "Apps", brief) + p.suffix,
+          images,
+          30000,
+          `ICON-${i + 1}`,
+        ),
+      ),
+    );
+
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (r.status === "fulfilled" && r.value) {
+        concepts.push({
+          data: r.value.imageData,
+          mimeType: r.value.imageMime,
+          label: prompts[i].label,
+          commentary: r.value.text || "",
+        });
+      } else {
+        const reason = r.status === "rejected" ? (r.reason instanceof Error ? r.reason.message : String(r.reason)) : "No image returned";
+        console.error(`Icon concept ${i + 1} (${prompts[i].label}) failed: ${reason}`);
+      }
+    }
+  } else if (section === "screenshots") {
+    const images: { data: string; mimeType: string; label: string }[] = [];
+
+    if (appData.iconUrl) {
+      const icon = await downloadImageAsBase64(appData.iconUrl);
+      if (icon) {
+        images.push({ data: icon.data, mimeType: icon.mimeType, label: "App icon (for brand color reference):" });
+      }
+    }
+
+    const firstScreenshot = appData.screenshots?.[0];
+    if (firstScreenshot) {
+      const ss = await downloadImageAsBase64(firstScreenshot);
+      if (ss) {
+        images.push({ data: ss.data, mimeType: ss.mimeType, label: "Current screenshot #1 (for reference on what exists today):" });
+      }
+    }
+
+    const result = await callGeminiImageGen(
+      apiKey,
+      buildScreenshotMoodboardPrompt(appData.title, appData.platform, brief),
+      images,
+      30000,
+      "MOODBOARD",
+    );
+
+    if (result) {
+      concepts.push({
+        data: result.imageData,
+        mimeType: result.imageMime,
+        label: "Gallery Moodboard",
+        commentary: result.text || "",
+      });
+    }
+  }
+
+  if (concepts.length === 0) {
+    throw new Error(`No visual concepts could be generated for ${section}`);
+  }
+
+  return concepts;
 }

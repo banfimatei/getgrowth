@@ -13,6 +13,13 @@ interface DeepDiveEnhancement {
   deliverables?: string[];
 }
 
+interface VisualConceptResult {
+  data: string;
+  mimeType: string;
+  label: string;
+  commentary: string;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatDeepDiveResult(section: string, analysis: any, platform?: string): DeepDiveEnhancement | null {
   if (!analysis) return null;
@@ -319,6 +326,30 @@ export default function Home() {
       return "__ERROR__Network error — please try again";
     } finally {
       setDeepDiveLoading(null);
+    }
+  }, [report]);
+
+  const handleVisualize = useCallback(async (section: "icon" | "screenshots", brief: string): Promise<VisualConceptResult[] | string> => {
+    if (!report?.appData) return "__ERROR__No app data available";
+    try {
+      const resp = await fetch("/api/audit/visualize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appData: report.appData, section, brief }),
+      });
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => null);
+        return `__ERROR__${errData?.error || `Visual generation failed (${resp.status})`}`;
+      }
+      const data = await resp.json();
+      return (data.concepts || []).map((c: { data: string; mimeType: string; label: string; commentary: string }) => ({
+        data: c.data,
+        mimeType: c.mimeType,
+        label: c.label,
+        commentary: c.commentary,
+      }));
+    } catch {
+      return "__ERROR__Network error — please try again";
     }
   }, [report]);
 
@@ -734,7 +765,7 @@ export default function Home() {
                 <h3 className="text-lg mb-3" style={{ color: "var(--text-primary)" }}>
                   Action Plan
                 </h3>
-                <ActionPlan actions={report.actionPlan} onDeepDive={handleDeepDive} deepDiveLoading={deepDiveLoading} />
+                <ActionPlan actions={report.actionPlan} onDeepDive={handleDeepDive} deepDiveLoading={deepDiveLoading} onVisualize={handleVisualize} />
               </div>
             )}
 

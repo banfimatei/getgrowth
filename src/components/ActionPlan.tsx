@@ -9,10 +9,18 @@ interface DeepDiveEnhancement {
   deliverables?: string[];
 }
 
+interface VisualConceptResult {
+  data: string;
+  mimeType: string;
+  label: string;
+  commentary: string;
+}
+
 interface ActionPlanProps {
   actions: ActionItem[];
   onDeepDive?: (section: DeepDiveSection, actionId: string) => Promise<DeepDiveEnhancement | string | null>;
   deepDiveLoading?: string | null;
+  onVisualize?: (section: "icon" | "screenshots", brief: string) => Promise<VisualConceptResult[] | string>;
 }
 
 const priorityConfig = {
@@ -28,7 +36,7 @@ const effortConfig = {
   heavy: { label: "Significant effort", color: "var(--text-tertiary)" },
 };
 
-export default function ActionPlan({ actions, onDeepDive, deepDiveLoading }: ActionPlanProps) {
+export default function ActionPlan({ actions, onDeepDive, deepDiveLoading, onVisualize }: ActionPlanProps) {
   if (actions.length === 0) {
     return (
       <div
@@ -49,24 +57,25 @@ export default function ActionPlan({ actions, onDeepDive, deepDiveLoading }: Act
   return (
     <div className="space-y-4">
       {quickWins.length > 0 && (
-        <ActionGroup title="Quick Wins" subtitle="Can be done today" actions={quickWins} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} />
+        <ActionGroup title="Quick Wins" subtitle="Can be done today" actions={quickWins} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} onVisualize={onVisualize} />
       )}
       {mediumEffort.length > 0 && (
-        <ActionGroup title="This Sprint" subtitle="Medium effort, high impact" actions={mediumEffort} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} />
+        <ActionGroup title="This Sprint" subtitle="Medium effort, high impact" actions={mediumEffort} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} onVisualize={onVisualize} />
       )}
       {heavyEffort.length > 0 && (
-        <ActionGroup title="Roadmap" subtitle="Significant effort" actions={heavyEffort} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} />
+        <ActionGroup title="Roadmap" subtitle="Significant effort" actions={heavyEffort} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} onVisualize={onVisualize} />
       )}
     </div>
   );
 }
 
-function ActionGroup({ title, subtitle, actions, onDeepDive, deepDiveLoading }: {
+function ActionGroup({ title, subtitle, actions, onDeepDive, deepDiveLoading, onVisualize }: {
   title: string;
   subtitle: string;
   actions: ActionItem[];
   onDeepDive?: (section: DeepDiveSection, actionId: string) => Promise<DeepDiveEnhancement | string | null>;
   deepDiveLoading?: string | null;
+  onVisualize?: (section: "icon" | "screenshots", brief: string) => Promise<VisualConceptResult[] | string>;
 }) {
   return (
     <div>
@@ -76,21 +85,25 @@ function ActionGroup({ title, subtitle, actions, onDeepDive, deepDiveLoading }: 
       </div>
       <div className="space-y-2">
         {actions.map((action) => (
-          <ActionCard key={action.id} action={action} onDeepDive={onDeepDive} isLoading={deepDiveLoading === action.id} />
+          <ActionCard key={action.id} action={action} onDeepDive={onDeepDive} isLoading={deepDiveLoading === action.id} onVisualize={onVisualize} />
         ))}
       </div>
     </div>
   );
 }
 
-function ActionCard({ action, onDeepDive, isLoading }: {
+function ActionCard({ action, onDeepDive, isLoading, onVisualize }: {
   action: ActionItem;
   onDeepDive?: (section: DeepDiveSection, actionId: string) => Promise<DeepDiveEnhancement | string | null>;
   isLoading?: boolean;
+  onVisualize?: (section: "icon" | "screenshots", brief: string) => Promise<VisualConceptResult[] | string>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [enhanced, setEnhanced] = useState<DeepDiveEnhancement | null>(null);
   const [deepDiveError, setDeepDiveError] = useState<string | null>(null);
+  const [visualConcepts, setVisualConcepts] = useState<VisualConceptResult[] | null>(null);
+  const [visualLoading, setVisualLoading] = useState(false);
+  const [visualError, setVisualError] = useState<string | null>(null);
   const pConfig = priorityConfig[action.priority];
   const eConfig = effortConfig[action.effort];
 
@@ -104,6 +117,9 @@ function ActionCard({ action, onDeepDive, isLoading }: {
   const activeDeliverables = enhanced?.deliverables || action.deliverables;
 
   const aiBadge = isEnhanced ? "enhanced" : action.aiStatus;
+
+  const canVisualize = !!onVisualize && (action.deepDiveSection === "icon" || action.deepDiveSection === "screenshots");
+  const showVisualize = canVisualize && (isEnhanced || action.aiStatus === "reviewed");
 
   return (
     <div
@@ -279,6 +295,68 @@ function ActionCard({ action, onDeepDive, isLoading }: {
               )}
             </div>
           )}
+
+          {/* Visual Concepts */}
+          {showVisualize && (
+            <div className="pt-2 border-t" style={{ borderColor: "var(--border)" }}>
+              {visualLoading ? (
+                <div className="flex items-center gap-2 text-xs py-1.5" style={{ color: "rgb(234, 179, 8)" }}>
+                  <span className="inline-block w-3.5 h-3.5 border-2 rounded-full animate-spin" style={{ borderColor: "rgba(234, 179, 8, 0.3)", borderTopColor: "rgb(234, 179, 8)" }} />
+                  Generating {action.deepDiveSection === "icon" ? "icon concepts" : "gallery moodboard"}... (10-20s)
+                </div>
+              ) : visualError ? (
+                <div className="flex items-center gap-2 text-xs py-1.5">
+                  <span style={{ color: "var(--fail-text)" }}>{visualError}</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setVisualError(null);
+                    }}
+                    className="text-xs underline cursor-pointer"
+                    style={{ color: "var(--text-tertiary)" }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : visualConcepts ? (
+                <VisualConceptsGallery
+                  concepts={visualConcepts}
+                  section={action.deepDiveSection as "icon" | "screenshots"}
+                />
+              ) : (
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (onVisualize && action.deepDiveSection) {
+                      setVisualLoading(true);
+                      try {
+                        const result = await onVisualize(
+                          action.deepDiveSection as "icon" | "screenshots",
+                          activeBrief,
+                        );
+                        if (typeof result === "string" && result.startsWith("__ERROR__")) {
+                          setVisualError(result.replace("__ERROR__", ""));
+                        } else if (Array.isArray(result)) {
+                          setVisualConcepts(result);
+                        }
+                      } finally {
+                        setVisualLoading(false);
+                      }
+                    }
+                  }}
+                  className="flex items-center gap-1.5 text-xs font-medium py-1.5 px-3 rounded cursor-pointer transition-colors"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(234,179,8,0.1), rgba(245,158,11,0.1))",
+                    color: "rgb(234, 179, 8)",
+                    border: "1px solid rgba(234, 179, 8, 0.3)",
+                  }}
+                >
+                  <span>{"\uD83C\uDFA8"}</span>
+                  {action.deepDiveSection === "icon" ? "Generate Icon Concepts" : "Generate Gallery Moodboard"}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -347,6 +425,64 @@ function BriefContent({ text }: { text: string }) {
           </p>
         );
       })}
+    </div>
+  );
+}
+
+function VisualConceptsGallery({ concepts, section }: {
+  concepts: VisualConceptResult[];
+  section: "icon" | "screenshots";
+}) {
+  const isIcon = section === "icon";
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "rgb(234, 179, 8)" }}>
+          {isIcon ? "Icon Concepts" : "Gallery Moodboard"}
+        </p>
+        <span
+          className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+          style={{
+            backgroundColor: "rgba(234, 179, 8, 0.1)",
+            color: "rgb(234, 179, 8)",
+            border: "1px solid rgba(234, 179, 8, 0.3)",
+          }}
+        >
+          AI Concept
+        </span>
+      </div>
+      <div className={isIcon ? "grid grid-cols-3 gap-3" : "space-y-3"}>
+        {concepts.map((concept, i) => (
+          <div key={i} className="space-y-1.5">
+            <div
+              className="relative rounded-lg overflow-hidden border"
+              style={{ borderColor: "rgba(234, 179, 8, 0.2)" }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`data:${concept.mimeType};base64,${concept.data}`}
+                alt={concept.label}
+                className={isIcon ? "w-full aspect-square object-cover" : "w-full object-contain"}
+                style={{ backgroundColor: "var(--bg-inset)" }}
+              />
+              <div
+                className="absolute bottom-0 left-0 right-0 px-2 py-1"
+                style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.7))" }}
+              >
+                <p className="text-[10px] font-semibold text-white">{concept.label}</p>
+              </div>
+            </div>
+            {concept.commentary && (
+              <p className="text-[11px] leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
+                {concept.commentary}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] italic" style={{ color: "var(--text-tertiary)" }}>
+        These are AI-generated concepts for creative direction only — not production-ready assets.
+      </p>
     </div>
   );
 }
