@@ -7,90 +7,228 @@ import ActionPlan from "@/components/ActionPlan";
 import type { AuditCategory } from "@/lib/aso-rules";
 import type { ActionItem } from "@/lib/action-plan";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function formatDeepDiveResult(section: string, analysis: any): string {
-  if (!analysis) return "";
-  let out = "";
+interface DeepDiveEnhancement {
+  brief: string;
+  copyOptions?: string[];
+  deliverables?: string[];
+}
 
-  if (section === "description") {
-    if (analysis.primaryRewrite) {
-      out += `**Recommended Description (${analysis.charCounts?.primary || "?"} chars):**\n\n`;
-      out += analysis.primaryRewrite + "\n\n";
-    }
-    if (analysis.alternativeA) {
-      out += `**Alternative A (${analysis.charCounts?.altA || "?"} chars):**\n\n`;
-      out += analysis.alternativeA + "\n\n";
-    }
-    if (analysis.alternativeB) {
-      out += `**Alternative B (${analysis.charCounts?.altB || "?"} chars):**\n\n`;
-      out += analysis.alternativeB + "\n\n";
-    }
-    if (analysis.keywordStrategy) {
-      out += `**Keyword Strategy:**\n${analysis.keywordStrategy}\n\n`;
-    }
-    if (analysis.structuralChanges?.length) {
-      out += `**Structural Changes:**\n`;
-      for (const c of analysis.structuralChanges) out += `  \u2022 ${c}\n`;
-    }
-  } else if (section === "screenshots") {
-    if (analysis.overallAssessment) out += `**Overall:** ${analysis.overallAssessment}\n\n`;
-    if (analysis.visualIdentity) out += `**Visual Identity:** ${analysis.visualIdentity}\n\n`;
-    if (analysis.firstThreeVerdict) out += `**First 3 Rule:** ${analysis.firstThreeVerdict}\n\n`;
-    if (analysis.perScreenshot?.length) {
-      for (const ss of analysis.perScreenshot) {
-        out += `**Slot ${ss.slot}:** ${ss.whatItShows}\n`;
-        out += `  Caption: "${ss.captionVisible}"\n`;
-        out += `  Quality: ${ss.captionQuality}\n`;
-        if (ss.captionSuggestions?.length) {
-          out += `  Suggestions: ${ss.captionSuggestions.join(" | ")}\n`;
-        }
-        if (ss.issues?.length) {
-          for (const issue of ss.issues) out += `  \u274C ${issue}\n`;
-        }
-        if (ss.designBrief) out += `  **Design brief:** ${ss.designBrief}\n`;
-        out += "\n";
-      }
-    }
-    if (analysis.missingSlots?.length) {
-      out += `**Missing Slots:**\n`;
-      for (const ms of analysis.missingSlots) {
-        out += `  \u274C Slot ${ms.slot}: ${ms.whatToShow}\n`;
-        out += `    Caption: "${ms.captionSuggestion}"\n`;
-        if (ms.designBrief) out += `    **Brief:** ${ms.designBrief}\n`;
-      }
-      out += "\n";
-    }
-    if (analysis.galleryReorderSuggestion) out += `**Reorder:** ${analysis.galleryReorderSuggestion}\n\n`;
-    if (analysis.ocrOptimization) out += `**OCR:** ${analysis.ocrOptimization}\n`;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatDeepDiveResult(section: string, analysis: any, platform?: string): DeepDiveEnhancement | null {
+  if (!analysis) return null;
+
+  if (section === "screenshots") {
+    return formatScreenshotsDeepDive(analysis, platform || "ios");
+  } else if (section === "description") {
+    return formatDescriptionDeepDive(analysis);
   } else if (section === "title" || section === "subtitle" || section === "keywords" || section === "shortDescription") {
-    if (analysis.currentAnalysis) out += `**Analysis:** ${analysis.currentAnalysis}\n\n`;
-    if (analysis.variants?.length) {
-      out += `**Title Variants:**\n`;
-      for (const v of analysis.variants) {
-        out += `  \u2022 "${v.title}" (${v.charCount}ch, ${v.strategy}) \u2014 ${v.reasoning}\n`;
-      }
-      out += "\n";
-    }
-    if (analysis.recommendation) out += `**Recommendation:** ${analysis.recommendation}\n`;
+    return formatTitleDeepDive(analysis);
   } else if (section === "icon") {
-    if (analysis.assessment) out += `**Assessment:** ${analysis.assessment}\n\n`;
-    if (analysis.issues?.length) {
-      out += `**Issues:**\n`;
-      for (const issue of analysis.issues) out += `  \u274C ${issue}\n`;
-      out += "\n";
+    return formatIconDeepDive(analysis, platform || "ios");
+  }
+  return { brief: JSON.stringify(analysis, null, 2) };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatScreenshotsDeepDive(ai: any, platform: string): DeepDiveEnhancement {
+  const isIOS = platform === "ios";
+  const max = isIOS ? 10 : 8;
+  let b = "";
+
+  b += `**AI Screenshot Analysis** (deep-dive, vision-powered):\n`;
+  if (ai.overallAssessment) b += `${ai.overallAssessment}\n`;
+  if (ai.galleryCoherence) b += `**Gallery coherence:** ${ai.galleryCoherence}/10\n`;
+  if (ai.visualIdentity) b += `**Visual identity:** ${ai.visualIdentity}\n`;
+  b += "\n";
+
+  if (ai.firstThreeVerdict) b += `**First 3 Rule verdict:** ${ai.firstThreeVerdict}\n\n`;
+
+  b += `**Per-screenshot analysis:**\n`;
+  if (ai.perScreenshot?.length) {
+    for (const ss of ai.perScreenshot) {
+      b += `\n  \u2705 **Slot ${ss.slot}:**\n`;
+      b += `     Shows: ${ss.whatItShows}\n`;
+      if (ss.style) b += `     Style: ${ss.style}\n`;
+      if (ss.captionVisible && ss.captionVisible !== "none") b += `     Visible caption: "${ss.captionVisible}"\n`;
+      if (ss.captionQuality) b += `     Caption assessment: ${ss.captionQuality}\n`;
+      if (ss.captionSuggestions?.length) {
+        b += `     Suggested captions: ${ss.captionSuggestions.map((c: string) => `"${c}"`).join(" | ")}\n`;
+      } else if (ss.captionSuggestion) {
+        b += `     Suggested caption: "${ss.captionSuggestion}"\n`;
+      }
+      if (ss.issues?.length) {
+        for (const issue of ss.issues) b += `     \u274C ${issue}\n`;
+      }
+      if (ss.designBrief) b += `     **Design brief:** ${ss.designBrief}\n`;
     }
-    if (analysis.colorAnalysis) out += `**Colors:** ${analysis.colorAnalysis}\n\n`;
-    if (analysis.competitorComparison) out += `**vs Competitors:** ${analysis.competitorComparison}\n\n`;
-    if (analysis.redesignBrief) out += `**Design Brief:** ${analysis.redesignBrief}\n\n`;
-    if (analysis.suggestions?.length) {
-      out += `**Suggestions:**\n`;
-      for (const s of analysis.suggestions) out += `  \u2022 ${s}\n`;
-    }
-  } else {
-    out = JSON.stringify(analysis, null, 2);
   }
 
-  return out.trim();
+  if (ai.missingSlots?.length) {
+    b += `\n**Missing screenshots to add** *(verify each feature is live in your app before shooting)*:\n`;
+    for (const ms of ai.missingSlots) {
+      b += `\n  \u274C **Slot ${ms.slot}:**\n`;
+      b += `     What to show: ${ms.whatToShow}\n`;
+      b += `     Suggested caption: "${ms.captionSuggestion}"\n`;
+      if (ms.recommendedStyle) b += `     Recommended style: ${ms.recommendedStyle}\n`;
+      if (ms.designBrief) b += `     **Design brief:** ${ms.designBrief}\n`;
+    }
+  }
+
+  if (ai.commonMistakesFound?.length) {
+    b += `\n**Common mistakes detected:**\n`;
+    for (const m of ai.commonMistakesFound) b += `  \u274C ${m}\n`;
+  }
+
+  if (ai.galleryReorderSuggestion) b += `\n**Reorder suggestion:** ${ai.galleryReorderSuggestion}\n`;
+  if (ai.ocrOptimization) b += `\n**OCR optimization:** ${ai.ocrOptimization}\n`;
+
+  // Compact reference (same as initial brief)
+  b += `\n**Caption rules:** 2-5 words \u2022 benefit-focused \u2022 40pt+ bold sans-serif \u2022 keyword-aware\n`;
+  if (isIOS) {
+    b += `**iOS OCR:** Apple indexes caption text as keywords \u2014 first 3 screenshots carry most weight. Align captions with your title + subtitle keywords.\n`;
+    b += `**Design specs:** 1320\u00D72868px (6.9") | 1290\u00D72796px (6.7") | 1242\u00D72208px (5.5") \u2014 upload 6.9" and Apple scales down.\n`;
+    b += `**Device frame:** iPhone 16 Pro (Dynamic Island, no home button)\n`;
+    b += `**A/B test:** Apple PPO supports up to 3 treatments. Test screenshot order, caption copy, and visual style.\n`;
+  } else {
+    b += `**Android:** Keep promo text under 20% of image area. Use Store Listing Experiments (7+ days, 50%+ traffic).\n`;
+    b += `**Design specs:** 1080\u00D71920px (standard) | 1440\u00D72560px (high-res) | Feature graphic 1024\u00D7500px\n`;
+    b += `**Device frame:** Pixel 9 or current flagship Android device\n`;
+  }
+
+  // Extract caption copy options
+  const copyOptions: string[] = [];
+  if (ai.perScreenshot?.length) {
+    for (const ss of ai.perScreenshot) {
+      if (ss.captionSuggestions?.length) {
+        copyOptions.push(ss.captionSuggestions[0]);
+      } else if (ss.captionSuggestion) {
+        copyOptions.push(ss.captionSuggestion);
+      }
+    }
+  }
+  if (ai.missingSlots?.length) {
+    for (const ms of ai.missingSlots) {
+      if (ms.captionSuggestion) copyOptions.push(ms.captionSuggestion);
+    }
+  }
+
+  // Build deliverables
+  const deliverables: string[] = [];
+  const existingCount = ai.perScreenshot?.length || 0;
+  const missingCount = ai.missingSlots?.length || 0;
+  const hasFrameIssues = JSON.stringify(ai.perScreenshot || []).toLowerCase().includes("outdated");
+  const hasUIIssues = JSON.stringify(ai.perScreenshot || []).toLowerCase().match(/2019|2020|outdated ui/);
+
+  if (hasFrameIssues) deliverables.push(`Reshoot all ${existingCount} existing screenshots with current-gen device frames (${isIOS ? "iPhone 16 Pro" : "Pixel 9"})`);
+  if (hasUIIssues) deliverables.push("Update all screenshots to show the current app version (outdated UI/dates detected)");
+  if (missingCount > 0) deliverables.push(`Design ${missingCount} new screenshots for slots ${existingCount + 1}-${existingCount + missingCount} (see above)`);
+  deliverables.push(`Export at platform-required resolutions`);
+  deliverables.push(`Upload to ${isIOS ? "App Store Connect \u203A Media Manager" : "Google Play Console \u203A Store Listing"}`);
+  if (isIOS) deliverables.push("Verify OCR readability (zoom to 25% test)");
+  deliverables.push("Set up A/B test with current vs new screenshots");
+
+  return { brief: b, copyOptions: copyOptions.length > 0 ? copyOptions : undefined, deliverables };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatDescriptionDeepDive(ai: any): DeepDiveEnhancement {
+  let b = "**AI Description Analysis** (deep-dive):\n\n";
+
+  if (ai.keywordStrategy) b += `**Keyword Strategy:**\n${ai.keywordStrategy}\n\n`;
+
+  if (ai.structuralChanges?.length) {
+    b += `**Structural Changes:**\n`;
+    for (const c of ai.structuralChanges) b += `  \u2022 ${c}\n`;
+    b += "\n";
+  }
+
+  const copyOptions: string[] = [];
+
+  if (ai.primaryRewrite) {
+    b += `**Recommended Description** (${ai.charCounts?.primary || "?"} chars):\n\nSee copy option 1 below for the full rewrite.\n\n`;
+    copyOptions.push(ai.primaryRewrite);
+  }
+  if (ai.alternativeA) {
+    b += `**Alternative A** (${ai.charCounts?.altA || "?"} chars):\n\nSee copy option ${copyOptions.length + 1} below.\n\n`;
+    copyOptions.push(ai.alternativeA);
+  }
+  if (ai.alternativeB) {
+    b += `**Alternative B** (${ai.charCounts?.altB || "?"} chars):\n\nSee copy option ${copyOptions.length + 1} below.\n\n`;
+    copyOptions.push(ai.alternativeB);
+  }
+
+  const deliverables = [
+    "Choose preferred description variant (or combine best elements)",
+    "Paste into store listing and verify character count",
+    "Run keyword density check on final version",
+    "Set up A/B test (current vs new description)",
+  ];
+
+  return { brief: b, copyOptions: copyOptions.length > 0 ? copyOptions : undefined, deliverables };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatTitleDeepDive(ai: any): DeepDiveEnhancement {
+  let b = "**AI Title Analysis** (deep-dive):\n\n";
+
+  if (ai.currentAnalysis) b += `${ai.currentAnalysis}\n\n`;
+
+  if (ai.variants?.length) {
+    b += `**Title Variants:**\n`;
+    for (const v of ai.variants) {
+      b += `  \u2022 "${v.title}" (${v.charCount}ch) \u2014 ${v.strategy}: ${v.reasoning}\n`;
+    }
+    b += "\n";
+  }
+
+  if (ai.recommendation) b += `**Recommendation:** ${ai.recommendation}\n`;
+
+  const copyOptions: string[] = [];
+  if (ai.variants?.length) {
+    for (const v of ai.variants) {
+      if (v.title) copyOptions.push(v.title);
+    }
+  }
+
+  return { brief: b, copyOptions: copyOptions.length > 0 ? copyOptions : undefined };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatIconDeepDive(ai: any, platform: string): DeepDiveEnhancement {
+  let b = "**AI Icon Analysis** (deep-dive, vision-powered):\n";
+  if (ai.assessment) b += `${ai.assessment}\n\n`;
+
+  if (ai.issues?.length) {
+    b += `**Issues found:**\n`;
+    for (const issue of ai.issues) b += `  \u2022 ${issue}\n`;
+    b += "\n";
+  }
+
+  if (ai.colorAnalysis) b += `**Color analysis:** ${ai.colorAnalysis}\n\n`;
+  if (ai.competitorComparison) b += `**vs Competitors:** ${ai.competitorComparison}\n\n`;
+  if (ai.redesignBrief) b += `**Redesign brief:** ${ai.redesignBrief}\n\n`;
+
+  if (ai.suggestions?.length) {
+    b += `**Suggestions:**\n`;
+    for (const s of ai.suggestions) b += `  \u2022 ${s}\n`;
+    b += "\n";
+  }
+
+  b += `**Icon best practices:**\n`;
+  b += `  \u2022 Must be recognizable at 60x60px \u2014 the smallest display size\n`;
+  b += `  \u2022 Simple, bold shapes with high contrast\n`;
+  b += `  \u2022 Should communicate the app's purpose at a glance\n`;
+  b += `  \u2022 Test against both light and dark backgrounds\n`;
+  b += `  \u2022 Unique within your category \u2014 avoid looking like competitors`;
+
+  const deliverables = [
+    "Design 2-3 icon variants addressing the issues above",
+    "Test at 60x60px, 120x120px, and 1024x1024px sizes",
+    `Upload to ${platform === "ios" ? "App Store Connect" : "Google Play Console"}`,
+    `A/B test with ${platform === "ios" ? "Apple PPO" : "Google Play Store Listing Experiments"}`,
+  ];
+
+  return { brief: b, deliverables };
 }
 
 interface SearchResult {
@@ -162,7 +300,7 @@ export default function Home() {
   const [searching, setSearching] = useState(false);
   const [deepDiveLoading, setDeepDiveLoading] = useState<string | null>(null);
 
-  const handleDeepDive = useCallback(async (section: string, actionId: string): Promise<string | null> => {
+  const handleDeepDive = useCallback(async (section: string, actionId: string): Promise<DeepDiveEnhancement | string | null> => {
     if (!report?.appData) return null;
     setDeepDiveLoading(actionId);
     try {
@@ -176,7 +314,7 @@ export default function Home() {
         return `__ERROR__${errData?.error || `AI analysis failed (${resp.status})`}`;
       }
       const data = await resp.json();
-      return formatDeepDiveResult(section, data.analysis);
+      return formatDeepDiveResult(section, data.analysis, report.appData.platform);
     } catch {
       return "__ERROR__Network error — please try again";
     } finally {

@@ -3,9 +3,15 @@
 import { useState } from "react";
 import type { ActionItem, DeepDiveSection } from "@/lib/action-plan";
 
+interface DeepDiveEnhancement {
+  brief: string;
+  copyOptions?: string[];
+  deliverables?: string[];
+}
+
 interface ActionPlanProps {
   actions: ActionItem[];
-  onDeepDive?: (section: DeepDiveSection, actionId: string) => Promise<string | null>;
+  onDeepDive?: (section: DeepDiveSection, actionId: string) => Promise<DeepDiveEnhancement | string | null>;
   deepDiveLoading?: string | null;
 }
 
@@ -59,7 +65,7 @@ function ActionGroup({ title, subtitle, actions, onDeepDive, deepDiveLoading }: 
   title: string;
   subtitle: string;
   actions: ActionItem[];
-  onDeepDive?: (section: DeepDiveSection, actionId: string) => Promise<string | null>;
+  onDeepDive?: (section: DeepDiveSection, actionId: string) => Promise<DeepDiveEnhancement | string | null>;
   deepDiveLoading?: string | null;
 }) {
   return (
@@ -79,11 +85,11 @@ function ActionGroup({ title, subtitle, actions, onDeepDive, deepDiveLoading }: 
 
 function ActionCard({ action, onDeepDive, isLoading }: {
   action: ActionItem;
-  onDeepDive?: (section: DeepDiveSection, actionId: string) => Promise<string | null>;
+  onDeepDive?: (section: DeepDiveSection, actionId: string) => Promise<DeepDiveEnhancement | string | null>;
   isLoading?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [deepDiveResult, setDeepDiveResult] = useState<string | null>(null);
+  const [enhanced, setEnhanced] = useState<DeepDiveEnhancement | null>(null);
   const [deepDiveError, setDeepDiveError] = useState<string | null>(null);
   const pConfig = priorityConfig[action.priority];
   const eConfig = effortConfig[action.effort];
@@ -92,12 +98,19 @@ function ActionCard({ action, onDeepDive, isLoading }: {
   const deepDiveSections: DeepDiveSection[] = ["description", "screenshots", "title", "subtitle", "icon"];
   const showDeepDive = canDeepDive && deepDiveSections.includes(action.deepDiveSection!);
 
+  const isEnhanced = !!enhanced;
+  const activeBrief = enhanced?.brief || action.brief;
+  const activeCopyOptions = enhanced?.copyOptions || action.copyOptions;
+  const activeDeliverables = enhanced?.deliverables || action.deliverables;
+
+  const aiBadge = isEnhanced ? "enhanced" : action.aiStatus;
+
   return (
     <div
       className="border rounded-lg overflow-hidden"
       style={{
         backgroundColor: "var(--bg-card)",
-        borderColor: isLoading ? "var(--info-border)" : "var(--border)",
+        borderColor: isLoading ? "var(--info-border)" : isEnhanced ? "rgba(124,58,237,0.3)" : "var(--border)",
         transition: "border-color 0.3s ease",
       }}
     >
@@ -116,7 +129,16 @@ function ActionCard({ action, onDeepDive, isLoading }: {
           <div className="flex items-start gap-1.5 flex-wrap">
             <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
               {action.title}
-              {action.aiStatus === "reviewed" && (
+              {aiBadge === "enhanced" && (
+                <span
+                  className="inline-block ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none align-middle"
+                  style={{ background: "linear-gradient(135deg, #7c3aed, #2563eb)", color: "#fff" }}
+                  title="Enhanced by deep AI analysis"
+                >
+                  AI+
+                </span>
+              )}
+              {aiBadge === "reviewed" && (
                 <span
                   className="inline-block ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none align-middle"
                   style={{ background: "linear-gradient(135deg, #7c3aed, #6366f1)", color: "#fff" }}
@@ -125,7 +147,7 @@ function ActionCard({ action, onDeepDive, isLoading }: {
                   AI
                 </span>
               )}
-              {action.aiStatus === "available" && (
+              {aiBadge === "available" && (
                 <span
                   className="inline-block ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium leading-none align-middle"
                   style={{ backgroundColor: "var(--bg-inset)", color: "var(--text-tertiary)", border: "1px dashed var(--border)" }}
@@ -165,23 +187,23 @@ function ActionCard({ action, onDeepDive, isLoading }: {
             {action.currentState}
           </div>
 
-          {/* Rich brief with markdown-like rendering */}
-          <BriefContent text={action.brief} />
+          {/* Rich brief — replaced when deep-dive succeeds */}
+          <BriefContent text={activeBrief} />
 
           {/* Copy options */}
-          {action.copyOptions && action.copyOptions.length > 0 && (
+          {activeCopyOptions && activeCopyOptions.length > 0 && (
             <div className="space-y-1.5">
               <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-tertiary)" }}>
                 Ready-to-use copy options
               </p>
-              {action.copyOptions.map((opt, i) => (
+              {activeCopyOptions.map((opt, i) => (
                 <CopyOption key={i} index={i + 1} text={opt} />
               ))}
             </div>
           )}
 
           {/* Deliverables checklist */}
-          {action.deliverables && action.deliverables.length > 0 && (
+          {activeDeliverables && activeDeliverables.length > 0 && (
             <div className="space-y-1">
               <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-tertiary)" }}>
                 Deliverables
@@ -190,7 +212,7 @@ function ActionCard({ action, onDeepDive, isLoading }: {
                 className="rounded p-2.5 space-y-1"
                 style={{ backgroundColor: "var(--bg-inset)" }}
               >
-                {action.deliverables.map((d, i) => (
+                {activeDeliverables.map((d, i) => (
                   <div key={i} className="flex items-start gap-2 text-xs" style={{ color: "var(--text-secondary)" }}>
                     <span className="shrink-0 mt-px" style={{ color: "var(--text-tertiary)" }}>{"\u25A2"}</span>
                     <span>{d}</span>
@@ -205,7 +227,7 @@ function ActionCard({ action, onDeepDive, isLoading }: {
             <span className="font-medium" style={{ color: "var(--text-secondary)" }}>Impact:</span> {action.impact}
           </p>
 
-          {/* Deep Dive button */}
+          {/* Deep Dive button / status */}
           {showDeepDive && (
             <div className="pt-2 border-t" style={{ borderColor: "var(--border)" }}>
               {isLoading ? (
@@ -227,23 +249,20 @@ function ActionCard({ action, onDeepDive, isLoading }: {
                     Retry
                   </button>
                 </div>
-              ) : deepDiveResult ? (
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--info-text)" }}>
-                    ✦ Deep AI Analysis
-                  </p>
-                  <BriefContent text={deepDiveResult} />
-                </div>
+              ) : isEnhanced ? (
+                <p className="text-xs py-1" style={{ color: "var(--text-tertiary)" }}>
+                  ✦ Enhanced with deep AI analysis
+                </p>
               ) : (
                 <button
                   onClick={async (e) => {
                     e.stopPropagation();
                     if (onDeepDive && action.deepDiveSection) {
                       const result = await onDeepDive(action.deepDiveSection, action.id);
-                      if (result?.startsWith("__ERROR__")) {
+                      if (typeof result === "string" && result.startsWith("__ERROR__")) {
                         setDeepDiveError(result.replace("__ERROR__", ""));
-                      } else if (result) {
-                        setDeepDiveResult(result);
+                      } else if (result && typeof result === "object") {
+                        setEnhanced(result);
                       }
                     }
                   }}
