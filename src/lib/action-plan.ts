@@ -18,7 +18,8 @@ export type DeepDiveSection =
   | "ratings"
   | "video"
   | "maintenance"
-  | "localization";
+  | "localization"
+  | "cpp";
 
 export interface ActionItem {
   id: string;
@@ -1702,7 +1703,7 @@ function customStoreListingsBrief(data: AppData, ai?: AIAnalysis | null): Action
     impact: "Custom listings improve conversion for specific audiences and ad campaigns",
     scoreBoost: "Improves conversion for targeted segments",
     aiStatus: "reviewed",
-    deepDiveSection: "localization",
+    deepDiveSection: "cpp",
   }];
 }
 
@@ -1759,7 +1760,7 @@ function cppBrief(data: AppData, _p: AppProfile, ai?: AIAnalysis | null): Action
     impact: "CPPs deliver average 8.6% conversion lift and up to 60% CPA reduction on paid campaigns",
     scoreBoost: "Improves paid acquisition ROI + organic conversion for specific keyword intents",
     aiStatus: "reviewed",
-    deepDiveSection: "screenshots",
+    deepDiveSection: "cpp",
   }];
 }
 

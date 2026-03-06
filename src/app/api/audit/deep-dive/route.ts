@@ -7,7 +7,7 @@ export const maxDuration = 120;
 const VALID_SECTIONS: DeepDiveSection[] = [
   "title", "subtitle", "keywords", "shortDescription",
   "description", "screenshots", "icon", "ratings",
-  "video", "maintenance", "localization",
+  "video", "maintenance", "localization", "cpp",
 ];
 
 export async function POST(request: NextRequest) {

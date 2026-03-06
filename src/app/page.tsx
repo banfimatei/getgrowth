@@ -48,6 +48,8 @@ function formatDeepDiveResult(section: string, analysis: any, platform?: string)
       return formatMaintenanceDeepDive(analysis, p);
     case "localization":
       return formatLocalizationDeepDive(analysis);
+    case "cpp":
+      return formatCppDeepDive(analysis, p);
     default:
       return { brief: JSON.stringify(analysis, null, 2) };
   }
@@ -589,6 +591,82 @@ function formatMaintenanceDeepDive(ai: any, platform: string): DeepDiveEnhanceme
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatCppDeepDive(ai: any, platform: string): DeepDiveEnhancement {
+  const isIos = platform === "ios";
+  const label = isIos ? "Custom Product Pages" : "Custom Store Listings";
+  let b = `**AI ${label} Strategy** (deep-dive):\n\n`;
+
+  if (ai.assessment) b += `${ai.assessment}\n\n`;
+  if (ai.currentState) b += `**Current state:** ${ai.currentState}\n`;
+  if (ai.priority) b += `**Priority:** ${ai.priority}\n`;
+  if (ai.reasoning) b += `${ai.reasoning}\n\n`;
+
+  if (ai.pages?.length) {
+    b += `---\n\n**Recommended ${label}:**\n\n`;
+    for (let i = 0; i < ai.pages.length; i++) {
+      const pg = ai.pages[i];
+      b += `**${i + 1}. ${pg.name || `Page ${i + 1}`}**\n`;
+      if (pg.targetIntent) b += `  Target: ${pg.targetIntent}\n`;
+      if (pg.heroScreenshot) b += `  Hero screenshot: ${pg.heroScreenshot}\n`;
+      if (pg.supportingScreenshots?.length) {
+        b += `  Supporting: ${pg.supportingScreenshots.join(" → ")}\n`;
+      }
+      if (isIos) {
+        if (pg.promotionalText) b += `  Promotional text: "${pg.promotionalText}"\n`;
+        if (pg.captionKeywords?.length) b += `  OCR keywords: ${pg.captionKeywords.join(", ")}\n`;
+      } else {
+        if (pg.title) b += `  Title: "${pg.title}"\n`;
+        if (pg.shortDescription) b += `  Short description: "${pg.shortDescription}"\n`;
+      }
+      if (pg.adIntegration) b += `  Ad integration: ${pg.adIntegration}\n`;
+      if (pg.expectedImpact) b += `  Expected impact: ${pg.expectedImpact}\n`;
+      b += "\n";
+    }
+  }
+
+  if (ai.seasonalOpportunities?.length) {
+    b += `---\n\n**Seasonal / event opportunities:**\n`;
+    for (const s of ai.seasonalOpportunities) b += `  \u2022 ${s}\n`;
+    b += "\n";
+  }
+
+  if (ai.measurementPlan) b += `**Measurement plan:** ${ai.measurementPlan}\n\n`;
+
+  if (ai.implementationSteps?.length) {
+    b += `**Implementation steps:**\n`;
+    for (let i = 0; i < ai.implementationSteps.length; i++) {
+      b += `  ${i + 1}. ${ai.implementationSteps[i]}\n`;
+    }
+    b += "\n";
+  }
+
+  if (ai.suggestions?.length) {
+    b += `**Recommendations:**\n`;
+    for (const s of ai.suggestions) b += `  \u2022 ${s}\n`;
+    b += "\n";
+  }
+
+  const deliverables = isIos
+    ? [
+        ...(ai.pages || []).map((pg: { name?: string }) => `Design screenshot set for CPP: "${pg.name || "Unnamed"}"`),
+        "Create CPPs in App Store Connect › Custom Product Pages",
+        "Link each CPP to corresponding Apple Search Ads ad group",
+        "Write keyword-optimized captions per CPP for OCR indexing",
+        "Monitor conversion rates per CPP vs default page",
+        "Set up seasonal CPP rotation calendar",
+      ]
+    : [
+        ...(ai.pages || []).map((pg: { name?: string }) => `Create custom store listing: "${pg.name || "Unnamed"}"`),
+        "Set up listings in Google Play Console › Custom store listings",
+        "Link listings to Google Ads campaigns",
+        "Research local keywords per target market (not translations)",
+        "Monitor conversion rates per listing vs default",
+      ];
+
+  return { brief: b, deliverables };
+}
+
 function formatLocalizationDeepDive(ai: any): DeepDiveEnhancement {
   let b = "**AI Localization Strategy** (deep-dive):\n\n";
 

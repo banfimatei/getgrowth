@@ -1480,6 +1480,92 @@ function buildLocalizationDeepDivePrompt(data: AppData): string {
   return p;
 }
 
+function buildCppDeepDivePrompt(data: AppData): string {
+  const isIos = data.platform === "ios";
+  const platformLabel = isIos ? "iOS" : "Android";
+  const featureName = isIos ? "Custom Product Pages (CPPs)" : "Custom Store Listings";
+
+  let p = `You are a senior ASO and paid acquisition strategist specializing in ${platformLabel} ${featureName}. `;
+  p += `Provide a comprehensive, actionable strategy for creating ${featureName} for this specific app.\n\n`;
+
+  p += `## APP CONTEXT\n`;
+  p += `**App:** ${data.title}\n`;
+  p += `**Category:** ${data.category}\n`;
+  p += `**Platform:** ${platformLabel}\n`;
+  p += `**Rating:** ${data.rating > 0 ? `${data.rating.toFixed(1)}★ (${data.ratingsCount.toLocaleString()} ratings)` : "No rating"}\n`;
+  if (data.subtitle) p += `**Subtitle:** ${data.subtitle}\n`;
+  p += `\n`;
+
+  p += `## DESCRIPTION (for understanding the app and its features)\n`;
+  p += `${data.description.substring(0, 2500)}\n\n`;
+
+  if (isIos) {
+    p += `## iOS CUSTOM PRODUCT PAGES — RULES & BEST PRACTICES\n`;
+    p += `- Apple supports up to 70 CPPs per app\n`;
+    p += `- Each CPP has its own URL and can have unique: screenshots, app preview video, and promotional text\n`;
+    p += `- CPPs do NOT support custom titles, subtitles, or icons — only visual assets and promo text\n`;
+    p += `- CPPs can be linked to Apple Search Ads campaigns for keyword-specific landing pages\n`;
+    p += `- Average result: 8.6% conversion lift, up to 60% CPA reduction, 2.5pp average conversion increase vs default page\n`;
+    p += `- Apple OCR indexes screenshot captions — align CPP captions with the target keyword cluster\n`;
+    p += `- Each CPP should target a distinct user intent or keyword cluster (not just cosmetic variations)\n`;
+    p += `- Seasonal CPPs (holiday, back-to-school, new year) can be scheduled and rotated\n`;
+    p += `- CPPs are created in App Store Connect › Custom Product Pages\n`;
+    p += `- Deep-link format: apps.apple.com/app/[id]?ppid=[CPP-ID]\n\n`;
+
+    p += `## STRATEGY REQUIREMENTS\n`;
+    p += `- Identify 3-5 distinct keyword clusters or user personas that justify dedicated CPPs\n`;
+    p += `- For EACH CPP: specify the target keyword/intent, the hero screenshot concept, supporting screenshots, and promotional text angle\n`;
+    p += `- Explain how each CPP's screenshot captions should differ from the default page for OCR optimization\n`;
+    p += `- Include an Apple Search Ads integration plan (which ad groups link to which CPPs)\n`;
+    p += `- Suggest seasonal/event CPP opportunities if relevant\n`;
+    p += `- Provide measurement framework (what KPIs to track per CPP)\n\n`;
+  } else {
+    p += `## ANDROID CUSTOM STORE LISTINGS — RULES & BEST PRACTICES\n`;
+    p += `- Google Play supports multiple custom store listings per app\n`;
+    p += `- Each listing can customize: title, short description, full description, icon, screenshots, feature graphic, and video\n`;
+    p += `- Custom listings can be targeted by: country/region, pre-registration status, or Google Ads campaigns\n`;
+    p += `- Country-specific listings should use locally researched keywords (not just translated)\n`;
+    p += `- Custom listings for paid campaigns serve as keyword-specific landing pages\n`;
+    p += `- Create in Google Play Console › Store presence › Custom store listings\n\n`;
+
+    p += `## STRATEGY REQUIREMENTS\n`;
+    p += `- Identify 3-5 target segments that justify dedicated custom listings (countries, user types, campaign audiences)\n`;
+    p += `- For EACH listing: specify the target segment, tailored title, short description, screenshot strategy, and description angle\n`;
+    p += `- Include country-specific keyword research recommendations (not just translations)\n`;
+    p += `- Provide a Google Ads integration plan (linking campaigns to specific listings)\n`;
+    p += `- Suggest measurement framework\n\n`;
+  }
+
+  p += `Return JSON:\n{\n`;
+  p += `  "assessment": "Overall ${featureName} opportunity assessment for this specific app",\n`;
+  p += `  "currentState": "What the app currently has (or lacks) in terms of ${featureName}",\n`;
+  p += `  "priority": "high | medium | low",\n`;
+  p += `  "reasoning": "Why this priority level — with category-specific and app-specific reasoning",\n`;
+  p += `  "pages": [\n`;
+  p += `    {\n`;
+  p += `      "name": "Descriptive name for this ${isIos ? "CPP" : "listing"} (e.g. 'Workout Focused' or 'Germany Market')",\n`;
+  p += `      "targetIntent": "The keyword cluster, user persona, or segment this targets",\n`;
+  p += `      "heroScreenshot": "What the first screenshot should show and its caption",\n`;
+  p += `      "supportingScreenshots": ["Brief description of screenshot 2", "Screenshot 3", "Screenshot 4"],\n`;
+  if (isIos) {
+    p += `      "promotionalText": "The promotional text angle for this CPP (up to 170 chars)",\n`;
+    p += `      "captionKeywords": ["keyword1", "keyword2", "keyword3"],\n`;
+  } else {
+    p += `      "title": "Tailored title for this listing",\n`;
+    p += `      "shortDescription": "Tailored short description (80 chars max)",\n`;
+  }
+  p += `      "adIntegration": "How to link this to ${isIos ? "Apple Search Ads" : "Google Ads"} campaigns",\n`;
+  p += `      "expectedImpact": "Expected conversion impact"\n`;
+  p += `    }\n`;
+  p += `  ],\n`;
+  p += `  "seasonalOpportunities": ["Seasonal or event-based ${isIos ? "CPP" : "listing"} opportunities"],\n`;
+  p += `  "measurementPlan": "What KPIs to track and how to measure success per ${isIos ? "CPP" : "listing"}",\n`;
+  p += `  "implementationSteps": ["Step 1", "Step 2", "Step 3"],\n`;
+  p += `  "suggestions": ["Specific actionable recommendation 1", "Recommendation 2"]\n`;
+  p += `}`;
+  return p;
+}
+
 function getDeepDivePromptAndConfig(section: DeepDiveSection, data: AppData): {
   systemPrompt: string;
   prompt: string;
@@ -1562,6 +1648,13 @@ function getDeepDivePromptAndConfig(section: DeepDiveSection, data: AppData): {
         systemPrompt: TEXT_SYSTEM_PROMPT,
         prompt: buildLocalizationDeepDivePrompt(data),
         maxOutputTokens: 8192,
+        needsImages: false,
+      };
+    case "cpp":
+      return {
+        systemPrompt: TEXT_SYSTEM_PROMPT,
+        prompt: buildCppDeepDivePrompt(data),
+        maxOutputTokens: 12288,
         needsImages: false,
       };
     default:
