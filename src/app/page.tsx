@@ -31,9 +31,11 @@ function formatDeepDiveResult(section: string, analysis: any, platform?: string)
     case "description":
       return formatDescriptionDeepDive(analysis, p);
     case "title":
-    case "subtitle":
-    case "keywords":
       return formatTitleDeepDive(analysis);
+    case "subtitle":
+      return formatSubtitleDeepDive(analysis);
+    case "keywords":
+      return formatKeywordsDeepDive(analysis);
     case "shortDescription":
       return formatShortDescriptionDeepDive(analysis);
     case "icon":
@@ -239,6 +241,14 @@ function formatTitleDeepDive(ai: any): DeepDiveEnhancement {
     b += "\n";
   }
 
+  if (ai.keywordCoverage?.length) {
+    b += `**Keyword coverage across variants:**\n`;
+    for (const k of ai.keywordCoverage) {
+      b += `  \u2022 "${k.keyword}" (${k.searchVolume}) \u2014 in: ${k.presentIn?.join(", ") || "none"}\n`;
+    }
+    b += "\n";
+  }
+
   if (ai.recommendation) b += `**Recommendation:** ${ai.recommendation}\n`;
 
   const copyOptions: string[] = [];
@@ -248,7 +258,108 @@ function formatTitleDeepDive(ai: any): DeepDiveEnhancement {
     }
   }
 
-  return { brief: b, copyOptions: copyOptions.length > 0 ? copyOptions : undefined };
+  const deliverables = [
+    "Choose preferred title variant",
+    "Update in store listing and submit for review",
+    "Monitor keyword rankings for 2 weeks after change",
+  ];
+
+  return { brief: b, copyOptions: copyOptions.length > 0 ? copyOptions : undefined, deliverables };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatSubtitleDeepDive(ai: any): DeepDiveEnhancement {
+  let b = "**AI Subtitle Analysis** (deep-dive, iOS):\n\n";
+
+  if (ai.currentAnalysis) b += `${ai.currentAnalysis}\n\n`;
+
+  if (ai.titleOverlapCheck) b += `**Title/subtitle overlap check:** ${ai.titleOverlapCheck}\n\n`;
+
+  if (ai.variants?.length) {
+    b += `**Subtitle Variants** (30 chars max):\n`;
+    for (const v of ai.variants) {
+      b += `  \u2022 "${v.subtitle}" (${v.charCount}ch)`;
+      if (v.keywordsAdded?.length) b += ` \u2014 adds: ${v.keywordsAdded.join(", ")}`;
+      b += `\n    ${v.reasoning}\n`;
+    }
+    b += "\n";
+  }
+
+  if (ai.recommendation) b += `**Recommendation:** ${ai.recommendation}\n`;
+
+  const copyOptions: string[] = [];
+  if (ai.variants?.length) {
+    for (const v of ai.variants) {
+      if (v.subtitle) copyOptions.push(v.subtitle);
+    }
+  }
+
+  const deliverables = [
+    "Choose preferred subtitle variant",
+    "Verify zero word overlap with title before submission",
+    "Update in App Store Connect (requires app update submission)",
+    "Monitor keyword rankings for 2 weeks after change",
+  ];
+
+  return { brief: b, copyOptions: copyOptions.length > 0 ? copyOptions : undefined, deliverables };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatKeywordsDeepDive(ai: any): DeepDiveEnhancement {
+  let b = "**AI Keyword Field Analysis** (deep-dive, iOS):\n\n";
+
+  if (ai.currentAnalysis) b += `${ai.currentAnalysis}\n\n`;
+
+  if (ai.wastedWords?.length) {
+    b += `**Wasted words** (already in title/subtitle, remove from keyword field):\n`;
+    for (const w of ai.wastedWords) b += `  \u274C ${w}\n`;
+    b += "\n";
+  }
+
+  if (ai.optimizedField) {
+    b += `---\n\n`;
+    b += `**Optimized keyword field** (${ai.charCount || "?"}/100 chars):\n\n`;
+    b += `\`${ai.optimizedField}\`\n\n`;
+  }
+
+  if (ai.keywordsIncluded?.length) {
+    b += `**Keywords included:**\n`;
+    for (const k of ai.keywordsIncluded) {
+      if (typeof k === "string") {
+        b += `  \u2705 ${k}\n`;
+      } else {
+        b += `  \u2705 "${k.keyword}" \u2014 ${k.reasoning}\n`;
+      }
+    }
+    b += "\n";
+  }
+
+  if (ai.keywordsExcluded?.length) {
+    b += `**Keywords considered but excluded:**\n`;
+    for (const k of ai.keywordsExcluded) b += `  \u2022 ${k}\n`;
+    b += "\n";
+  }
+
+  if (ai.combinationExamples?.length) {
+    b += `**Search queries this field enables:**\n`;
+    for (const c of ai.combinationExamples) b += `  \u2022 ${c}\n`;
+    b += "\n";
+  }
+
+  if (ai.recommendation) b += `**Strategy:** ${ai.recommendation}\n`;
+
+  const copyOptions: string[] = [];
+  if (ai.optimizedField) copyOptions.push(ai.optimizedField);
+
+  const deliverables = [
+    "Copy the optimized keyword field above",
+    "Paste into App Store Connect \u203A Keywords (comma-separated)",
+    "Verify no words overlap with title or subtitle",
+    "Submit app update to apply changes",
+    "Update keyword field quarterly based on ranking data",
+  ];
+
+  return { brief: b, copyOptions: copyOptions.length > 0 ? copyOptions : undefined, deliverables };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

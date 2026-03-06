@@ -1048,7 +1048,13 @@ function buildScreenshotsDeepDivePrompt(data: AppData): string {
 function buildTitleDeepDivePrompt(data: AppData): string {
   const isIOS = data.platform === "ios";
   const titleMax = isIOS ? 30 : 50;
-  let p = `You are a senior ASO consultant. Provide an exhaustive title optimization analysis.\n\n`;
+  let p = `You are a senior ASO consultant. Provide an exhaustive TITLE optimization analysis.\n\n`;
+
+  p += `## FIELD BEING ANALYZED: APP TITLE\n`;
+  p += `**HARD CHARACTER LIMIT: ${titleMax} characters** (${isIOS ? "iOS App Store" : "Google Play Store"})\n`;
+  p += `**EVERY variant you suggest MUST be ≤${titleMax} characters. No exceptions.**\n\n`;
+
+  p += `## CURRENT APP METADATA\n`;
   p += `**Current title:** "${data.title}" (${data.title.length}/${titleMax} chars)\n`;
   if (isIOS) {
     p += data.subtitle
@@ -1059,18 +1065,36 @@ function buildTitleDeepDivePrompt(data: AppData): string {
     p += `**Short description:** "${data.shortDescription}" (${data.shortDescription.length}/80 chars)\n`;
   }
   p += `**Category:** ${data.category}\n`;
-  p += `**Platform:** ${isIOS ? "iOS" : "Android"}\n\n`;
-  p += `**Description excerpt:** ${data.description.substring(0, 800)}\n\n`;
+  p += `**Platform:** ${isIOS ? "iOS" : "Android"}\n`;
+  p += `**Rating:** ${data.rating > 0 ? `${data.rating.toFixed(1)}★ (${data.ratingsCount.toLocaleString()})` : "No rating"}\n\n`;
+
+  p += `## DESCRIPTION (for feature/keyword context)\n`;
+  p += `${data.description.substring(0, 1200)}\n\n`;
+
+  p += `## TITLE OPTIMIZATION RULES\n`;
+  p += `- Most heavily weighted metadata field on both stores\n`;
+  p += `- Front-load keywords in the first 15 characters (highest algorithmic weight + most visible in search results)\n`;
+  p += `- Format options: "Brand – Keyword" or "Keyword – Brand" (if brand isn't well-known)\n`;
+  p += `- Write for humans first, SEO second — must read naturally\n`;
+  p += `- No superlatives (#1, best, top) — stores reject these\n`;
+  p += `- Use every available character — unused chars = wasted ranking potential\n`;
+  if (isIOS) {
+    p += `- iOS indexable budget: title (30) + subtitle (30) + keyword field (100) = 160 chars — avoid duplicating words across these fields\n`;
+    p += `- Don't include words already in the subtitle "${data.subtitle || ""}" — Apple combines them automatically\n`;
+  } else {
+    p += `- Google indexes the title + short description + full description — the title should target the highest-value keywords\n`;
+  }
+  p += `\n`;
 
   p += `Return JSON:\n{\n`;
-  p += `  "currentAnalysis": "Detailed analysis of current title — keyword coverage, brand placement, character usage",\n`;
+  p += `  "currentAnalysis": "Detailed analysis — what's good, what's missing, character efficiency, keyword coverage vs competitors",\n`;
   p += `  "variants": [\n`;
   for (let i = 1; i <= 8; i++) {
     p += `    {\n`;
-    p += `      "title": "Title variant ${i} (≤${titleMax} chars)",\n`;
+    p += `      "title": "Title variant ${i} — MUST BE ≤${titleMax} CHARS, count carefully before writing",\n`;
     p += `      "charCount": 0,\n`;
     p += `      "strategy": "keyword-first | brand-first | hybrid",\n`;
-    p += `      "reasoning": "Why this variant works"\n`;
+    p += `      "reasoning": "Why this variant improves on the current title"\n`;
     p += `    }${i < 8 ? "," : ""}\n`;
   }
   p += `  ],\n`;
@@ -1079,7 +1103,126 @@ function buildTitleDeepDivePrompt(data: AppData): string {
   p += `  ],\n`;
   p += `  "recommendation": "Which variant is the top recommendation and why"\n`;
   p += `}\n\n`;
-  p += `IMPORTANT: "charCount" must be the ACTUAL character count of each title variant you write, not the maximum limit.`;
+  p += `CRITICAL RULES:\n`;
+  p += `1. "charCount" must be the ACTUAL character count you computed, NOT ${titleMax}\n`;
+  p += `2. EVERY title variant MUST be ≤${titleMax} characters — count BEFORE writing each one\n`;
+  p += `3. If a title exceeds ${titleMax} chars, it is INVALID and will be rejected by the store`;
+  return p;
+}
+
+function buildSubtitleDeepDivePrompt(data: AppData): string {
+  let p = `You are a senior ASO consultant specializing in Apple App Store optimization. Provide a comprehensive SUBTITLE analysis.\n\n`;
+
+  p += `## FIELD BEING ANALYZED: iOS SUBTITLE\n`;
+  p += `**HARD CHARACTER LIMIT: 30 characters**\n`;
+  p += `**EVERY variant you suggest MUST be ≤30 characters. No exceptions.**\n\n`;
+
+  p += `## CURRENT APP METADATA\n`;
+  p += `**Current title:** "${data.title}" (${data.title.length}/30 chars)\n`;
+  p += data.subtitle
+    ? `**Current subtitle:** "${data.subtitle}" (${data.subtitle.length}/30 chars)\n`
+    : `**Current subtitle:** (not set — 30 chars available)\n`;
+  if ((data as unknown as Record<string, unknown>).keywordField) {
+    p += `**Current keyword field:** "${(data as unknown as Record<string, unknown>).keywordField}"\n`;
+  }
+  p += `**Category:** ${data.category}\n`;
+  p += `**Platform:** iOS (Apple App Store)\n`;
+  p += `**Rating:** ${data.rating > 0 ? `${data.rating.toFixed(1)}★ (${data.ratingsCount.toLocaleString()})` : "No rating"}\n\n`;
+
+  p += `## DESCRIPTION (for feature/keyword context)\n`;
+  p += `${data.description.substring(0, 1200)}\n\n`;
+
+  p += `## SUBTITLE OPTIMIZATION RULES\n`;
+  p += `- Second-most weighted field on iOS for search ranking\n`;
+  p += `- ZERO word overlap with title — Apple combines title + subtitle + keyword field automatically\n`;
+  p += `- Words in the title "${data.title}" are ALREADY indexed, so never repeat them in the subtitle\n`;
+  p += `- Don't repeat the category name (already indexed for free)\n`;
+  p += `- Apple's total indexable text budget: title (30) + subtitle (30) + keyword field (100) = 160 chars\n`;
+  p += `- The subtitle appears directly below the title in search results — it should complement, not repeat\n`;
+  p += `- Focus on the #1 benefit or differentiator that the title doesn't cover\n`;
+  p += `- Use the subtitle to capture different keyword intent than the title\n\n`;
+
+  p += `Return JSON:\n{\n`;
+  p += `  "currentAnalysis": "Assessment of current subtitle — keyword coverage, overlap with title, character efficiency, missed opportunities",\n`;
+  p += `  "titleOverlapCheck": "List any words that appear in BOTH the current title and subtitle (these are wasted)",\n`;
+  p += `  "variants": [\n`;
+  for (let i = 1; i <= 6; i++) {
+    p += `    {\n`;
+    p += `      "subtitle": "Subtitle variant ${i} — MUST BE ≤30 CHARS",\n`;
+    p += `      "charCount": 0,\n`;
+    p += `      "keywordsAdded": ["new keyword not in title"],\n`;
+    p += `      "reasoning": "Why this subtitle complements the title and targets different search intent"\n`;
+    p += `    }${i < 6 ? "," : ""}\n`;
+  }
+  p += `  ],\n`;
+  p += `  "recommendation": "Which variant is the top recommendation and why"\n`;
+  p += `}\n\n`;
+  p += `CRITICAL RULES:\n`;
+  p += `1. Every variant MUST be ≤30 characters — count before writing\n`;
+  p += `2. ZERO overlap with title words — check "${data.title}" before suggesting\n`;
+  p += `3. "charCount" must be the ACTUAL count, not 30`;
+  return p;
+}
+
+function buildKeywordsDeepDivePrompt(data: AppData): string {
+  let p = `You are a senior ASO consultant specializing in Apple App Store keyword optimization. Provide a comprehensive keyword field analysis.\n\n`;
+
+  p += `## FIELD BEING ANALYZED: iOS KEYWORD FIELD\n`;
+  p += `**HARD CHARACTER LIMIT: 100 characters**\n`;
+  p += `**Format: comma-separated, NO spaces after commas**\n`;
+  p += `**This field is INVISIBLE to users — purely for search indexing**\n\n`;
+
+  p += `## CURRENT APP METADATA\n`;
+  p += `**Current title:** "${data.title}"\n`;
+  p += data.subtitle
+    ? `**Current subtitle:** "${data.subtitle}"\n`
+    : `**Current subtitle:** (not set)\n`;
+  const kw = (data as unknown as Record<string, unknown>).keywordField;
+  if (kw) {
+    p += `**Current keyword field:** "${kw}" (${String(kw).length}/100 chars)\n`;
+  } else {
+    p += `**Current keyword field:** (not available — provide optimized field from scratch)\n`;
+  }
+  p += `**Category:** ${data.category}\n`;
+  p += `**Platform:** iOS (Apple App Store)\n`;
+  p += `**Rating:** ${data.rating > 0 ? `${data.rating.toFixed(1)}★ (${data.ratingsCount.toLocaleString()})` : "No rating"}\n\n`;
+
+  p += `## DESCRIPTION (for keyword context)\n`;
+  p += `${data.description.substring(0, 1500)}\n\n`;
+
+  p += `## KEYWORD FIELD OPTIMIZATION RULES (from ASO best practices)\n`;
+  p += `- 100 characters MAX, comma-separated, NO spaces after commas (spaces waste characters)\n`;
+  p += `- NO words already in the title or subtitle — Apple auto-indexes those, duplicates waste budget\n`;
+  p += `  Title words to exclude: ${data.title.toLowerCase().split(/\\s+/).join(", ")}\n`;
+  if (data.subtitle) {
+    p += `  Subtitle words to exclude: ${data.subtitle.toLowerCase().split(/\\s+/).join(", ")}\n`;
+  }
+  p += `- Use SINGULAR forms only — Apple handles plural/singular automatically\n`;
+  p += `- Single words > multi-word phrases — Apple recombines words automatically\n`;
+  p += `  Example: "music,stream" covers "music streaming" + "stream music" + "streaming"\n`;
+  p += `- NO competitor brand names (violates guidelines, causes app rejection)\n`;
+  p += `- NO category name (already indexed automatically)\n`;
+  p += `- Apple combines: title (30) + subtitle (30) + keyword field (100) = 160 indexable chars\n`;
+  p += `- Research and update quarterly with each app submission\n`;
+  p += `- Target a mix of high-volume and long-tail keywords\n\n`;
+
+  p += `Return JSON:\n{\n`;
+  p += `  "currentAnalysis": "Assessment of current keyword field — wasted characters, duplicate words, missing opportunities, plural issues",\n`;
+  p += `  "wastedWords": ["word that's already in title/subtitle and shouldn't be repeated"],\n`;
+  p += `  "optimizedField": "the,complete,optimized,100,char,keyword,field,no,spaces,after,commas",\n`;
+  p += `  "charCount": 0,\n`;
+  p += `  "keywordsIncluded": [\n`;
+  p += `    { "keyword": "word", "reasoning": "Why this keyword — search intent, volume estimate, relevance" }\n`;
+  p += `  ],\n`;
+  p += `  "keywordsExcluded": ["keyword considered but left out and why"],\n`;
+  p += `  "combinationExamples": ["Example searches this field enables: 'music streaming', 'relaxing radio', etc."],\n`;
+  p += `  "recommendation": "Summary of the optimization strategy and expected impact"\n`;
+  p += `}\n\n`;
+  p += `CRITICAL RULES:\n`;
+  p += `1. The "optimizedField" MUST be ≤100 characters total\n`;
+  p += `2. NO spaces after commas — "word1,word2,word3" not "word1, word2, word3"\n`;
+  p += `3. NO words from the title or subtitle\n`;
+  p += `4. "charCount" must be the ACTUAL length of "optimizedField"`;
   return p;
 }
 
@@ -1307,12 +1450,24 @@ function getDeepDivePromptAndConfig(section: DeepDiveSection, data: AppData): {
         needsImages: true,
       };
     case "title":
-    case "subtitle":
-    case "keywords":
       return {
         systemPrompt: TEXT_SYSTEM_PROMPT,
         prompt: buildTitleDeepDivePrompt(data),
         maxOutputTokens: 8192,
+        needsImages: false,
+      };
+    case "subtitle":
+      return {
+        systemPrompt: TEXT_SYSTEM_PROMPT,
+        prompt: buildSubtitleDeepDivePrompt(data),
+        maxOutputTokens: 4096,
+        needsImages: false,
+      };
+    case "keywords":
+      return {
+        systemPrompt: TEXT_SYSTEM_PROMPT,
+        prompt: buildKeywordsDeepDivePrompt(data),
+        maxOutputTokens: 4096,
         needsImages: false,
       };
     case "shortDescription":
