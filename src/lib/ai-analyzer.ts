@@ -1227,6 +1227,57 @@ function buildKeywordsDeepDivePrompt(data: AppData): string {
   return p;
 }
 
+function buildIconDeepDivePrompt(data: AppData): string {
+  const isIOS = data.platform === "ios";
+  let p = `You are a senior ASO and app design consultant specializing in app store icon optimization. Provide a comprehensive icon analysis.\n\n`;
+
+  p += `## APP CONTEXT\n`;
+  p += `**App:** ${data.title}\n`;
+  p += `**Category:** ${data.category}\n`;
+  p += `**Platform:** ${isIOS ? "iOS (Apple App Store)" : "Android (Google Play Store)"}\n`;
+  if (data.subtitle) p += `**Subtitle:** ${data.subtitle}\n`;
+  p += `**Rating:** ${data.rating > 0 ? `${data.rating.toFixed(1)}★ (${data.ratingsCount.toLocaleString()})` : "No rating"}\n\n`;
+
+  p += `## DESCRIPTION (for understanding what the app does)\n`;
+  p += `${data.description.substring(0, 1500)}\n\n`;
+
+  p += `## ICON OPTIMIZATION RULES (from ASO best practices)\n`;
+  p += `- The icon is the single most important visual element — it appears in search results, browse, and the home screen\n`;
+  p += `- Must be instantly recognizable at 60x60px (the smallest display size)\n`;
+  p += `- Simple, bold shapes with high contrast work best — avoid fine details that disappear at small sizes\n`;
+  p += `- Should communicate the app's purpose or brand at a glance\n`;
+  p += `- Must work on BOTH light and dark backgrounds (iOS has both modes, Android has themed icons)\n`;
+  p += `- Unique within the category — avoid looking like competitors in ${data.category}\n`;
+  p += `- No text in the icon (unreadable at small sizes, except single letters/initials)\n`;
+  p += `- No screenshots or photos — too much detail\n`;
+  p += `- Consistent with the app's UI color palette and brand identity\n`;
+  if (isIOS) {
+    p += `- iOS automatically applies rounded corners (superellipse mask) — don't add your own rounded corners\n`;
+    p += `- Required size: 1024x1024px (Apple scales down automatically)\n`;
+    p += `- No alpha channel or transparency allowed\n`;
+  } else {
+    p += `- Android adaptive icons: provide foreground + background layers for themed icon support\n`;
+    p += `- Required size: 512x512px (Google scales down)\n`;
+    p += `- Consider how the icon looks with Material You dynamic theming\n`;
+  }
+  p += `- A/B test icon variants — even small changes can significantly impact conversion\n\n`;
+
+  p += `## ANALYSIS INSTRUCTIONS\n`;
+  p += `Analyze the provided icon image in detail. Evaluate it against every rule above. Be specific about what you see.\n\n`;
+
+  p += `Return JSON:\n{\n`;
+  p += `  "assessment": "Detailed assessment of the current icon — what it shows, what it communicates, overall effectiveness",\n`;
+  p += `  "issues": ["specific issue 1 with the current icon", "issue 2", "etc — list EVERY problem you identify"],\n`;
+  p += `  "strengths": ["what the icon does well — be specific"],\n`;
+  p += `  "colorAnalysis": "Detailed color palette assessment — primary colors, contrast ratio, visibility on light/dark backgrounds, brand consistency",\n`;
+  p += `  "readabilityAt60px": "Can you identify the app's purpose at 60x60px? What gets lost?",\n`;
+  p += `  "competitorComparison": "How this icon compares to typical icons in the ${data.category} category — does it stand out or blend in?",\n`;
+  p += `  "redesignBrief": "Detailed creative brief for a designer to improve the icon — specific directions, not vague suggestions. Include: color direction, shape/symbol, style (flat/gradient/3D), what to keep vs change",\n`;
+  p += `  "suggestions": ["specific actionable improvement 1", "improvement 2", "improvement 3", "improvement 4"]\n`;
+  p += `}`;
+  return p;
+}
+
 function buildShortDescriptionDeepDivePrompt(data: AppData): string {
   let p = `You are a senior ASO consultant specializing in Google Play optimization. Provide a comprehensive short description analysis and rewrite.\n\n`;
 
@@ -1481,7 +1532,7 @@ function getDeepDivePromptAndConfig(section: DeepDiveSection, data: AppData): {
     case "icon":
       return {
         systemPrompt: VISUAL_SYSTEM_PROMPT,
-        prompt: `Provide a deep-dive icon analysis for "${data.title}" (${data.category}, ${data.platform}).\n\nReturn JSON:\n{\n  "assessment": "Detailed assessment of the icon",\n  "issues": ["list every issue"],\n  "colorAnalysis": "Color palette assessment — contrast, visibility on light/dark backgrounds",\n  "competitorComparison": "How this icon compares to typical icons in ${data.category} category",\n  "redesignBrief": "Detailed brief for a designer to improve the icon",\n  "suggestions": ["specific improvement 1", "improvement 2", "improvement 3"]\n}`,
+        prompt: buildIconDeepDivePrompt(data),
         maxOutputTokens: 4096,
         needsImages: true,
       };

@@ -400,37 +400,47 @@ function formatShortDescriptionDeepDive(ai: any): DeepDiveEnhancement {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatIconDeepDive(ai: any, platform: string): DeepDiveEnhancement {
-  let b = "**AI Icon Analysis** (deep-dive, vision-powered):\n";
+  const isIOS = platform === "ios";
+  let b = "**AI Icon Analysis** (deep-dive, vision-powered):\n\n";
   if (ai.assessment) b += `${ai.assessment}\n\n`;
 
-  if (ai.issues?.length) {
-    b += `**Issues found:**\n`;
-    for (const issue of ai.issues) b += `  \u2022 ${issue}\n`;
+  if (ai.strengths?.length) {
+    b += `**Strengths:**\n`;
+    for (const s of ai.strengths) b += `  \u2705 ${s}\n`;
     b += "\n";
   }
 
+  if (ai.issues?.length) {
+    b += `**Issues found:**\n`;
+    for (const issue of ai.issues) b += `  \u274C ${issue}\n`;
+    b += "\n";
+  }
+
+  if (ai.readabilityAt60px) b += `**Readability at 60x60px:** ${ai.readabilityAt60px}\n\n`;
   if (ai.colorAnalysis) b += `**Color analysis:** ${ai.colorAnalysis}\n\n`;
-  if (ai.competitorComparison) b += `**vs Competitors:** ${ai.competitorComparison}\n\n`;
-  if (ai.redesignBrief) b += `**Redesign brief:** ${ai.redesignBrief}\n\n`;
+  if (ai.competitorComparison) b += `**Category comparison:** ${ai.competitorComparison}\n\n`;
+
+  if (ai.redesignBrief) {
+    b += `---\n\n`;
+    b += `**Redesign brief for designer:**\n${ai.redesignBrief}\n\n`;
+  }
 
   if (ai.suggestions?.length) {
-    b += `**Suggestions:**\n`;
+    b += `**Actionable improvements:**\n`;
     for (const s of ai.suggestions) b += `  \u2022 ${s}\n`;
     b += "\n";
   }
 
-  b += `**Icon best practices:**\n`;
-  b += `  \u2022 Must be recognizable at 60x60px \u2014 the smallest display size\n`;
-  b += `  \u2022 Simple, bold shapes with high contrast\n`;
-  b += `  \u2022 Should communicate the app's purpose at a glance\n`;
-  b += `  \u2022 Test against both light and dark backgrounds\n`;
-  b += `  \u2022 Unique within your category \u2014 avoid looking like competitors`;
+  b += `---\n\n`;
+  b += `**Icon specs:** ${isIOS ? "1024x1024px, no transparency, Apple applies rounded corners automatically" : "512x512px, provide adaptive icon layers (foreground + background)"}\n`;
 
   const deliverables = [
-    "Design 2-3 icon variants addressing the issues above",
+    "Design 2-3 icon variants based on the redesign brief above",
     "Test at 60x60px, 120x120px, and 1024x1024px sizes",
-    `Upload to ${platform === "ios" ? "App Store Connect" : "Google Play Console"}`,
-    `A/B test with ${platform === "ios" ? "Apple PPO" : "Google Play Store Listing Experiments"}`,
+    "Verify visibility on both light and dark backgrounds",
+    `Export at ${isIOS ? "1024x1024px (no alpha channel)" : "512x512px with adaptive icon layers"}`,
+    `Upload to ${isIOS ? "App Store Connect" : "Google Play Console"}`,
+    `A/B test with ${isIOS ? "Apple PPO (Product Page Optimization)" : "Google Play Store Listing Experiments"}`,
   ];
 
   return { brief: b, deliverables };
