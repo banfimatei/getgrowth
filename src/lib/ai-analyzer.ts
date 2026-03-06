@@ -271,6 +271,8 @@ Upload 6-8 screenshots minimum. All 10 (iOS) / 8 (Android) only if each adds dis
 - BENEFIT-focused, not feature-focused
 - 40pt+ bold sans-serif font (SF Pro, Helvetica, Inter)
 - Keyword-aware — distribute ASO keywords across captions
+- **CRITICAL: NEVER repeat the same primary keyword across multiple captions.** Each caption must target a DIFFERENT high-value keyword. If the app's USP is "curation", use "curated" in ONE caption only — then use different angles (e.g., "DJ-picked", "premium radio", "exclusive channels") for the rest. Repeating the same word wastes OCR keyword slots and signals lazy copy.
+- Aim for 5-10 unique keywords spread across the full gallery
 
 Bad → Good examples:
 - "Push Notification System" → "Never Miss a Deadline"
@@ -279,6 +281,8 @@ Bad → Good examples:
 - "Audio Player Interface" → "Stream Music Anytime"
 - "Settings and Preferences" → "Personalize Your Sound"
 - "Easy to Use" (zero search volume) → "Track Daily Habits" (keyword-rich)
+- BAD gallery: "Curated Playlists" / "Curated Channels" / "Curated Radio" (repeats "curated" 3x — wastes 2 keyword slots)
+- GOOD gallery: "90+ Electronic Channels" / "Hand-Picked by Real DJs" / "Premium Radio, Zero Algorithms" (3 different keyword angles)
 
 ### Screenshot Styles (7 types — identify which each screenshot uses)
 1. **Device Frame with Caption** — 96% of top apps. Device mockup + benefit caption. Default.
@@ -355,6 +359,8 @@ For EACH screenshot image I provide, you MUST:
 6. Suggest a better caption (2-5 words, benefit-focused, keyword-aware)
 
 DO NOT make up captions that aren't visible. Report exactly what you SEE on each image.
+
+**SELF-CHECK BEFORE RESPONDING:** Review ALL your suggested captions together. If any two share the same primary keyword, revise one to use a different keyword angle. Each caption = unique keyword opportunity.
 
 ## ICON ANALYSIS
 The icon is the single most important visual element — must be recognizable at 60x60px.
@@ -580,6 +586,7 @@ function buildVisualPrompt(data: AppData): string {
     p += `4. Identify the style (device-frame, full-bleed, lifestyle, etc.)\n`;
     p += `5. List specific issues\n`;
     p += `6. Suggest a better 2-5 word benefit-focused caption\n\n`;
+    p += `**CAPTION DIVERSITY RULE:** Each captionSuggestion MUST use a DIFFERENT primary keyword. Never repeat the same primary word (e.g., "curated", "discover", "stream") across multiple captions. Spread 5-10 unique ASO keywords across the full gallery. If you catch yourself repeating a word, rephrase with a synonym or different angle.\n\n`;
   }
 
   p += `Return JSON matching this exact structure:\n{\n`;
@@ -616,11 +623,14 @@ function buildVisualPrompt(data: AppData): string {
   }
   p += `    ],\n`;
 
-  p += `    "missingSlots": [\n`;
-  p += `      // IMPORTANT: Only suggest features you can confirm from the app description or existing screenshots.\n`;
-  p += `      // If you're guessing about a feature, add "(if available)" to whatToShow.\n`;
   const startSlot = imgCount + 1;
   const endSlot = Math.min(imgCount + 4, screenshotMax);
+  const missingCount = endSlot - startSlot + 1;
+  p += `    "missingSlots": [\n`;
+  if (missingCount > 0) {
+    p += `      // You MUST provide exactly ${missingCount} missing slot entries (slots ${startSlot}-${endSlot}).\n`;
+    p += `      // Only suggest features confirmed in the description. Add "(if available)" for uncertain features.\n`;
+  }
   for (let i = startSlot; i <= endSlot; i++) {
     p += `      {\n`;
     p += `        "slot": ${i},\n`;
@@ -948,6 +958,7 @@ function buildScreenshotsDeepDivePrompt(data: AppData): string {
     p += `5. List ALL issues (device frame age, UI freshness, placeholder data, contrast, readability)\n`;
     p += `6. Provide a specific design brief for how to remake this screenshot\n`;
     p += `7. Suggest 3 caption alternatives (benefit-focused, keyword-rich, 2-5 words each)\n\n`;
+    p += `**CAPTION DIVERSITY RULE:** Each slot's primary captionSuggestion MUST use a DIFFERENT primary keyword from every other slot. Never repeat the same word (e.g., "curated", "discover", "stream") as the lead keyword across multiple captions. Spread 5-10 unique ASO keywords across the full gallery. If you notice repetition in your own output, revise before responding.\n\n`;
   }
 
   p += `Return JSON matching this structure:\n{\n`;
