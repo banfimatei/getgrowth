@@ -237,6 +237,21 @@ function sceneDirection(feature: string | undefined, fallback: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Resolve AI-reported priority, falling back to score-based logic when AI
+// did not run or didn't return a priority for this section.
+// ---------------------------------------------------------------------------
+
+function resolveAiPriority(
+  aiPriority: string | undefined,
+  fallback: ActionItem["priority"],
+): ActionItem["priority"] {
+  if (aiPriority === "high") return "high";
+  if (aiPriority === "medium") return "medium";
+  if (aiPriority === "low") return "low";
+  return fallback;
+}
+
+// ---------------------------------------------------------------------------
 // TITLE BRIEF
 // Sources: ASO skill §2 metadata, book Ch.2
 // ---------------------------------------------------------------------------
@@ -323,7 +338,10 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
   b += `  \u2022 ${data.platform === "ios" ? "Apple combines title + subtitle + keyword field \u2014 don't duplicate across them" : "Google extracts keywords from title + description \u2014 title keywords carry the most weight"}`;
 
   const titleScore = cat.score;
-  const titlePriority: ActionItem["priority"] = needsKw ? "critical" : titleScore < 65 ? "high" : "medium";
+  const titleScoreFallback: ActionItem["priority"] = titleScore < 65 ? "high" : "medium";
+  const titlePriority: ActionItem["priority"] = needsKw
+    ? "critical"
+    : resolveAiPriority(ai?.title?.priority, titleScoreFallback);
   const titleScoreBoost = needsKw
     ? `+${100 - titleScore - 10}-${100 - titleScore} on Title score`
     : titleScore < 65
@@ -415,7 +433,9 @@ function subtitleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?:
   b += `  \u2022 Use every character \u2014 unused space is wasted ranking potential`;
 
   const subtitleScore = cat.score;
-  const subtitlePriority: ActionItem["priority"] = empty ? "critical" : subtitleScore < 65 ? "high" : "medium";
+  const subtitlePriority: ActionItem["priority"] = empty
+    ? "critical"
+    : resolveAiPriority(ai?.subtitle?.priority, subtitleScore < 65 ? "high" : "medium");
   const subtitleScoreBoost = empty
     ? "+60-90 on Subtitle score"
     : subtitleScore < 65
@@ -558,7 +578,9 @@ function shortDescBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?
   b += `  \u2022 Must read naturally \u2014 this is the first text users see in search results`;
 
   const shortDescScore = cat.score;
-  const shortDescPriority: ActionItem["priority"] = !data.shortDescription ? "critical" : shortDescScore < 65 ? "high" : "medium";
+  const shortDescPriority: ActionItem["priority"] = !data.shortDescription
+    ? "critical"
+    : resolveAiPriority(ai?.shortDescription?.priority, shortDescScore < 65 ? "high" : "medium");
   const shortDescScoreBoost = !data.shortDescription
     ? "+60-90 on Short Description score"
     : shortDescScore < 65
@@ -715,9 +737,14 @@ function descriptionBrief(data: AppData, p: AppProfile, cats: AuditCategory[], a
   }
   deliverables.push("A/B test new vs current description (Google Play Experiments or track conversion via App Store Connect analytics)");
 
+  const descCat = cats.find(c => c.id === "description");
+  const descScore = descCat?.score ?? 0;
+  const descScoreFallback: ActionItem["priority"] = data.platform === "android" && descScore < 65 ? "high" : "medium";
+  const descPriority = resolveAiPriority(ai?.description?.priority, descScoreFallback);
+
   return [{
     id: "desc-rewrite",
-    priority: data.platform === "android" ? "high" : "medium", effort: "medium", category: "Description",
+    priority: descPriority, effort: "medium", category: "Description",
     title: hasAiRewrite ? "Replace description with AI-optimized version" : "Rewrite description with optimized structure and keywords",
     currentState: `${desc.length} chars, ~${wc} words \u2014 ${!hasBullets ? "no bullets, " : ""}${!hasParagraphs ? "no paragraphs, " : ""}${!hasCTA ? "no CTA" : "has CTA"}`,
     action: b, brief: b, deliverables,
@@ -1135,9 +1162,11 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
     const isHighEffort = needsRedo || data.screenshotCount < 4;
     const isCritical = data.screenshotCount < 3 || (needsDeviceFrameUpdate && needsUIUpdate);
 
-    // Priority and scoreBoost calibrated against the actual visuals category score
+    // Priority: AI-informed when available, else score-based fallback
     const visualScore = cat.score;
-    const screenshotPriority: ActionItem["priority"] = isCritical ? "critical" : visualScore < 60 ? "high" : "medium";
+    const screenshotPriority: ActionItem["priority"] = isCritical
+      ? "critical"
+      : resolveAiPriority(ai?.screenshots?.priority, visualScore < 60 ? "high" : "medium");
     const screenshotScoreBoost = visualScore >= 80
       ? `+${Math.max(3, 100 - visualScore - 8)}-${Math.max(8, 100 - visualScore)} on Visual Assets score`
       : visualScore >= 65

@@ -21,16 +21,19 @@ export interface AIAnalysis {
     issues: string[];
     suggestions: string[];
     reasoning: string;
+    priority?: string;
   };
   subtitle?: {
     issues: string[];
     suggestions: string[];
     reasoning: string;
+    priority?: string;
   };
   shortDescription?: {
     issues: string[];
     suggestions: string[];
     reasoning: string;
+    priority?: string;
   };
   keywordField?: {
     suggestedKeywords: string[];
@@ -44,6 +47,7 @@ export interface AIAnalysis {
     cta: string;
     keywordGaps: string[];
     structureIssues: string[];
+    priority?: string;
     keywordDensity?: {
       keyword: string;
       currentCount: number;
@@ -58,11 +62,13 @@ export interface AIAnalysis {
     assessment: string;
     issues: string[];
     suggestions: string[];
+    priority?: string;
   };
   screenshots: {
     overallAssessment: string;
     galleryCoherence: number;
     firstThreeVerdict: string;
+    priority?: string;
     perScreenshot: {
       slot: number;
       whatItShows: string;
@@ -460,14 +466,16 @@ function buildTextPrompt(data: AppData): string {
   p += `  "title": {\n`;
   p += `    "issues": ["specific issue — title limit is 30 chars on BOTH iOS and Android"],\n`;
   p += `    "suggestions": ["Title Option 1 (MUST be ≤${titleMax} chars)", "Title Option 2 (≤${titleMax}ch)", "Title Option 3 (≤${titleMax}ch)"],\n`;
-  p += `    "reasoning": "Why these changes improve ranking and conversion"\n`;
+  p += `    "reasoning": "Why these changes improve ranking and conversion",\n`;
+  p += `    "priority": "high | medium | low — high if title is missing key ranking terms, wastes >20% of the 30-char budget, or brand-only; medium if functional but keyword selection can be improved; low if well-optimized and near full usage"\n`;
   p += `  },\n`;
 
   if (isIOS) {
     p += `  "subtitle": {\n`;
     p += `    "issues": ["specific issue"],\n`;
     p += `    "suggestions": ["Subtitle Option 1 (≤30ch)", "Subtitle Option 2"],\n`;
-    p += `    "reasoning": "Why — zero overlap with title"\n`;
+    p += `    "reasoning": "Why — zero overlap with title",\n`;
+    p += `    "priority": "high | medium | low — high if empty, heavily duplicates title, or wastes >40% of 30 chars; medium if underusing or weak keywords; low if well-optimized"\n`;
     p += `  },\n`;
     p += `  "keywordField": {\n`;
     p += `    "suggestedKeywords": ["keyword1", "keyword2", "...up to 20 single words that complement title+subtitle"],\n`;
@@ -482,7 +490,8 @@ function buildTextPrompt(data: AppData): string {
     p += `  "shortDescription": {\n`;
     p += `    "issues": ["specific issue"],\n`;
     p += `    "suggestions": ["Short desc option 1 (≤80ch)", "Option 2 (≤80ch)"],\n`;
-    p += `    "reasoning": "Why — front-load primary keyword"\n`;
+    p += `    "reasoning": "Why — front-load primary keyword",\n`;
+    p += `    "priority": "high | medium | low — high if empty, <40 chars, or missing primary keyword in first 3 words; medium if functional but not using full 80 chars or keywords are weak; low if strong"\n`;
     p += `  },\n`;
   }
 
@@ -492,15 +501,14 @@ function buildTextPrompt(data: AppData): string {
   p += `    "featureBullets": ["• Benefit-focused bullet 1", "• Bullet 2", "...5-8 bullets extracted from the fullRewrite"],\n`;
   p += `    "cta": "Just the closing CTA paragraph extracted from the fullRewrite",\n`;
   p += `    "keywordGaps": ["keyword not found in current description that should be added"],\n`;
-  p += `    "structureIssues": ["specific structural problem observed in the CURRENT description"]`;
+  p += `    "structureIssues": ["specific structural problem observed in the CURRENT description"],\n`;
+  p += `    "priority": "high | medium | low — high if structurally poor (no bullets, weak hook, no CTA)${!isIOS ? " or severely keyword-thin" : ""}; medium if restructuring and hook improvements would help; low if solid structure and good copy"\n`;
 
   if (!isIOS) {
-    p += `,\n    "keywordDensity": [\n`;
+    p += `    ,"keywordDensity": [\n`;
     p += `      { "keyword": "primary keyword", "currentCount": 2, "recommendedCount": 5 },\n`;
     p += `      { "keyword": "secondary keyword", "currentCount": 0, "recommendedCount": 3 }\n`;
     p += `    ]\n`;
-  } else {
-    p += `\n`;
   }
 
   p += `  },\n`;
@@ -603,7 +611,8 @@ function buildVisualPrompt(data: AppData): string {
   p += `  "icon": {\n`;
   p += `    "assessment": "What the icon shows, whether it communicates app purpose, readability at small size, color analysis",\n`;
   p += `    "issues": ["specific issue observed"],\n`;
-  p += `    "suggestions": ["specific improvement"]\n`;
+  p += `    "suggestions": ["specific improvement"],\n`;
+  p += `    "priority": "high | medium | low — high if icon fails to communicate app purpose, poor small-size readability, or generic design; medium if functional but not distinctive; low if strong and memorable"\n`;
   p += `  },\n`;
 
   if (!isIOS) {
@@ -650,7 +659,8 @@ function buildVisualPrompt(data: AppData): string {
   }
   p += `    ],\n`;
 
-  p += `    "commonMistakesFound": ["List any of the 12 common screenshot mistakes you observe in these actual screenshots"]`;
+  p += `    "commonMistakesFound": ["List any of the 12 common screenshot mistakes you observe in these actual screenshots"],\n`;
+  p += `    "priority": "high | medium | low — high if gallery has serious issues (poor first-3 story, generic/feature-only captions, outdated frames, or messaging misaligned with app); medium if functional gallery with clear optimization opportunities; low if strong gallery with good keyword-rich captions"`;
 
   if (isIOS) {
     p += `,\n    "cppStrategy": {\n`;
