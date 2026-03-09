@@ -2,7 +2,9 @@ import type { AppData } from "./aso-rules";
 import type { DeepDiveSection } from "./action-plan";
 
 const GEMINI_MODEL = "gemini-3-flash-preview";
-const GEMINI_MODEL_LITE = "gemini-3.1-flash-lite-preview";
+// gemini-3.1-flash-lite-preview was released 2026-03-03 and has been unstable on launch.
+// Using the stable gemini-2.5-flash-lite as the reliable fallback.
+const GEMINI_MODEL_LITE = "gemini-2.5-flash-lite";
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const GEMINI_URL = `${GEMINI_BASE}/${GEMINI_MODEL}:generateContent`;
 const GEMINI_URL_LITE = `${GEMINI_BASE}/${GEMINI_MODEL_LITE}:generateContent`;
@@ -753,33 +755,42 @@ async function callGeminiWithFallback(
   apiKey: string,
   opts: GeminiCallOptions & { throwOnError?: boolean },
 ): Promise<Record<string, unknown> | null> {
-  // Attempt 1: primary model
+  const wallStart = Date.now();
+  let primaryError = "returned null (empty response)";
+  let liteError = "returned null (empty response)";
+
+  // Attempt 1: primary model — cap at 65s to always preserve budget for lite fallback.
+  // (Vercel maxDuration=120s; 65s primary + 45s lite = 110s worst case, leaving 10s headroom)
+  const primaryTimeout = Math.min(opts.timeoutMs, 65_000);
   try {
-    const result = await callGemini(apiKey, opts);
+    const result = await callGemini(apiKey, { ...opts, timeoutMs: primaryTimeout });
     if (result) return result;
-  } catch {
-    // primary failed — fall through to lite
+  } catch (err) {
+    primaryError = err instanceof Error ? err.message : String(err);
   }
 
-  // Attempt 2: lite model with same timeout
-  console.log(`AI [${opts.label}]: Primary failed, retrying with LITE model...`);
+  // Attempt 2: lite model — fixed 45s budget so primary+lite never exceeds ~110s total
+  const elapsed = Date.now() - wallStart;
+  console.log(`AI [${opts.label}]: Primary failed after ${elapsed}ms (${primaryError.substring(0, 120)}), retrying with LITE model...`);
   try {
     const result = await callGemini(apiKey, {
       ...opts,
       modelUrl: GEMINI_URL_LITE,
       label: `${opts.label}-LITE`,
+      timeoutMs: 45_000,
       throwOnError: false,
     });
     if (result) {
-      console.log(`AI [${opts.label}-LITE]: Fallback succeeded`);
+      console.log(`AI [${opts.label}-LITE]: Fallback succeeded after ${Date.now() - wallStart}ms total`);
       return result;
     }
-  } catch {
-    // lite also failed
+  } catch (err) {
+    liteError = err instanceof Error ? err.message : String(err);
   }
 
-  console.error(`AI [${opts.label}]: Both primary and lite models failed`);
-  if (opts.throwOnError) throw new Error(`AI analysis failed on both primary and lite models`);
+  const fullMsg = `AI analysis failed on both models — Primary (${GEMINI_MODEL}): ${primaryError.substring(0, 200)} | Lite (${GEMINI_MODEL_LITE}): ${liteError.substring(0, 200)}`;
+  console.error(`AI [${opts.label}]: ${fullMsg}`);
+  if (opts.throwOnError) throw new Error(fullMsg);
   return null;
 }
 
