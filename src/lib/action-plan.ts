@@ -322,9 +322,19 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
   b += `  \u2022 No superlatives ("#1", "best", "top") \u2014 stores reject these\n`;
   b += `  \u2022 ${data.platform === "ios" ? "Apple combines title + subtitle + keyword field \u2014 don't duplicate across them" : "Google extracts keywords from title + description \u2014 title keywords carry the most weight"}`;
 
+  const titleScore = cat.score;
+  const titlePriority: ActionItem["priority"] = needsKw ? "critical" : titleScore < 65 ? "high" : "medium";
+  const titleScoreBoost = needsKw
+    ? `+${100 - titleScore - 10}-${100 - titleScore} on Title score`
+    : titleScore < 65
+      ? "+20-35 on Title score"
+      : titleScore < 80
+        ? "+10-20 on Title score"
+        : `+${Math.max(3, 100 - titleScore - 8)}-${Math.max(8, 100 - titleScore)} on Title score`;
+
   return [{
     id: "title-optimize",
-    priority: needsKw ? "critical" : "high",
+    priority: titlePriority,
     effort: "quick",
     category: "Title",
     title: needsKw ? "Restructure title with high-value keywords" : needsFront ? "Front-load keywords before brand name" : remaining > 0 ? `Fill ${remaining} unused title characters` : "Optimize title keyword strategy",
@@ -338,7 +348,7 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
       "A/B test for 7+ days before committing (Apple PPO or Google Play Experiments)",
     ],
     impact: "Title is the single most weighted metadata field for search ranking on both stores",
-    scoreBoost: needsKw ? "+30-50 on Title score" : "+10-20 on Title score",
+    scoreBoost: titleScoreBoost,
     aiStatus: hasAiTitle ? "reviewed" : "available",
     deepDiveSection: "title",
   }];
@@ -404,9 +414,17 @@ function subtitleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?:
   b += `  \u2022 Benefit-first language: what the user gets, not what the app is\n`;
   b += `  \u2022 Use every character \u2014 unused space is wasted ranking potential`;
 
+  const subtitleScore = cat.score;
+  const subtitlePriority: ActionItem["priority"] = empty ? "critical" : subtitleScore < 65 ? "high" : "medium";
+  const subtitleScoreBoost = empty
+    ? "+60-90 on Subtitle score"
+    : subtitleScore < 65
+      ? "+20-35 on Subtitle score"
+      : `+${Math.max(5, 100 - subtitleScore - 8)}-${Math.max(10, 100 - subtitleScore)} on Subtitle score`;
+
   return [{
     id: "subtitle-optimize",
-    priority: empty ? "critical" : "high", effort: "quick", category: "Subtitle",
+    priority: subtitlePriority, effort: "quick", category: "Subtitle",
     title: empty ? "Add a subtitle \u2014 your second most valuable field is empty" : "Optimize subtitle keywords",
     currentState: empty ? "No subtitle set" : `"${data.subtitle}" (${data.subtitle!.length}/30 chars)`,
     action: b, brief: b,
@@ -417,7 +435,7 @@ function subtitleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?:
       "Requires app update submission for review",
     ],
     impact: "Unlocks keyword rankings for terms not reachable via title alone",
-    scoreBoost: empty ? "+60-90 on Subtitle score" : "+15-30 on Subtitle score",
+    scoreBoost: subtitleScoreBoost,
     aiStatus: hasAiSub ? "reviewed" : "available",
     deepDiveSection: "subtitle",
   }];
@@ -539,9 +557,17 @@ function shortDescBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?
   b += `  \u2022 Write a compelling pitch, not a keyword list\n`;
   b += `  \u2022 Must read naturally \u2014 this is the first text users see in search results`;
 
+  const shortDescScore = cat.score;
+  const shortDescPriority: ActionItem["priority"] = !data.shortDescription ? "critical" : shortDescScore < 65 ? "high" : "medium";
+  const shortDescScoreBoost = !data.shortDescription
+    ? "+60-90 on Short Description score"
+    : shortDescScore < 65
+      ? "+25-40 on Short Description score"
+      : `+${Math.max(5, 100 - shortDescScore - 8)}-${Math.max(10, 100 - shortDescScore)} on Short Description score`;
+
   return [{
     id: "short-desc-optimize",
-    priority: data.shortDescription ? "high" : "critical", effort: "quick", category: "Short Description",
+    priority: shortDescPriority, effort: "quick", category: "Short Description",
     title: data.shortDescription ? "Rewrite short description" : "Add a short description",
     currentState: data.shortDescription ? `"${data.shortDescription}" (${data.shortDescription.length}/80 chars)` : "Not set",
     action: b, brief: b,
@@ -552,7 +578,7 @@ function shortDescBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?
       "Run a Store Listing Experiment to A/B test variants",
     ],
     impact: "Directly affects Google Play search ranking and search result click-through rate",
-    scoreBoost: "+30-60 on Short Description score",
+    scoreBoost: shortDescScoreBoost,
     aiStatus: hasAiShort ? "reviewed" : "available",
     deepDiveSection: "shortDescription",
   }];
@@ -1109,6 +1135,15 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
     const isHighEffort = needsRedo || data.screenshotCount < 4;
     const isCritical = data.screenshotCount < 3 || (needsDeviceFrameUpdate && needsUIUpdate);
 
+    // Priority and scoreBoost calibrated against the actual visuals category score
+    const visualScore = cat.score;
+    const screenshotPriority: ActionItem["priority"] = isCritical ? "critical" : visualScore < 60 ? "high" : "medium";
+    const screenshotScoreBoost = visualScore >= 80
+      ? `+${Math.max(3, 100 - visualScore - 8)}-${Math.max(8, 100 - visualScore)} on Visual Assets score`
+      : visualScore >= 65
+        ? "+10-20 on Visual Assets score"
+        : "+15-30 on Visual Assets score";
+
     // Collect AI caption suggestions as one-click copy options (just the caption text)
     const captionCopyOptions: string[] = [];
     if (hasAiScreenshots) {
@@ -1122,7 +1157,7 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
 
     actions.push({
       id: "screenshots-optimize",
-      priority: isCritical ? "critical" : "high",
+      priority: screenshotPriority,
       effort: isHighEffort ? "heavy" : "medium",
       category: "Visual Assets",
       title: actionTitle,
@@ -1130,7 +1165,7 @@ function visualsBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: 
       action: b, brief: b, deliverables,
       copyOptions: captionCopyOptions.length > 0 ? captionCopyOptions : undefined,
       impact: "Screenshots are the #1 conversion driver" + (data.platform === "ios" ? " \u2014 captions are also a keyword ranking signal via OCR" : ""),
-      scoreBoost: "+15-30 on Visual Assets score",
+      scoreBoost: screenshotScoreBoost,
       aiStatus: hasAiScreenshots ? "reviewed" : "available",
       deepDiveSection: "screenshots",
     });
