@@ -186,6 +186,7 @@ Google has no separate keyword field — keywords extracted from title and descr
 - Format: "Brand – Keyword Phrase" or "Keyword – Brand" (if brand isn't well-known)
 - Write for humans first, SEO second — must read naturally
 - No superlatives (#1, best, top) — stores reject these
+- NEVER repeat the same word within a single title — each word should be a unique ranking term
 - Use every available character — unused chars = wasted ranking potential
 - Both platforms: 30 chars max
 
@@ -1108,8 +1109,8 @@ function buildScreenshotsDeepDivePrompt(data: AppData): string {
   p += `  ],\n`;
 
   p += `  "commonMistakesFound": ["list all common screenshot mistakes observed"],\n`;
-  p += `  "galleryReorderSuggestion": "If the current order is suboptimal, suggest a better order with reasoning",\n`;
-  p += `  "ocrOptimization": "Assessment of caption text for Apple OCR indexing (font size, contrast, positioning)"\n`;
+  p += `  "galleryReorderSuggestion": "If the current order is suboptimal, suggest a better order with reasoning. Consider: panoramic/continuous-scroll layout (screenshots visually connect across gallery), story-flow three-act structure (Hook→Flow→Trust), or standard strategic positioning (Hero→Differentiator→Popular→Proof→Features→CTA)",\n`;
+  p += `  "ocrOptimization": "Assessment of caption text for Apple OCR indexing — font size (40pt+ required), contrast, positioning, font type (bold sans-serif required for reliable extraction). Also assess semantic clustering: do captions cover thematically related terms that activate Apple's 2026 semantic indexing? (e.g., an app with 'meditation' should also use 'mindfulness', 'stress relief', 'calm' across captions)"\n`;
   p += `}`;
   return p;
 }
@@ -1402,12 +1403,13 @@ function buildShortDescriptionDeepDivePrompt(data: AppData): string {
 
   p += `## RULES\n`;
   p += `- Google Play short description: 80 characters MAX\n`;
-  p += `- Front-load the most important keywords — Google indexes this field\n`;
+  p += `- Front-load the PRIMARY keyword in the FIRST 3 WORDS — Google gives highest weight to the beginning\n`;
   p += `- This is the FIRST text users see below the screenshots — it must hook and convert\n`;
   p += `- Each variant MUST be 80 characters or fewer — count carefully\n`;
   p += `- Include a clear value proposition, not just a feature list\n`;
   p += `- Avoid generic phrases like "the best app" or "download now"\n`;
-  p += `- Use natural language — no keyword stuffing\n\n`;
+  p += `- Use natural language — no keyword stuffing\n`;
+  p += `- Directly affects click-through rate from search results — treat this as a mini-ad\n\n`;
 
   p += `Return JSON:\n{\n`;
   p += `  "currentAnalysis": "Detailed analysis of current short description — keyword coverage, hook quality, character usage efficiency, what's missing",\n`;
@@ -1582,7 +1584,8 @@ function buildLocalizationDeepDivePrompt(data: AppData): string {
   p += `  ],\n`;
   p += `  "localizationChecklist": ["What to localize first", "Second priority", "Third"],\n`;
   p += `  "culturalConsiderations": ["Cultural adaptation note 1 for a specific market", "Note 2"],\n`;
-  p += `  "keywordStrategy": "How to approach keyword research in non-English markets (not just translation)",\n`;
+  p += `  "keywordStrategy": "How to approach keyword research in non-English markets. CRITICAL: direct translations miss local search terms — research actual local search behavior, colloquialisms, and market-specific keyword volumes. Each market needs native keyword research, not translation.",\n`;
+  p += `  "screenshotLocalization": "Strategy for localizing screenshots: which markets need full new screenshots, which need caption translation only, and which can use English defaults",\n`;
   p += `  "suggestions": ["Specific localization action 1", "Action 2"]\n`;
   p += `}`;
   return p;
