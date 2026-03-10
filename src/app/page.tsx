@@ -175,23 +175,26 @@ function formatDescriptionDeepDive(ai: any, platform: string): DeepDiveEnhanceme
 
   const copyOptions: string[] = [];
 
-  // Primary rewrite — shown inline with breakdown
+  // Opening hook + bullets breakdown — shown before the full rewrite so users
+  // get the headline content immediately without scrolling through 4,000 chars.
+  if (ai.openingHook) {
+    b += `---\n\n`;
+    b += `**Opening hook** (first impression — must lead with value, not intro fluff):\n\n`;
+    b += `${ai.openingHook}\n\n`;
+  }
+  if (ai.featureBullets?.length) {
+    b += `**Feature bullets** (benefit-focused — paste directly):\n`;
+    for (const bullet of ai.featureBullets) b += `${bullet}\n`;
+    b += "\n";
+  }
+  if (ai.cta) b += `**Closing CTA:** ${ai.cta}\n\n`;
+
+  // Primary rewrite — full copy-paste version
   if (ai.primaryRewrite) {
     b += `---\n\n`;
     b += `**Recommended Description** (${ai.charCounts?.primary || "?"} chars, ready to copy-paste):\n\n`;
     b += `${ai.primaryRewrite}\n\n`;
     copyOptions.push(ai.primaryRewrite);
-
-    // Breakdown of the rewrite
-    b += `---\n\n`;
-    b += `**Breakdown of the recommended rewrite:**\n\n`;
-    if (ai.openingHook) b += `**Opening hook:** ${ai.openingHook}\n\n`;
-    if (ai.featureBullets?.length) {
-      b += `**Feature bullets:**\n`;
-      for (const bullet of ai.featureBullets) b += `${bullet}\n`;
-      b += "\n";
-    }
-    if (ai.cta) b += `**CTA:** ${ai.cta}\n\n`;
   }
 
   if (ai.alternativeA) {
@@ -710,6 +713,21 @@ function formatCppDeepDive(ai: any, platform: string): DeepDiveEnhancement {
     b += "\n";
   }
 
+  // Surface copy-paste-ready content from each page as copyOptions
+  const cppCopyOptions: string[] = [];
+  if (isIos) {
+    for (const pg of ai.pages || []) {
+      if (pg.promotionalText) {
+        cppCopyOptions.push(`[${pg.name || "CPP"}] Promo text: "${pg.promotionalText}"`);
+      }
+    }
+  } else {
+    for (const pg of ai.pages || []) {
+      if (pg.title) cppCopyOptions.push(`[${pg.name || "Listing"}] Title: "${pg.title}"`);
+      if (pg.shortDescription) cppCopyOptions.push(`[${pg.name || "Listing"}] Short desc: "${pg.shortDescription}"`);
+    }
+  }
+
   const deliverables = isIos
     ? [
         ...(ai.pages || []).map((pg: { name?: string }) => `Design screenshot set for CPP: "${pg.name || "Unnamed"}"`),
@@ -727,7 +745,7 @@ function formatCppDeepDive(ai: any, platform: string): DeepDiveEnhancement {
         "Monitor conversion rates per listing vs default",
       ];
 
-  return { brief: b, deliverables };
+  return { brief: b, copyOptions: cppCopyOptions.length > 0 ? cppCopyOptions : undefined, deliverables };
 }
 
 function formatLocalizationDeepDive(ai: any): DeepDiveEnhancement {
@@ -785,6 +803,14 @@ function formatLocalizationDeepDive(ai: any): DeepDiveEnhancement {
     b += "\n";
   }
 
+  // Surface tier 1 markets and keyword strategy as copy options
+  const locCopyOptions: string[] = [];
+  if (ai.keywordStrategy) locCopyOptions.push(`Keyword strategy: ${ai.keywordStrategy}`);
+  for (const m of ai.tier1Markets || []) {
+    const market = typeof m === "string" ? m : m.market;
+    if (market) locCopyOptions.push(market);
+  }
+
   const deliverables = [
     "Identify top target markets using category download data",
     "Research local ASO keywords per market (not just translations)",
@@ -793,7 +819,7 @@ function formatLocalizationDeepDive(ai: any): DeepDiveEnhancement {
     "Set up per-market keyword tracking",
   ];
 
-  return { brief: b, deliverables };
+  return { brief: b, copyOptions: locCopyOptions.length > 0 ? locCopyOptions : undefined, deliverables };
 }
 
 interface SearchResult {
