@@ -2015,70 +2015,107 @@ function extractDesignDirection(brief: string): string {
       || lower.includes("suggest") || lower.includes("issue") || lower.includes("improve")
       || lower.includes("redesign") || lower.includes("contrast") || lower.includes("shape")
       || lower.includes("visual") || lower.includes("compet") || lower.includes("assess")
-      || lower.includes("brand") || lower.includes("recogni") || lower.includes("palette");
+      || lower.includes("brand") || lower.includes("recogni") || lower.includes("palette")
+      || lower.includes("icon") || lower.includes("screenshot") || lower.includes("font")
+      || lower.includes("caption") || lower.includes("feature") || lower.includes("dark")
+      || lower.includes("light") || lower.includes("gradient") || lower.includes("flat");
   });
-  return designLines.slice(0, 15).join("\n") || cleaned.substring(0, 1500);
+  return designLines.slice(0, 20).join("\n") || cleaned.substring(0, 2000);
 }
 
 function buildIconConceptPrompt(appData: AppData, brief: string): string {
-  const desc = (appData.description || "").substring(0, 300);
+  const desc = (appData.description || "").substring(0, 600);
   const designDirection = extractDesignDirection(brief);
 
-  return `You are a world-class app icon designer working at a top design studio. Generate a professional, production-quality app icon.
+  return `You are a senior brand designer at a top-tier mobile design studio (think Ueno, Fantasy, Work & Co). You are designing a real production app icon for submission to the App Store / Google Play today.
 
-APP NAME: ${appData.title}
+APP: ${appData.title}
 CATEGORY: ${appData.category || "Apps"}
-WHAT THE APP DOES: ${desc}
+WHAT IT DOES: ${desc}
 ${appData.subtitle ? `TAGLINE: ${appData.subtitle}` : ""}
 
-DESIGN ANALYSIS FROM OUR ASO AUDIT:
+AUDIT FINDINGS — use these to inform visual direction:
 ${designDirection}
 
-ICON REQUIREMENTS:
-- Square 1024x1024px app icon
-- Must be instantly recognizable at 60x60px (thumbnail size in search results)
-- NO text, NO letters, NO words on the icon — text goes in the app name, not the icon
-- Strong visual metaphor that communicates what the app does at a glance
-- High contrast between the main element and the background
-- Professional quality indistinguishable from a real top-grossing app
-- No rounded corners (the operating system applies those)
-- Rich, intentional color palette — not generic gradients
-- Should feel distinctly different from the current icon while staying on-brand for the category
+ICON DESIGN BRIEF:
+Design a single-element icon with absolute clarity. The icon should communicate what the app does in one symbol — like a pictogram, not an illustration. Think of the icon as a road sign: maximum information, minimum detail.
 
-Generate exactly ONE polished app icon concept.`;
+COMPOSITION RULES:
+- One dominant foreground element fills ~55-65% of the canvas, centered
+- Solid, flat or subtly textured background — NO gradients-as-background, NO glows, NO bloom, NO lens flares
+- The subject is a clean, solid shape — vector-like, flat or with one level of dimensionality
+- Generous padding: the subject doesn't touch the edges
+- Square canvas — no rounded corners in your image (OS applies them)
+- No text, no letters, no numbers, no words anywhere on the icon
+
+WHAT NOT TO DO (these are the AI clichés to avoid):
+- No floating 3D spheres, orbs, or glowing balls
+- No "glass morphism" blobs or frosted panels
+- No neon glows, outer glows, or drop shadows with colored halos
+- No generic gradient mesh backgrounds
+- No lens flares, light streaks, bokeh, or depth-of-field effects
+- No isometric 3D screenshots inside the icon
+- No collage of multiple small elements — pick ONE symbol
+- No stock-photography-style composite imagery
+
+REFERENCE QUALITY LEVEL: Headspace (orange dot), Duolingo (green owl), Notion (N on white), Calm (blue gradient done simply), Spotify (black + green audio bars), Robinhood (green feather on black) — each is ONE clear element on a strong background.
+
+Generate exactly ONE sharp, flat-design app icon ready for real submission.`;
 }
 
 function buildScreenshotMoodboardPrompt(appData: AppData, brief: string): string {
   const isIOS = appData.platform === "ios";
-  const desc = (appData.description || "").substring(0, 300);
+  const desc = (appData.description || "").substring(0, 800);
   const designDirection = extractDesignDirection(brief);
+  const frameCount = isIOS ? 5 : 4;
+  const deviceLabel = isIOS ? "iPhone 16 Pro (thin bezels, Dynamic Island notch at top center, no home button)" : "Pixel 9 (thin bezels, pill-shaped punch-hole camera top center)";
 
-  return `You are an expert app store screenshot designer. Create a visual moodboard / layout guide for a complete screenshot gallery redesign.
+  return `You are a senior app marketing designer at a growth agency. You are creating a screenshot gallery creative brief for a developer to hand off to their design team. This must look like a real professional design deliverable — the kind you'd see from Mobbin, SplitMetrics, or a top ASO agency.
 
-APP NAME: ${appData.title}
+APP: ${appData.title}
 PLATFORM: ${isIOS ? "iOS App Store" : "Google Play Store"}
-WHAT THE APP DOES: ${desc}
+WHAT IT DOES: ${desc}
 ${appData.subtitle ? `TAGLINE: ${appData.subtitle}` : ""}
 
-DESIGN ANALYSIS FROM OUR ASO AUDIT:
+AUDIT FINDINGS — screenshot analysis to inform the new design direction:
 ${designDirection}
 
-CREATE A MOODBOARD IMAGE that shows:
-1. A horizontal strip of ${isIOS ? "5" : "4"} thumbnail screenshot frames side by side (like a gallery preview row)
-2. Each frame contains: a modern device frame outline, a caption zone in the top 1/3, and a colored block representing the app's UI
-3. A color palette strip at the bottom with 4-5 recommended brand colors
-4. A typography sample showing the recommended caption font style
-5. Visual annotations (arrows, labels) indicating: caption placement, background treatment, device frame style
+CREATE A SCREENSHOT GALLERY CONCEPT showing ${frameCount} sequential screenshots laid out horizontally, like a preview strip. This is a VISUAL BRIEF, not a finished product — but it must show concrete creative direction.
 
-DESIGN REQUIREMENTS:
-- Professional design document aesthetic — clean, organized, easy to scan
-- Dark background for the moodboard itself
-- Device frames: ${isIOS ? "iPhone 16 Pro (Dynamic Island, no home button)" : "Pixel 9 style"}
-- Show captions in the top 1/3 of each frame — bold, benefit-focused, 2-5 words
-- Use colors that match the app's brand identity
-- This is creative direction for designers, not finished screenshots
+LAYOUT:
+- ${frameCount} portrait device frames side-by-side on a dark (#111 or #0d0d0d) background, slight gap between each
+- Device frame style: ${deviceLabel}
+- Each frame: tall portrait ratio (~9:19.5), clean dark gray device outline, no excessive drop shadow
+- Small number label below each frame: "1", "2", "3"...
 
-Generate ONE comprehensive moodboard image.`;
+EACH FRAME MUST SHOW:
+Frame 1 — HERO: A bold 2-4 word benefit caption in the UPPER THIRD in large white bold sans-serif (e.g. "Helvetica Neue Bold" style). Below the caption: a simplified but recognizable UI screen from this specific app — show actual UI elements relevant to the app's core function (not a colored block — real UI shapes, charts, cards, lists, or interfaces that suggest this category). Bold app-brand background color.
+Frame 2 — DIFFERENTIATOR: Different caption angle, different UI screen showing the app's standout feature.
+Frame 3 — PROOF / FEATURE: Caption showing outcome or social proof. UI showing the most-used screen.
+Frame 4 — SECONDARY FEATURE: Caption + UI of another key feature.
+${isIOS ? "Frame 5 — CTA: Final screenshot with a compelling closing message and clean UI." : ""}
+
+CAPTION RULES (render these as actual readable text on each frame):
+- 2-4 words, benefit-focused, not feature-focused
+- Bold, white, 28-36pt equivalent, placed in the top 25% of the frame
+- Examples of the RIGHT tone: "Sleep Better Tonight", "Never Miss a Deadline", "Track Any Habit", "Save 2 Hours Weekly"
+- Examples of the WRONG tone: "Push Notifications", "Calendar Integration", "Settings Panel", "User Interface"
+
+BOTTOM PANEL (below the frames):
+- A horizontal color palette row: 4-5 color swatches with hex codes derived from the app's brand identity
+- A typography specimen: show "Caption Style" in a bold sans-serif and "Body Style" in a lighter weight — label them
+
+WHAT NOT TO DO (avoid generic AI output):
+- Do NOT fill the UI area with a flat solid color — show simplified but recognizable UI shapes
+- Do NOT use gradient rainbow backgrounds
+- Do NOT make it look like a generic wireframe or Figma template
+- Do NOT use placeholder text like "Lorem ipsum" or "Caption Here" — write real benefit-driven captions for THIS app
+- Do NOT add excessive annotations, callouts, or arrows — the layout speaks for itself
+- Captions must be readable text, not decorative scribbles
+
+REFERENCE QUALITY: This should look like a screenshot brief from a top ASO agency — clean, dark, professional, with real creative direction embedded in the frame content.
+
+Generate ONE comprehensive screenshot gallery concept image.`;
 }
 
 export async function generateVisualConcepts(
@@ -2102,9 +2139,18 @@ export async function generateVisualConcepts(
     }
 
     const prompts = [
-      { label: "Modern & Bold", suffix: "\n\nSTYLE DIRECTION: Modern, bold, and vibrant. Use strong geometric shapes and a contemporary color palette. Make it feel premium and current." },
-      { label: "Minimal & Clean", suffix: "\n\nSTYLE DIRECTION: Minimalist and clean. Focus on a single iconic element with lots of negative space. Subtle, refined color usage. Think Apple-level restraint." },
-      { label: "Distinctive & Expressive", suffix: "\n\nSTYLE DIRECTION: Distinctive and expressive. Push creative boundaries — use an unexpected metaphor, texture, or visual treatment that stands out in a crowded category grid. Bold and memorable." },
+      {
+        label: "Bold & Saturated",
+        suffix: "\n\nSTYLE DIRECTION A — Bold & Saturated:\nSolid, high-saturation background color (one dominant hue, no gradients). Foreground symbol in white or contrasting solid color. Think Duolingo, YouTube, or Robinhood — one strong color, one clear shape. No shading, no drop shadows on the symbol. Flat and punchy.",
+      },
+      {
+        label: "Dark & Premium",
+        suffix: "\n\nSTYLE DIRECTION B — Dark & Premium:\nDeep dark background (#0d0d0d, deep navy, or rich dark teal). Single foreground symbol in a crisp accent color (gold, electric blue, soft white, or brand color). Think Spotify, Things 3, or Craft. Refined and premium. Symbol has clean vector edges — no glow, no blur, no inner shadows.",
+      },
+      {
+        label: "Light & Minimal",
+        suffix: "\n\nSTYLE DIRECTION C — Light & Minimal:\nOff-white or very light background. One simple symbol in a single medium-dark color. Lots of breathing room — symbol is well-centered with generous padding. Think Notion, Bear, or Linear. No decoration beyond the essential symbol. Elegant restraint.",
+      },
     ];
 
     const results = await Promise.allSettled(
