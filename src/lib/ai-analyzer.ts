@@ -2006,27 +2006,144 @@ function stripMarkdown(text: string): string {
     .trim();
 }
 
-function extractDesignDirection(brief: string): string {
-  // If this brief contains a "Redesign brief for designer" section (from icon deep-dive),
-  // extract it as the primary design direction — it's the most specific and actionable content.
-  const redesignMatch = brief.match(/Redesign brief for designer[:\s*\n]+([\s\S]+?)(?:\n---|\n\*\*Actionable|\n\*\*Icon specs|$)/i);
-  const colorMatch = brief.match(/Color analysis[:\s*\n]+([\s\S]+?)(?:\n\n\*\*|\n---|\n✅|$)/i);
-  const competitorMatch = brief.match(/Category comparison[:\s*\n]+([\s\S]+?)(?:\n\n\*\*|\n---|\n✅|$)/i);
-  const issuesMatch = brief.match(/Issues found[:\s*\n]+([\s\S]+?)(?:\n\n\*\*|\n---|\n✅|$)/i);
-  const strengthsMatch = brief.match(/Strengths[:\s*\n]+([\s\S]+?)(?:\n\n\*\*|\n---|\n❌|$)/i);
+/** Structured design context extracted from deep-dive briefs */
+interface ExtractedDesignContext {
+  type: "icon-deepdive" | "screenshot-deepdive" | "fallback";
+  text: string;
+  // screenshot deep-dive specifics
+  perSlot?: { slot: number; caption: string; whatToShow: string; designBrief?: string }[];
+  missingSlots?: { slot: number; caption: string; whatToShow: string; designBrief?: string }[];
+  overallAssessment?: string;
+  visualIdentity?: string;
+  firstThreeVerdict?: string;
+  galleryReorderSuggestion?: string;
+  commonMistakes?: string[];
+}
 
+function extractDesignDirection(brief: string): string {
+  const ctx = extractDesignContext(brief);
+  return ctx.text;
+}
+
+function extractDesignContext(brief: string): ExtractedDesignContext {
+  // ── ICON DEEP-DIVE ─────────────────────────────────────────────────────────
+  const redesignMatch = brief.match(/Redesign brief for designer[:\s*\n]+([\s\S]+?)(?:\n---|\n\*\*Actionable|\n\*\*Icon specs|$)/i);
   if (redesignMatch) {
-    // Deep-dive output detected — build a structured design direction block
+    const colorMatch = brief.match(/Color analysis[:\s*\n]+([\s\S]+?)(?:\n\n\*\*|\n---|\n✅|$)/i);
+    const competitorMatch = brief.match(/Category comparison[:\s*\n]+([\s\S]+?)(?:\n\n\*\*|\n---|\n✅|$)/i);
+    const issuesMatch = brief.match(/Issues found[:\s*\n]+([\s\S]+?)(?:\n\n\*\*|\n---|\n✅|$)/i);
+    const strengthsMatch = brief.match(/Strengths[:\s*\n]+([\s\S]+?)(?:\n\n\*\*|\n---|\n❌|$)/i);
+
     const parts: string[] = [];
     if (redesignMatch[1]?.trim()) parts.push(`REDESIGN BRIEF:\n${redesignMatch[1].trim()}`);
     if (colorMatch?.[1]?.trim()) parts.push(`COLOR ANALYSIS:\n${colorMatch[1].trim()}`);
     if (competitorMatch?.[1]?.trim()) parts.push(`CATEGORY CONTEXT:\n${competitorMatch[1].trim()}`);
     if (issuesMatch?.[1]?.trim()) parts.push(`CURRENT ICON ISSUES TO FIX:\n${issuesMatch[1].trim()}`);
     if (strengthsMatch?.[1]?.trim()) parts.push(`ELEMENTS TO PRESERVE:\n${strengthsMatch[1].trim()}`);
-    return parts.join("\n\n").substring(0, 3000);
+    return { type: "icon-deepdive", text: parts.join("\n\n").substring(0, 3000) };
   }
 
-  // Fallback: keyword-filtered lines from the initial (non-deep-dive) brief
+  // ── SCREENSHOT DEEP-DIVE ───────────────────────────────────────────────────
+  if (brief.includes("AI Screenshot Analysis") && brief.includes("deep-dive")) {
+    const perSlot: ExtractedDesignContext["perSlot"] = [];
+    const missingSlots: ExtractedDesignContext["missingSlots"] = [];
+
+    // Extract per-slot data
+    const slotBlocks = brief.matchAll(/✅ \*\*Slot (\d+):\*\*\n([\s\S]+?)(?=\n  ✅ \*\*Slot |\n\*\*Missing|\n\*\*Common|$)/g);
+    for (const block of slotBlocks) {
+      const slotNum = parseInt(block[1]);
+      const content = block[2];
+      const captionMatch = content.match(/Suggested captions?: "([^"]+)"/);
+      const captionMultiMatch = content.match(/Suggested captions: (.+)/);
+      const whatMatch = content.match(/Shows: (.+)/);
+      const briefMatch = content.match(/Design brief: (.+)/);
+      const caption = captionMatch?.[1]
+        || captionMultiMatch?.[1]?.match(/"([^"]+)"/)?.[1]
+        || "";
+      if (caption || whatMatch?.[1]) {
+        perSlot.push({
+          slot: slotNum,
+          caption: caption.substring(0, 40),
+          whatToShow: whatMatch?.[1]?.substring(0, 120) || "",
+          designBrief: briefMatch?.[1]?.substring(0, 200),
+        });
+      }
+    }
+
+    // Extract missing slots
+    const missingBlocks = brief.matchAll(/❌ \*\*Slot (\d+):\*\*\n([\s\S]+?)(?=\n  ❌ \*\*Slot |\n\*\*Common|$)/g);
+    for (const block of missingBlocks) {
+      const slotNum = parseInt(block[1]);
+      const content = block[2];
+      const captionMatch = content.match(/Suggested caption: "([^"]+)"/);
+      const whatMatch = content.match(/What to show: (.+)/);
+      if (captionMatch?.[1] || whatMatch?.[1]) {
+        missingSlots.push({
+          slot: slotNum,
+          caption: captionMatch?.[1]?.substring(0, 40) || "",
+          whatToShow: whatMatch?.[1]?.substring(0, 120) || "",
+        });
+      }
+    }
+
+    // Extract top-level fields
+    const overallMatch = brief.match(/AI Screenshot Analysis[^:]*:\*?\n([^\n*]+(?:\n[^\n*]+)*?)(?=\n\*\*Gallery coherence|\n\*\*Visual)/i);
+    const visualIdentityMatch = brief.match(/Visual identity[:\s*\n]+([^\n]+)/i);
+    const firstThreeMatch = brief.match(/First 3 Rule verdict[:\s*\n]+([^\n]+)/i);
+    const reorderMatch = brief.match(/Reorder suggestion[:\s*\n]+([^\n]+(?:\n(?!\n)[^\n]+)*)/i);
+    const mistakesSection = brief.match(/Common mistakes detected[:\s*\n]+([\s\S]+?)(?=\n\n\*\*|$)/i);
+    const commonMistakes = mistakesSection?.[1]
+      ?.split("\n")
+      .filter(l => l.includes("❌"))
+      .map(l => l.replace(/^\s*❌\s*/, "").trim())
+      .filter(Boolean)
+      .slice(0, 5) || [];
+
+    // Build text summary for the prompt
+    const parts: string[] = [];
+
+    if (overallMatch?.[1]?.trim()) {
+      parts.push(`OVERALL GALLERY ASSESSMENT:\n${overallMatch[1].trim()}`);
+    }
+    if (firstThreeMatch?.[1]?.trim()) {
+      parts.push(`FIRST 3 SCREENSHOTS VERDICT:\n${firstThreeMatch[1].trim()}`);
+    }
+    if (visualIdentityMatch?.[1]?.trim()) {
+      parts.push(`CURRENT VISUAL IDENTITY:\n${visualIdentityMatch[1].trim()}`);
+    }
+    if (commonMistakes.length > 0) {
+      parts.push(`MISTAKES TO FIX IN NEW DESIGN:\n${commonMistakes.map(m => `• ${m}`).join("\n")}`);
+    }
+    if (reorderMatch?.[1]?.trim()) {
+      parts.push(`GALLERY ORDER DIRECTION:\n${reorderMatch[1].trim()}`);
+    }
+    if (perSlot.length > 0) {
+      const slotLines = perSlot.map(s =>
+        `  Slot ${s.slot}: Caption → "${s.caption}" | Shows: ${s.whatToShow}${s.designBrief ? ` | Design brief: ${s.designBrief}` : ""}`
+      );
+      parts.push(`CAPTION & CONTENT DIRECTION PER SLOT (from AI analysis):\n${slotLines.join("\n")}`);
+    }
+    if (missingSlots.length > 0) {
+      const missingLines = missingSlots.map(s =>
+        `  Slot ${s.slot}: Caption → "${s.caption}" | Shows: ${s.whatToShow}`
+      );
+      parts.push(`NEW SCREENSHOTS TO ADD:\n${missingLines.join("\n")}`);
+    }
+
+    return {
+      type: "screenshot-deepdive",
+      text: parts.join("\n\n").substring(0, 4000),
+      perSlot,
+      missingSlots,
+      overallAssessment: overallMatch?.[1]?.trim(),
+      visualIdentity: visualIdentityMatch?.[1]?.trim(),
+      firstThreeVerdict: firstThreeMatch?.[1]?.trim(),
+      galleryReorderSuggestion: reorderMatch?.[1]?.trim(),
+      commonMistakes,
+    };
+  }
+
+  // ── FALLBACK: keyword-filtered lines ──────────────────────────────────────
   const cleaned = stripMarkdown(brief);
   const lines = cleaned.split("\n").filter(l => l.trim().length > 0);
   const designLines = lines.filter(l => {
@@ -2040,12 +2157,15 @@ function extractDesignDirection(brief: string): string {
       || lower.includes("caption") || lower.includes("feature") || lower.includes("dark")
       || lower.includes("light") || lower.includes("gradient") || lower.includes("flat");
   });
-  return designLines.slice(0, 20).join("\n") || cleaned.substring(0, 2000);
+  return {
+    type: "fallback",
+    text: designLines.slice(0, 20).join("\n") || cleaned.substring(0, 2000),
+  };
 }
 
 function buildIconConceptPrompt(appData: AppData, brief: string): string {
   const desc = (appData.description || "").substring(0, 600);
-  const designDirection = extractDesignDirection(brief);
+  const designDirection = extractDesignContext(brief).text;
 
   return `You are a senior brand designer at a top-tier mobile design studio (think Ueno, Fantasy, Work & Co). You are designing a real production app icon for submission to the App Store / Google Play today.
 
@@ -2087,9 +2207,48 @@ Generate exactly ONE sharp, flat-design app icon ready for real submission.`;
 function buildScreenshotMoodboardPrompt(appData: AppData, brief: string): string {
   const isIOS = appData.platform === "ios";
   const desc = (appData.description || "").substring(0, 800);
-  const designDirection = extractDesignDirection(brief);
+  const ctx = extractDesignContext(brief);
   const frameCount = isIOS ? 5 : 4;
-  const deviceLabel = isIOS ? "iPhone 16 Pro (thin bezels, Dynamic Island notch at top center, no home button)" : "Pixel 9 (thin bezels, pill-shaped punch-hole camera top center)";
+  const deviceLabel = isIOS
+    ? "iPhone 16 Pro (thin bezels, Dynamic Island notch at top center, no home button)"
+    : "Pixel 9 (thin bezels, pill-shaped punch-hole camera top center)";
+
+  // Build frame-level direction — use deep-dive per-slot data if available, else generic
+  const frameDirections: string[] = [];
+  const allSlots = [
+    ...(ctx.perSlot || []),
+    ...(ctx.missingSlots || []),
+  ].sort((a, b) => a.slot - b.slot).slice(0, frameCount);
+
+  if (ctx.type === "screenshot-deepdive" && allSlots.length > 0) {
+    // Populate as many frames as we have slot data for, fill rest with generic
+    const roleLabels = ["HERO — core value proposition", "DIFFERENTIATOR — what makes it unique", "PROOF / FEATURE — outcome or social proof", "SECONDARY FEATURE", "CTA / CLOSING MESSAGE"];
+    for (let i = 0; i < frameCount; i++) {
+      const slot = allSlots[i];
+      const role = roleLabels[i] || `FRAME ${i + 1}`;
+      if (slot) {
+        const captionText = slot.caption ? `"${slot.caption}"` : "(benefit-focused caption)";
+        const uiNote = slot.designBrief || slot.whatToShow || "app UI";
+        frameDirections.push(`Frame ${i + 1} — ${role}:\n  Caption: ${captionText}\n  UI to show: ${uiNote}`);
+      } else {
+        frameDirections.push(`Frame ${i + 1} — ${role}: derive from app description`);
+      }
+    }
+  } else {
+    frameDirections.push(`Frame 1 — HERO: Core value proposition caption + main app UI`);
+    frameDirections.push(`Frame 2 — DIFFERENTIATOR: What makes it unique + standout feature screen`);
+    frameDirections.push(`Frame 3 — PROOF / FEATURE: Outcome or social proof caption + most-used screen`);
+    frameDirections.push(`Frame 4 — SECONDARY FEATURE: Second key feature caption + UI`);
+    if (isIOS) frameDirections.push(`Frame 5 — CTA: Compelling closing message + clean UI`);
+  }
+
+  const deepDiveContext = ctx.type === "screenshot-deepdive"
+    ? `DEEP-DIVE ANALYSIS FINDINGS — follow these precisely, they come from an expert visual audit of this specific app:
+${ctx.text}
+
+The captions and UI direction per frame above are directly derived from this analysis. Use them as the primary creative brief.`
+    : `AUDIT FINDINGS — use to inform visual and copy direction:
+${ctx.text}`;
 
   return `You are a senior app marketing designer at a growth agency. You are creating a screenshot gallery creative brief for a developer to hand off to their design team. This must look like a real professional design deliverable — the kind you'd see from Mobbin, SplitMetrics, or a top ASO agency.
 
@@ -2098,10 +2257,9 @@ PLATFORM: ${isIOS ? "iOS App Store" : "Google Play Store"}
 WHAT IT DOES: ${desc}
 ${appData.subtitle ? `TAGLINE: ${appData.subtitle}` : ""}
 
-AUDIT FINDINGS — screenshot analysis to inform the new design direction:
-${designDirection}
+${deepDiveContext}
 
-CREATE A SCREENSHOT GALLERY CONCEPT showing ${frameCount} sequential screenshots laid out horizontally, like a preview strip. This is a VISUAL BRIEF, not a finished product — but it must show concrete creative direction.
+CREATE A SCREENSHOT GALLERY CONCEPT showing ${frameCount} sequential screenshots laid out horizontally, like a preview strip. This is a VISUAL BRIEF, not a finished product — but it must show concrete, specific creative direction.
 
 LAYOUT:
 - ${frameCount} portrait device frames side-by-side on a dark (#111 or #0d0d0d) background, slight gap between each
@@ -2109,32 +2267,34 @@ LAYOUT:
 - Each frame: tall portrait ratio (~9:19.5), clean dark gray device outline, no excessive drop shadow
 - Small number label below each frame: "1", "2", "3"...
 
-EACH FRAME MUST SHOW:
-Frame 1 — HERO: A bold 2-4 word benefit caption in the UPPER THIRD in large white bold sans-serif (e.g. "Helvetica Neue Bold" style). Below the caption: a simplified but recognizable UI screen from this specific app — show actual UI elements relevant to the app's core function (not a colored block — real UI shapes, charts, cards, lists, or interfaces that suggest this category). Bold app-brand background color.
-Frame 2 — DIFFERENTIATOR: Different caption angle, different UI screen showing the app's standout feature.
-Frame 3 — PROOF / FEATURE: Caption showing outcome or social proof. UI showing the most-used screen.
-Frame 4 — SECONDARY FEATURE: Caption + UI of another key feature.
-${isIOS ? "Frame 5 — CTA: Final screenshot with a compelling closing message and clean UI." : ""}
+EXACT FRAME CONTENT (follow this precisely):
+${frameDirections.join("\n")}
 
-CAPTION RULES (render these as actual readable text on each frame):
-- 2-4 words, benefit-focused, not feature-focused
-- Bold, white, 28-36pt equivalent, placed in the top 25% of the frame
-- Examples of the RIGHT tone: "Sleep Better Tonight", "Never Miss a Deadline", "Track Any Habit", "Save 2 Hours Weekly"
-- Examples of the WRONG tone: "Push Notifications", "Calendar Integration", "Settings Panel", "User Interface"
+CAPTION RENDERING RULES (non-negotiable):
+- Render the captions above as ACTUAL READABLE TEXT on each frame — large, bold, white, in the top 25% of the frame
+- Font: bold sans-serif (Helvetica Neue Bold / SF Pro Bold style), 28-36pt equivalent
+- 2-4 words maximum — readable at thumbnail size
+- Benefit-focused, not feature-focused:
+  RIGHT: "Sleep Better Tonight", "Never Miss a Deadline", "Track Any Habit", "Save 2 Hours Weekly"
+  WRONG: "Push Notifications", "Calendar Integration", "Settings Panel", "User Interface"
 
-BOTTOM PANEL (below the frames):
-- A horizontal color palette row: 4-5 color swatches with hex codes derived from the app's brand identity
-- A typography specimen: show "Caption Style" in a bold sans-serif and "Body Style" in a lighter weight — label them
+UI AREA (below the caption):
+- Show simplified but recognizable UI elements — real shapes like cards, lists, charts, audio waveforms, progress bars, maps — whatever matches this app's category
+- NOT a flat solid color block — actual UI anatomy
+- Background color consistent with app brand identity
 
-WHAT NOT TO DO (avoid generic AI output):
-- Do NOT fill the UI area with a flat solid color — show simplified but recognizable UI shapes
-- Do NOT use gradient rainbow backgrounds
-- Do NOT make it look like a generic wireframe or Figma template
-- Do NOT use placeholder text like "Lorem ipsum" or "Caption Here" — write real benefit-driven captions for THIS app
-- Do NOT add excessive annotations, callouts, or arrows — the layout speaks for itself
-- Captions must be readable text, not decorative scribbles
+BOTTOM PANEL:
+- 4-5 color palette swatches with hex codes derived from the app's brand
+- Typography specimen: "Caption Style" in bold sans-serif, "Body Style" in regular weight — both labeled
 
-REFERENCE QUALITY: This should look like a screenshot brief from a top ASO agency — clean, dark, professional, with real creative direction embedded in the frame content.
+WHAT NOT TO DO:
+- Do NOT fill the UI area with a flat color — show recognizable UI shapes
+- Do NOT use gradient rainbow or generic AI-looking backgrounds
+- Do NOT use "Caption Here", "Lorem ipsum", or any placeholder text — use the actual captions specified above
+- Do NOT add excessive annotations or arrows — clean layout only
+- Captions must be legible rendered text, not decorative marks
+
+REFERENCE QUALITY: Top ASO agency screenshot brief — clean, dark, professional, frame content directly informed by real analysis of this specific app.
 
 Generate ONE comprehensive screenshot gallery concept image.`;
 }
