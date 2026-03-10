@@ -198,14 +198,15 @@ Google has no separate keyword field — keywords extracted from title and descr
 - Write for humans first, SEO second — must read naturally
 - No superlatives (#1, best, top) — stores reject these
 - NEVER repeat the same word within a single title — each word should be a unique ranking term
-- Use every available character — unused chars = wasted ranking potential
-- Both platforms: 30 chars max
+- **CHARACTER TARGET: Aim for 28-30 chars. A 24-char title wastes 6 of your highest-weight ranking characters. Every unused character is an unused ranking opportunity.**
+- Both platforms: 30 chars HARD MAX
 
 **Subtitle (iOS only, 30 chars):**
 - Second-most weighted field on iOS
 - Zero word overlap with title (Apple combines title + subtitle + keyword field automatically)
 - Don't repeat category name (already indexed for free)
 - Apple's indexable budget: title (30) + subtitle (30) + keyword field (100) = 160 chars total
+- **CHARACTER TARGET: Aim for 28-30 chars. An 18-char subtitle wastes 12 of your 160-char iOS keyword budget.**
 
 **iOS Keyword Field (100 chars, invisible):**
 - Comma-separated, NO spaces after commas (spaces waste characters)
@@ -215,12 +216,30 @@ Google has no separate keyword field — keywords extracted from title and descr
 - No competitor brand names (violates guidelines, app rejection risk)
 - No category name (already indexed automatically)
 - Research and update quarterly with each app submission
+- **CHARACTER TARGET: Aim for 98-100 chars. ≤2 chars unused is acceptable. >5 chars unused = wasted indexing budget.**
 
 **Short Description (Android only, 80 chars):**
 - Second-most indexed field on Google Play
 - Front-load primary keyword in first 3 words
 - Appears directly in search results — must be compelling pitch, not keyword list
 - Directly affects click-through rate from search
+- **CHARACTER TARGET: Aim for 78-80 chars. A 65-char short description leaves 15 chars of prime indexed real estate unused.**
+
+## SOCIAL PROOF IN METADATA
+When the app has strong quantifiable signals, weave them into copy:
+- High rating (4.5+★ with 10K+ ratings): "Loved by 50K users" or "Top-rated [category]" in short description or subtitle
+- Feature quantifiers from the description (e.g., "35+ stations", "500+ templates", "10M users"): use in short description as conversion hooks
+- Social proof in short description: powerful because users see it in search results BEFORE tapping
+- At least ONE metadata variant across any paired set should test a social-proof angle when strong signals exist
+- IMPORTANT: Only use social proof if it's actually true — verify from description or app data provided
+
+## KEYWORD QUALITY STANDARDS
+Professional ASO agencies filter keywords by intent and volume. Apply these standards:
+- **Avoid generic fillers**: "Tunes", "App", "Great", "Easy", "Simple", "Nice" — low search volume, add no ranking value
+- **Prefer high-intent category terms**: For music/meditation apps: "ASMR", "white noise", "focus music", "sleep sounds" beat "tunes" or "radio" for search volume
+- **Test keywords mentally**: "Would a user actually type this into the search bar?" If not — cut it
+- **Competitive terms**: Include both head terms (high volume, high competition) AND long-tail (lower volume, lower competition, higher conversion)
+- **Category adjacency**: Include terms from adjacent categories users might search (e.g., meditation app → also targets "productivity", "focus", "anxiety relief")
 
 **Full Description:**
 - Google: Fully indexed. Keywords 3-5x naturally, front-loaded in first paragraph. Keyword density > raw count.
@@ -484,10 +503,22 @@ function buildTextPrompt(data: AppData): string {
     p += `## WHAT'S NEW (latest release notes)\n${data.whatsNew.substring(0, 500)}\n\n`;
   }
 
+  // Build social proof context string for injection into prompts
+  const hasSocialProof = data.rating >= 4.5 && data.ratingsCount >= 10000;
+  const ratingStr2 = data.rating > 0 ? `${data.rating.toFixed(1)}★ (${data.ratingsCount >= 1000 ? `${(data.ratingsCount / 1000).toFixed(0)}K` : data.ratingsCount} ratings)` : "";
+  const socialProofHint = hasSocialProof
+    ? `**SOCIAL PROOF AVAILABLE:** This app has ${ratingStr2} — strong enough to use as a conversion signal. At least ONE pair/suggestion should test a social-proof angle (e.g., "Trusted by ${data.ratingsCount >= 1000000 ? `${(data.ratingsCount / 1000000).toFixed(1)}M` : data.ratingsCount >= 1000 ? `${Math.round(data.ratingsCount / 1000)}K` : data.ratingsCount}+ users" in the short description / subtitle).`
+    : "";
+
   p += `## CRITICAL KEYWORD RULES FOR ALL SUGGESTIONS\n`;
   p += `- NEVER repeat the same word within a single title suggestion (e.g., "Rock Radio - Hard Rock" repeats "Rock" — this wastes 5 of your 30 characters on a word the algorithm already saw)\n`;
   p += `- Each unique word is only indexed ONCE — repeating it provides zero additional ranking benefit and wastes character budget\n`;
   p += `- Maximize unique keyword coverage: every word in every suggestion should be a DISTINCT ranking term\n`;
+  p += `- **CHARACTER UTILIZATION:** Every title MUST be 28-30 chars. Every subtitle/short-description MUST target near-max chars (subtitle: 28-30ch; short desc: 75-80ch). Leaving >5 chars unused = wasted ranking potential.\n`;
+  p += `- **KEYWORD QUALITY:** Avoid generic low-volume fillers ("Tunes", "App", "Easy", "Great"). Use high-intent, category-specific terms users actually search ("ASMR", "white noise", "sleep sounds", "focus music" for meditation apps). Ask: "Would a user type this into the search bar?"\n`;
+  if (hasSocialProof) {
+    p += `- ${socialProofHint}\n`;
+  }
   if (isIOS) {
     p += `- On iOS, title + subtitle + keyword field are combined for indexing. A word in the title is AUTOMATICALLY indexed from the subtitle and keyword field too — never repeat across fields\n`;
     p += `- Think of title (30ch) + subtitle (30ch) as a SINGLE 60-character keyword strategy split across two fields. Design them AS A PAIR.\n`;
@@ -517,25 +548,25 @@ function buildTextPrompt(data: AppData): string {
     p += `  "titleSubtitlePairs": {\n`;
     p += `    "pairs": [\n`;
     p += `      {\n`;
-    p += `        "title": "Title option (≤30ch, NO repeated words within it)",\n`;
-    p += `        "subtitle": "Matching subtitle (≤30ch, ZERO word overlap with the title above)",\n`;
+    p += `        "title": "Title option (TARGET 28-30ch, NO repeated words within it — count carefully)",\n`;
+    p += `        "subtitle": "Matching subtitle (TARGET 28-30ch, ZERO word overlap with title — fill it with fresh keywords)",\n`;
     p += `        "keywordsCovered": ["list", "every", "unique", "keyword", "across", "both", "fields"],\n`;
-    p += `        "reasoning": "Why this pair maximizes the 60-char keyword budget"\n`;
+    p += `        "reasoning": "Why this pair maximizes the 60-char keyword budget. Mention char counts used."\n`;
     p += `      },\n`;
     p += `      {\n`;
-    p += `        "title": "Alternative title (≤30ch)",\n`;
-    p += `        "subtitle": "Matching subtitle for this title (≤30ch, zero overlap)",\n`;
+    p += `        "title": "Alternative title (TARGET 28-30ch)",\n`;
+    p += `        "subtitle": "Matching subtitle (TARGET 28-30ch, zero overlap)",\n`;
     p += `        "keywordsCovered": ["different", "keyword", "set"],\n`;
-    p += `        "reasoning": "Why this pair works — different keyword strategy"\n`;
+    p += `        "reasoning": "Why this pair works — different keyword strategy. Mention char counts used."\n`;
     p += `      },\n`;
     p += `      {\n`;
-    p += `        "title": "Third option (≤30ch)",\n`;
-    p += `        "subtitle": "Matching subtitle (≤30ch, zero overlap)",\n`;
+    p += `        "title": "Third option (TARGET 28-30ch)",\n`;
+    p += `        "subtitle": "Matching subtitle (TARGET 28-30ch, zero overlap)",\n`;
     p += `        "keywordsCovered": ["keywords"],\n`;
-    p += `        "reasoning": "Reasoning"\n`;
+    p += `        "reasoning": "Reasoning. Mention char counts used."\n`;
     p += `      }\n`;
     p += `    ],\n`;
-    p += `    "keywordStrategy": "Explain the overall keyword distribution strategy across title+subtitle. How many unique ranking terms does each pair cover? Which high-volume terms are prioritized in the title (heavier weight) vs subtitle?",\n`;
+    p += `    "keywordStrategy": "Explain the overall keyword distribution strategy across title+subtitle. How many unique ranking terms does each pair cover? Which high-volume terms are prioritized in the title (heavier weight) vs subtitle? Flag any pairs where char utilization could be improved.",\n`;
     p += `    "priority": "high | medium | low — combined priority for the title+subtitle pair as a unit"\n`;
     p += `  },\n`;
 
@@ -559,28 +590,28 @@ function buildTextPrompt(data: AppData): string {
     p += `  "titleShortDescPairs": {\n`;
     p += `    "pairs": [\n`;
     p += `      {\n`;
-    p += `        "title": "Title option (≤30ch, NO repeated words within it)",\n`;
-    p += `        "shortDescription": "Paired short description (≤80ch). Front-load a DIFFERENT primary keyword from the title in the FIRST 3 WORDS. Cover fresh keyword territory. End with a compelling conversion pitch. ZERO words repeated from the paired title.",\n`;
+    p += `        "title": "Title option (TARGET 28-30ch, NO repeated words — count before writing)",\n`;
+    p += `        "shortDescription": "Paired short description (TARGET 78-80ch). Front-load a DIFFERENT primary keyword in the FIRST 3 WORDS. Cover fresh keyword territory. End with a compelling conversion pitch. ZERO words repeated from the paired title. Count carefully — aim for 78-80ch.",\n`;
     p += `        "keywordsCovered": ["list", "every", "unique", "keyword", "across", "BOTH", "fields"],\n`;
     p += `        "strategy": "keyword-first | benefit-first | social-proof",\n`;
-    p += `        "reasoning": "Why this pair maximizes indexed coverage — which terms go in title (most weight) vs short description, and how the short desc also converts browsers into installers"\n`;
+    p += `        "reasoning": "Why this pair maximizes indexed coverage AND conversion. State the exact char counts used for both fields."\n`;
     p += `      },\n`;
     p += `      {\n`;
-    p += `        "title": "Alternative title (≤30ch, NO repeated words)",\n`;
-    p += `        "shortDescription": "Paired short description (≤80ch, front-loads different keyword, zero title overlap)",\n`;
+    p += `        "title": "Alternative title (TARGET 28-30ch, NO repeated words)",\n`;
+    p += `        "shortDescription": "Paired short description (TARGET 78-80ch, front-loads different keyword, zero title overlap)",\n`;
     p += `        "keywordsCovered": ["different", "keyword", "set"],\n`;
     p += `        "strategy": "keyword-first | benefit-first | social-proof",\n`;
-    p += `        "reasoning": "Why this pair — different keyword strategy from pair 1"\n`;
+    p += `        "reasoning": "Why this pair — different keyword strategy from pair 1. State char counts."\n`;
     p += `      },\n`;
     p += `      {\n`;
-    p += `        "title": "Third title option (≤30ch)",\n`;
-    p += `        "shortDescription": "Third short description (≤80ch, zero title overlap)",\n`;
+    p += `        "title": "Third title option (TARGET 28-30ch)",\n`;
+    p += `        "shortDescription": "Third short description (TARGET 78-80ch, zero title overlap)",\n`;
     p += `        "keywordsCovered": ["keywords"],\n`;
     p += `        "strategy": "keyword-first | benefit-first | social-proof",\n`;
-    p += `        "reasoning": "Reasoning"\n`;
+    p += `        "reasoning": "Reasoning. State char counts."\n`;
     p += `      }\n`;
     p += `    ],\n`;
-    p += `    "keywordStrategy": "Explain the overall keyword distribution strategy. Which high-value terms anchor each title? How does each paired short description expand coverage with complementary terms AND maintain conversion appeal? How many total unique ranking terms does each pair cover?",\n`;
+    p += `    "keywordStrategy": "Explain the overall keyword distribution strategy. Which high-value terms anchor each title? How does each paired short description expand coverage with complementary terms AND maintain conversion appeal? How many total unique ranking terms does each pair cover? Flag any pairs where a char target (28-30ch title / 78-80ch short desc) was not met.",\n`;
     p += `    "priority": "high | medium | low — combined priority for the title+short description pair as a unit"\n`;
     p += `  },\n`;
   }
@@ -1065,6 +1096,14 @@ function buildDescriptionDeepDivePrompt(data: AppData): string {
 
   p += `## CURRENT DESCRIPTION\n${data.description.substring(0, 4000)}\n\n`;
 
+  // Social proof injection
+  const hasSocialProofDesc = data.rating >= 4.5 && data.ratingsCount >= 10000;
+  const rCountDesc = hasSocialProofDesc
+    ? (data.ratingsCount >= 1000000
+        ? `${(data.ratingsCount / 1000000).toFixed(1)}M`
+        : data.ratingsCount >= 1000 ? `${Math.round(data.ratingsCount / 1000)}K` : `${data.ratingsCount}`)
+    : "";
+
   p += `## REQUIREMENTS\n`;
   p += `- Write ${isIOS ? "1 complete rewrite (1,000-4,000 chars)" : "1 complete rewrite (2,500-4,000 chars)"}\n`;
   p += `- Also write 2 alternative versions with different angles/tones\n`;
@@ -1072,7 +1111,11 @@ function buildDescriptionDeepDivePrompt(data: AppData): string {
   p += `- ${!isIOS ? "Front-load primary keywords, use them 3-5x naturally. Google indexes the full description." : "Description is NOT indexed for search on iOS but affects conversion + web SEO."}\n`;
   p += `- NO brackets, NO placeholders, NO [insert here] — write actual final copy using real app features\n`;
   p += `- Each bullet should be benefit-focused: "✦ Feature → Benefit" format\n`;
-  p += `- Include character count for each version\n\n`;
+  p += `- Include character count for each version\n`;
+  if (hasSocialProofDesc) {
+    p += `- **SOCIAL PROOF AVAILABLE:** This app has ${data.rating.toFixed(1)}★ with ${rCountDesc}+ ratings. Weave this naturally into the description — in the opening hook or a dedicated social proof bullet. Example: "Join ${rCountDesc}+ users who..." or "Rated ${data.rating.toFixed(1)}★ by ${rCountDesc}+ listeners". DO NOT fabricate numbers — use only these actual figures.\n`;
+  }
+  p += `- If the description mentions quantifiable features (e.g., "35+ channels", "500+ templates", "10M downloads"), incorporate these specific numbers — they build credibility and trigger conversion\n\n`;
 
   p += `Return JSON:\n{\n`;
   p += `  "primaryRewrite": "Complete description ready to paste (${isIOS ? "1,000-4,000" : "2,500-4,000"} chars)",\n`;
@@ -1162,12 +1205,13 @@ function buildScreenshotsDeepDivePrompt(data: AppData): string {
 function buildTitleDeepDivePrompt(data: AppData): string {
   const isIOS = data.platform === "ios";
   let p = isIOS
-    ? `You are a senior ASO consultant. Provide an exhaustive TITLE + SUBTITLE paired optimization analysis for iOS.\n\n`
-    : `You are a senior ASO consultant. Provide an exhaustive TITLE + SHORT DESCRIPTION paired optimization analysis for Android Google Play.\n\n`;
+    ? `You are a senior ASO consultant at a top-tier mobile growth agency. Provide an exhaustive TITLE + SUBTITLE paired optimization analysis for iOS.\n\n`
+    : `You are a senior ASO consultant at a top-tier mobile growth agency. Provide an exhaustive TITLE + SHORT DESCRIPTION paired optimization analysis for Android Google Play.\n\n`;
 
   p += `## FIELD BEING ANALYZED: ${isIOS ? "APP TITLE + SUBTITLE (as a coordinated pair)" : "APP TITLE + SHORT DESCRIPTION (as a coordinated keyword pair)"}\n`;
   p += `**Title HARD CHARACTER LIMIT: 30 characters** (both platforms use 30 chars)\n`;
-  p += `**EVERY title variant you suggest MUST be ≤30 characters. No exceptions.**\n`;
+  p += `**Title CHARACTER TARGET: 28-30 chars. A 24ch title wastes 6 of your highest-ranked characters. Fill them.**\n`;
+  p += `**EVERY title variant you suggest MUST be ≤30 characters AND target ≥28 characters. No exceptions.**\n`;
   p += `**NEVER repeat the same word within a single title** (e.g., "Rock Radio - Hard Rock" repeats "Rock" — this wastes characters on a word already indexed)\n\n`;
 
   p += `## CURRENT APP METADATA\n`;
@@ -1185,6 +1229,18 @@ function buildTitleDeepDivePrompt(data: AppData): string {
   p += `**Platform:** ${isIOS ? "iOS" : "Android"}\n`;
   p += `**Rating:** ${data.rating > 0 ? `${data.rating.toFixed(1)}★ (${data.ratingsCount.toLocaleString()})` : "No rating"}\n\n`;
 
+  // Inject social proof context when the app qualifies
+  const hasSocialProofDeep = data.rating >= 4.5 && data.ratingsCount >= 10000;
+  if (hasSocialProofDeep) {
+    const rCount = data.ratingsCount >= 1000000
+      ? `${(data.ratingsCount / 1000000).toFixed(1)}M`
+      : data.ratingsCount >= 1000 ? `${Math.round(data.ratingsCount / 1000)}K` : `${data.ratingsCount}`;
+    p += `**SOCIAL PROOF SIGNAL:** This app has a strong ${data.rating.toFixed(1)}★ rating with ${rCount}+ ratings. `;
+    p += `At least ONE paired set MUST incorporate this as a conversion hook in the ${isIOS ? "subtitle" : "short description"} `;
+    p += `(e.g., "Trusted by ${rCount}+ users" or "Rated ${data.rating.toFixed(1)}★ by ${rCount}+ listeners"). `;
+    p += `Social proof in ${isIOS ? "subtitle" : "short description"} is visible in search results — it directly lifts click-through rate.\n\n`;
+  }
+
   p += `## DESCRIPTION (for feature/keyword context)\n`;
   p += `${data.description.substring(0, 1200)}\n\n`;
 
@@ -1200,75 +1256,80 @@ function buildTitleDeepDivePrompt(data: AppData): string {
     p += `- Write for humans first, SEO second — both fields must read naturally\n`;
     p += `- No superlatives (#1, best, top) — Apple rejects these\n`;
     p += `- Don't repeat the category name (already indexed for free)\n`;
-    p += `- Use every available character in both fields\n\n`;
+    p += `- **CHARACTER TARGET:** Title = 28-30ch. Subtitle = 28-30ch. Filling both fields maximizes the 60-char keyword budget.\n`;
+    p += `- **KEYWORD QUALITY:** Avoid generic fillers ("Easy", "Great", "App", "Tunes"). Use high-intent, category-specific terms users actually search ("ASMR", "mindfulness", "focus music"). Ask: "Would a user type this exact word into the App Store search bar?"\n\n`;
 
     p += `Return JSON:\n{\n`;
     p += `  "currentAnalysis": "Detailed analysis of the CURRENT title+subtitle pair — what's good, what's missing, keyword coverage, overlap issues, character efficiency",\n`;
     p += `  "pairedSets": [\n`;
     for (let i = 1; i <= 5; i++) {
       p += `    {\n`;
-      p += `      "title": "Title variant ${i} (≤30 chars, NO repeated words within it)",\n`;
+      p += `      "title": "Title variant ${i} (TARGET 28-30ch, NO repeated words within it — count before writing)",\n`;
       p += `      "titleCharCount": 0,\n`;
-      p += `      "subtitle": "Matching subtitle for title ${i} (≤30 chars, ZERO word overlap with its title)",\n`;
+      p += `      "subtitle": "Matching subtitle for title ${i} (TARGET 28-30ch, ZERO word overlap with its title — fill it with high-intent keywords)",\n`;
       p += `      "subtitleCharCount": 0,\n`;
       p += `      "keywordsCovered": ["list", "every", "unique", "keyword", "across", "BOTH", "fields"],\n`;
-      p += `      "strategy": "keyword-first | brand-first | hybrid",\n`;
-      p += `      "reasoning": "Why this PAIR maximizes the 60-char keyword budget — which high-volume terms go in title vs subtitle and why"\n`;
+      p += `      "strategy": "keyword-first | brand-first | hybrid | social-proof",\n`;
+      p += `      "reasoning": "Why this PAIR maximizes the 60-char keyword budget. State the actual char counts for both fields. Note if any chars are unused and why."\n`;
       p += `    }${i < 5 ? "," : ""}\n`;
     }
     p += `  ],\n`;
     p += `  "keywordCoverage": [\n`;
     p += `    { "keyword": "target keyword", "presentIn": ["pair 1 title", "pair 3 subtitle"], "searchVolume": "high | medium | low" }\n`;
     p += `  ],\n`;
-    p += `  "recommendation": "Which pair is the top recommendation and why — how many unique ranking terms does it cover across title+subtitle?"\n`;
+    p += `  "recommendation": "Which pair is the top recommendation and why — how many unique ranking terms does it cover across title+subtitle? Does both fields hit the 28-30ch target?"\n`;
     p += `}\n\n`;
     p += `CRITICAL RULES:\n`;
     p += `1. "titleCharCount" and "subtitleCharCount" must be ACTUAL character counts, NOT 30\n`;
-    p += `2. EVERY title AND subtitle MUST be ≤30 characters — count BEFORE writing each one\n`;
-    p += `3. ZERO repeated words within a single title — each word must be unique\n`;
-    p += `4. ZERO word overlap between a title and its paired subtitle — check BEFORE writing\n`;
-    p += `5. Maximize unique keyword count per pair — if a pair covers 8 unique terms, that's better than one covering 5`;
+    p += `2. EVERY title MUST be ≤30 characters AND target ≥28ch — count BEFORE writing\n`;
+    p += `3. EVERY subtitle MUST be ≤30 characters AND target ≥28ch — count BEFORE writing\n`;
+    p += `4. ZERO repeated words within a single title — each word must be unique\n`;
+    p += `5. ZERO word overlap between a title and its paired subtitle — check BEFORE writing\n`;
+    p += `6. Maximize unique keyword count per pair — if a pair covers 8 unique terms, that's better than one covering 5\n`;
+    p += `7. NO generic fillers: "Easy", "Great", "App", "Simple" — use high-intent category-specific terms`;
   } else {
     p += `## ANDROID TITLE + SHORT DESCRIPTION OPTIMIZATION RULES\n`;
     p += `- Title is the most heavily weighted field on Google Play; short description is second-most indexed\n`;
     p += `- They appear TOGETHER in search results — users see both before tapping; design them as a PAIR\n`;
     p += `- Google indexes both fields. A word in the title is already captured — the short description should expand to DIFFERENT keyword territory\n`;
     p += `- Short description dual role: (1) RANKING — front-load a primary keyword in the first 3 words; (2) CONVERSION — it's the first copy users see in search, must compel a tap\n`;
-    p += `- Short description: 80 characters MAX\n`;
+    p += `- Short description: 80 characters HARD MAX; TARGET 78-80 chars — every unused character wastes indexed real estate visible in search\n`;
     p += `- ZERO repeated words within a single title (each word = unique ranking term)\n`;
     p += `- Minimize keyword overlap between title and short description — wasted characters on terms already indexed from the title\n`;
     p += `- Front-load keywords in the first 15 characters of the TITLE (highest algorithmic weight + most visible in search results)\n`;
     p += `- Format options: "Brand – Keyword" or "Keyword – Brand" (if brand isn't well-known)\n`;
     p += `- No superlatives (#1, best, top) — stores reject these\n`;
-    p += `- Use every available character in both fields\n\n`;
+    p += `- **CHARACTER TARGETS:** Title = 28-30ch. Short description = 78-80ch. Both appear in search results — every character is a ranking and conversion opportunity.\n`;
+    p += `- **KEYWORD QUALITY:** Avoid generic fillers ("Tunes", "App", "Easy", "Great"). Prefer high-intent, category-specific terms that users actually search on Google Play.\n\n`;
 
     p += `Return JSON:\n{\n`;
-    p += `  "currentAnalysis": "Detailed analysis of the CURRENT title+short description pair — keyword coverage, overlap between fields, character efficiency, conversion quality of the short description, what's missing",\n`;
+    p += `  "currentAnalysis": "Detailed analysis of the CURRENT title+short description pair — keyword coverage, overlap between fields, exact character usage (e.g., 'title uses 29/30 chars — excellent'), conversion quality of the short description, what's missing",\n`;
     p += `  "pairedSets": [\n`;
     for (let i = 1; i <= 5; i++) {
       p += `    {\n`;
-      p += `      "title": "Title variant ${i} (≤30 chars, NO repeated words within it)",\n`;
+      p += `      "title": "Title variant ${i} (TARGET 28-30ch, NO repeated words — count before writing)",\n`;
       p += `      "titleCharCount": 0,\n`;
-      p += `      "shortDescription": "Paired short description (≤80 chars). Front-load a DIFFERENT keyword from the title in the FIRST 3 WORDS. Cover fresh keyword territory. Write as a compelling, human-readable conversion pitch — not a keyword list. ZERO words repeated from the paired title.",\n`;
+      p += `      "shortDescription": "Paired short description (TARGET 78-80ch). Front-load a DIFFERENT high-intent keyword in the FIRST 3 WORDS. Cover fresh keyword territory — ZERO words repeated from the paired title. Write as a compelling human-readable conversion pitch that also targets ranking. Count carefully.",\n`;
       p += `      "shortDescCharCount": 0,\n`;
       p += `      "keywordsCovered": ["list", "every", "unique", "keyword", "across", "BOTH", "fields"],\n`;
       p += `      "strategy": "keyword-first | benefit-first | social-proof",\n`;
-      p += `      "reasoning": "Why this PAIR maximizes indexed keyword coverage AND conversion — which high-value terms anchor the title vs short description, and how the short description expands coverage while staying compelling"\n`;
+      p += `      "reasoning": "Why this PAIR maximizes indexed keyword coverage AND conversion. State the exact char counts used for both fields. Flag if below target."\n`;
       p += `    }${i < 5 ? "," : ""}\n`;
     }
     p += `  ],\n`;
     p += `  "keywordCoverage": [\n`;
     p += `    { "keyword": "target keyword", "presentIn": ["pair 1 title", "pair 3 shortDescription"], "searchVolume": "high | medium | low" }\n`;
     p += `  ],\n`;
-    p += `  "recommendation": "Which pair is the top recommendation and why — how many unique ranking terms does it cover across title+short description, and why does the short description work as a conversion pitch?"\n`;
+    p += `  "recommendation": "Which pair is the top recommendation and why — how many unique ranking terms does it cover, do both fields hit their char targets (title ≥28ch, short desc ≥78ch), and why does the short description work as a conversion pitch?"\n`;
     p += `}\n\n`;
     p += `CRITICAL RULES:\n`;
     p += `1. "titleCharCount" and "shortDescCharCount" must be ACTUAL character counts you computed\n`;
-    p += `2. EVERY title MUST be ≤30 characters — count BEFORE writing each one\n`;
-    p += `3. EVERY short description MUST be ≤80 characters — count BEFORE writing each one\n`;
+    p += `2. EVERY title MUST be ≤30ch AND target ≥28ch — count BEFORE writing. A 24ch title wastes 6 high-weight ranking characters.\n`;
+    p += `3. EVERY short description MUST be ≤80ch AND target ≥78ch — count BEFORE writing. A 65ch short desc wastes 15 indexed characters.\n`;
     p += `4. NEVER repeat the same word within a single title\n`;
     p += `5. Minimize title word repetition in the paired short description — use different keywords\n`;
-    p += `6. Short description must read as a compelling human sentence, NOT a keyword list`;
+    p += `6. Short description must read as a compelling human sentence, NOT a keyword list\n`;
+    p += `7. NO generic fillers: "Tunes", "App", "Easy", "Great" — use high-intent category-specific terms`;
   }
   return p;
 }
@@ -1303,7 +1364,9 @@ function buildSubtitleDeepDivePrompt(data: AppData): string {
   p += `- Apple's total indexable text budget: title (30) + subtitle (30) + keyword field (100) = 160 chars\n`;
   p += `- The subtitle appears directly below the title in search results — it should complement, not repeat\n`;
   p += `- Focus on the #1 benefit or differentiator that the title doesn't cover\n`;
-  p += `- Use the subtitle to capture different keyword intent than the title\n\n`;
+  p += `- Use the subtitle to capture different keyword intent than the title\n`;
+  p += `- **CHARACTER TARGET: 28-30 chars. An 18-char subtitle wastes 12 of your 160-char iOS keyword budget. Fill every character with a high-intent keyword.**\n`;
+  p += `- **KEYWORD QUALITY:** Avoid generic fillers ("Easy", "Simple", "Great"). Use high-intent, category-specific search terms users actually type in the App Store.\n\n`;
 
   p += `Return JSON:\n{\n`;
   p += `  "currentAnalysis": "Assessment of current subtitle — keyword coverage, overlap with title, character efficiency, missed opportunities",\n`;
@@ -1322,8 +1385,10 @@ function buildSubtitleDeepDivePrompt(data: AppData): string {
   p += `}\n\n`;
   p += `CRITICAL RULES:\n`;
   p += `1. Every variant MUST be ≤30 characters — count before writing\n`;
-  p += `2. ZERO overlap with title words — check "${data.title}" before suggesting\n`;
-  p += `3. "charCount" must be the ACTUAL count, not 30`;
+  p += `2. Every variant should TARGET 28-30 chars. Flag any variant below 26 chars and explain why it's the best option despite unused characters.\n`;
+  p += `3. ZERO overlap with title words — check "${data.title}" before suggesting\n`;
+  p += `4. "charCount" must be the ACTUAL count, not 30\n`;
+  p += `5. NO generic fillers: "Easy", "Great", "Simple" — use high-intent category-specific terms`;
   return p;
 }
 
@@ -1354,7 +1419,8 @@ function buildKeywordsDeepDivePrompt(data: AppData): string {
   p += `${data.description.substring(0, 1500)}\n\n`;
 
   p += `## KEYWORD FIELD OPTIMIZATION RULES (from ASO best practices)\n`;
-  p += `- 100 characters MAX, comma-separated, NO spaces after commas (spaces waste characters)\n`;
+  p += `- 100 characters HARD MAX, comma-separated, NO spaces after commas (spaces waste characters)\n`;
+  p += `- **CHARACTER TARGET: 98-100 chars. ≤2 chars unused is acceptable. >5 chars unused = wasted indexing budget. A 90-char keyword field leaves 10 indexable characters on the table.**\n`;
   p += `- NO words already in the title or subtitle — Apple auto-indexes those, duplicates waste budget\n`;
   p += `  Title words to exclude: ${data.title.toLowerCase().split(/\\s+/).join(", ")}\n`;
   if (data.subtitle) {
@@ -1383,9 +1449,11 @@ function buildKeywordsDeepDivePrompt(data: AppData): string {
   p += `}\n\n`;
   p += `CRITICAL RULES:\n`;
   p += `1. The "optimizedField" MUST be ≤100 characters total\n`;
-  p += `2. NO spaces after commas — "word1,word2,word3" not "word1, word2, word3"\n`;
-  p += `3. NO words from the title or subtitle\n`;
-  p += `4. "charCount" must be the ACTUAL length of "optimizedField"`;
+  p += `2. TARGET 98-100 chars for "optimizedField". If you land below 95, add more keywords.\n`;
+  p += `3. NO spaces after commas — "word1,word2,word3" not "word1, word2, word3"\n`;
+  p += `4. NO words from the title or subtitle\n`;
+  p += `5. "charCount" must be the ACTUAL length of "optimizedField"\n`;
+  p += `6. NO generic low-value words ("easy", "great", "new", "free") — every keyword must be a term users actually search`;
   return p;
 }
 
@@ -1441,7 +1509,7 @@ function buildIconDeepDivePrompt(data: AppData): string {
 }
 
 function buildShortDescriptionDeepDivePrompt(data: AppData): string {
-  let p = `You are a senior ASO consultant specializing in Google Play optimization. Provide a comprehensive short description analysis and rewrite.\n\n`;
+  let p = `You are a senior ASO consultant at a top-tier mobile growth agency specializing in Google Play optimization. Provide a comprehensive short description analysis and rewrite.\n\n`;
 
   p += `## APP CONTEXT\n`;
   p += `**App:** ${data.title}\n`;
@@ -1454,15 +1522,26 @@ function buildShortDescriptionDeepDivePrompt(data: AppData): string {
 
   p += `**Full description excerpt:** ${data.description.substring(0, 1500)}\n\n`;
 
+  // Social proof injection
+  const hasSocialProofSD = data.rating >= 4.5 && data.ratingsCount >= 10000;
+  if (hasSocialProofSD) {
+    const rCountSD = data.ratingsCount >= 1000000
+      ? `${(data.ratingsCount / 1000000).toFixed(1)}M`
+      : data.ratingsCount >= 1000 ? `${Math.round(data.ratingsCount / 1000)}K` : `${data.ratingsCount}`;
+    p += `**SOCIAL PROOF SIGNAL:** This app has a strong ${data.rating.toFixed(1)}★ rating with ${rCountSD}+ ratings — visible in Google Play search results. At least ONE variant MUST be strategy "social-proof" and incorporate this signal in the first 15 chars (e.g., "Top-rated ${data.category} app..." or "${data.rating.toFixed(1)}★ rated — ..."). Social proof at the start of the short description directly lifts click-through rate.\n\n`;
+  }
+
   p += `## RULES\n`;
-  p += `- Google Play short description: 80 characters MAX\n`;
+  p += `- Google Play short description: 80 characters HARD MAX\n`;
+  p += `- **CHARACTER TARGET: 78-80 chars. A 65-char short description leaves 15 chars of prime indexed real estate unused. Fill them.**\n`;
   p += `- Front-load the PRIMARY keyword in the FIRST 3 WORDS — Google gives highest weight to the beginning\n`;
-  p += `- This is the FIRST text users see below the screenshots — it must hook and convert\n`;
-  p += `- Each variant MUST be 80 characters or fewer — count carefully\n`;
+  p += `- This is the FIRST text users see below the screenshots — it must hook and convert simultaneously\n`;
+  p += `- Each variant MUST be ≤80 characters AND target ≥78 characters — count carefully\n`;
   p += `- Include a clear value proposition, not just a feature list\n`;
   p += `- Avoid generic phrases like "the best app" or "download now"\n`;
   p += `- Use natural language — no keyword stuffing\n`;
-  p += `- Directly affects click-through rate from search results — treat this as a mini-ad\n\n`;
+  p += `- Directly affects click-through rate from search results — treat this as a mini-ad headline\n`;
+  p += `- **KEYWORD QUALITY:** Avoid low-volume fillers. Use high-intent, category-specific terms users actually type into Google Play search.\n\n`;
 
   p += `Return JSON:\n{\n`;
   p += `  "currentAnalysis": "Detailed analysis of current short description — keyword coverage, hook quality, character usage efficiency, what's missing",\n`;
@@ -1479,7 +1558,11 @@ function buildShortDescriptionDeepDivePrompt(data: AppData): string {
   p += `  "keywordsTargeted": ["keyword 1", "keyword 2"],\n`;
   p += `  "recommendation": "Which variant is the top recommendation and why"\n`;
   p += `}\n\n`;
-  p += `CRITICAL: Every variant MUST be ≤80 characters. "charCount" must be the ACTUAL character count. Double-check before responding.`;
+  p += `CRITICAL:\n`;
+  p += `1. Every variant MUST be ≤80 characters. "charCount" must be the ACTUAL character count. Double-check before responding.\n`;
+  p += `2. Every variant SHOULD TARGET 78-80 chars. Flag in reasoning if a variant is below 75 chars.\n`;
+  p += `3. NO generic fillers ("Tunes", "Easy", "Great") — use high-intent category-specific terms.\n`;
+  p += `4. The first 3 words of each variant must contain a high-value keyword (not an article, preposition, or filler word).`;
   return p;
 }
 
