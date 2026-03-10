@@ -232,20 +232,37 @@ function formatDescriptionDeepDive(ai: any, platform: string): DeepDiveEnhanceme
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatTitleDeepDive(ai: any): DeepDiveEnhancement {
   const hasPairedSets = ai.pairedSets?.length > 0;
+  // Detect Android pairs: paired sets that have shortDescription instead of subtitle
+  const isAndroidPair = hasPairedSets && ai.pairedSets[0]?.shortDescription !== undefined;
+  const isIosPair = hasPairedSets && !isAndroidPair;
 
-  let b = hasPairedSets
+  let b = isIosPair
     ? "**AI Title + Subtitle Analysis** (deep-dive, paired strategy):\n\n"
-    : "**AI Title Analysis** (deep-dive):\n\n";
+    : isAndroidPair
+      ? "**AI Title + Short Description Analysis** (deep-dive, paired strategy):\n\n"
+      : "**AI Title Analysis** (deep-dive):\n\n";
 
   if (ai.currentAnalysis) b += `${ai.currentAnalysis}\n\n`;
 
-  if (hasPairedSets) {
+  if (isIosPair) {
     b += `**Paired Title + Subtitle Sets** (designed as coordinated keyword strategies):\n\n`;
     for (let i = 0; i < ai.pairedSets.length; i++) {
       const pair = ai.pairedSets[i];
       b += `  **Set ${i + 1}** (${pair.strategy || "hybrid"}):\n`;
       b += `    Title: "${pair.title}" (${pair.titleCharCount || pair.title?.length || "?"}ch)\n`;
       b += `    Subtitle: "${pair.subtitle}" (${pair.subtitleCharCount || pair.subtitle?.length || "?"}ch)\n`;
+      if (pair.keywordsCovered?.length) {
+        b += `    Keywords covered: ${pair.keywordsCovered.join(", ")} (${pair.keywordsCovered.length} unique terms)\n`;
+      }
+      b += `    ${pair.reasoning}\n\n`;
+    }
+  } else if (isAndroidPair) {
+    b += `**Paired Title + Short Description Sets** (coordinated for max keyword coverage + conversion):\n\n`;
+    for (let i = 0; i < ai.pairedSets.length; i++) {
+      const pair = ai.pairedSets[i];
+      b += `  **Set ${i + 1}** (${pair.strategy || "keyword-first"}):\n`;
+      b += `    Title: "${pair.title}" (${pair.titleCharCount || pair.title?.length || "?"}ch)\n`;
+      b += `    Short description: "${pair.shortDescription}" (${pair.shortDescCharCount || pair.shortDescription?.length || "?"}ch)\n`;
       if (pair.keywordsCovered?.length) {
         b += `    Keywords covered: ${pair.keywordsCovered.join(", ")} (${pair.keywordsCovered.length} unique terms)\n`;
       }
@@ -270,10 +287,16 @@ function formatTitleDeepDive(ai: any): DeepDiveEnhancement {
   if (ai.recommendation) b += `**Recommendation:** ${ai.recommendation}\n`;
 
   const copyOptions: string[] = [];
-  if (hasPairedSets) {
+  if (isIosPair) {
     for (const pair of ai.pairedSets) {
       if (pair.title && pair.subtitle) {
         copyOptions.push(`Title: "${pair.title}" + Subtitle: "${pair.subtitle}"`);
+      }
+    }
+  } else if (isAndroidPair) {
+    for (const pair of ai.pairedSets) {
+      if (pair.title && pair.shortDescription) {
+        copyOptions.push(`Title: "${pair.title}" + Short desc: "${pair.shortDescription}"`);
       }
     }
   } else if (ai.variants?.length) {
@@ -282,7 +305,7 @@ function formatTitleDeepDive(ai: any): DeepDiveEnhancement {
     }
   }
 
-  const deliverables = hasPairedSets
+  const deliverables = isIosPair
     ? [
         "Choose a paired title + subtitle set (or adapt)",
         "Verify zero word overlap between chosen title and subtitle",
@@ -291,11 +314,20 @@ function formatTitleDeepDive(ai: any): DeepDiveEnhancement {
         "A/B test with Apple PPO for 7+ days",
         "Monitor keyword rankings for 2 weeks after change",
       ]
-    : [
-        "Choose preferred title variant",
-        "Update in store listing and submit for review",
-        "Monitor keyword rankings for 2 weeks after change",
-      ];
+    : isAndroidPair
+      ? [
+          "Choose a paired title + short description set (or adapt)",
+          "Verify the short description front-loads a different keyword from the title",
+          "Update both in Google Play Console \u203A Store Listing",
+          "Both take effect immediately \u2014 no app update required",
+          "Run a Store Listing Experiment to A/B test the paired variants for 7+ days",
+          "Monitor keyword rankings for 2 weeks after change",
+        ]
+      : [
+          "Choose preferred title variant",
+          "Update in store listing and submit for review",
+          "Monitor keyword rankings for 2 weeks after change",
+        ];
 
   return { brief: b, copyOptions: copyOptions.length > 0 ? copyOptions : undefined, deliverables };
 }

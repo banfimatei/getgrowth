@@ -39,6 +39,17 @@ export interface AIAnalysis {
     keywordStrategy: string;
     priority?: string;
   };
+  titleShortDescPairs?: {
+    pairs: {
+      title: string;
+      shortDescription: string;
+      keywordsCovered: string[];
+      strategy: string;
+      reasoning: string;
+    }[];
+    keywordStrategy: string;
+    priority?: string;
+  };
   shortDescription?: {
     issues: string[];
     suggestions: string[];
@@ -480,6 +491,10 @@ function buildTextPrompt(data: AppData): string {
   if (isIOS) {
     p += `- On iOS, title + subtitle + keyword field are combined for indexing. A word in the title is AUTOMATICALLY indexed from the subtitle and keyword field too — never repeat across fields\n`;
     p += `- Think of title (30ch) + subtitle (30ch) as a SINGLE 60-character keyword strategy split across two fields. Design them AS A PAIR.\n`;
+  } else {
+    p += `- On Android, title (30ch) + short description (80ch) are the two most indexed and most visible fields — they appear TOGETHER in search results\n`;
+    p += `- Think of them as a PAIR: title = highest-value keyword(s); short description = front-load a DIFFERENT primary keyword in the first 3 words, then expand to complementary keywords AND a compelling conversion pitch\n`;
+    p += `- Repeating title keywords in the short description is wasteful — Google already has them from the title. Use the 80ch to cover new keyword territory\n`;
   }
   p += `\n`;
 
@@ -539,6 +554,34 @@ function buildTextPrompt(data: AppData): string {
     p += `    "suggestions": ["Short desc option 1 (≤80ch)", "Option 2 (≤80ch)"],\n`;
     p += `    "reasoning": "Why — front-load primary keyword",\n`;
     p += `    "priority": "high | medium | low — high if empty, <40 chars, or missing primary keyword in first 3 words; medium if functional but not using full 80 chars or keywords are weak; low if strong"\n`;
+    p += `  },\n`;
+
+    p += `  "titleShortDescPairs": {\n`;
+    p += `    "pairs": [\n`;
+    p += `      {\n`;
+    p += `        "title": "Title option (≤30ch, NO repeated words within it)",\n`;
+    p += `        "shortDescription": "Paired short description (≤80ch). Front-load a DIFFERENT primary keyword from the title in the FIRST 3 WORDS. Cover fresh keyword territory. End with a compelling conversion pitch. ZERO words repeated from the paired title.",\n`;
+    p += `        "keywordsCovered": ["list", "every", "unique", "keyword", "across", "BOTH", "fields"],\n`;
+    p += `        "strategy": "keyword-first | benefit-first | social-proof",\n`;
+    p += `        "reasoning": "Why this pair maximizes indexed coverage — which terms go in title (most weight) vs short description, and how the short desc also converts browsers into installers"\n`;
+    p += `      },\n`;
+    p += `      {\n`;
+    p += `        "title": "Alternative title (≤30ch, NO repeated words)",\n`;
+    p += `        "shortDescription": "Paired short description (≤80ch, front-loads different keyword, zero title overlap)",\n`;
+    p += `        "keywordsCovered": ["different", "keyword", "set"],\n`;
+    p += `        "strategy": "keyword-first | benefit-first | social-proof",\n`;
+    p += `        "reasoning": "Why this pair — different keyword strategy from pair 1"\n`;
+    p += `      },\n`;
+    p += `      {\n`;
+    p += `        "title": "Third title option (≤30ch)",\n`;
+    p += `        "shortDescription": "Third short description (≤80ch, zero title overlap)",\n`;
+    p += `        "keywordsCovered": ["keywords"],\n`;
+    p += `        "strategy": "keyword-first | benefit-first | social-proof",\n`;
+    p += `        "reasoning": "Reasoning"\n`;
+    p += `      }\n`;
+    p += `    ],\n`;
+    p += `    "keywordStrategy": "Explain the overall keyword distribution strategy. Which high-value terms anchor each title? How does each paired short description expand coverage with complementary terms AND maintain conversion appeal? How many total unique ranking terms does each pair cover?",\n`;
+    p += `    "priority": "high | medium | low — combined priority for the title+short description pair as a unit"\n`;
     p += `  },\n`;
   }
 
@@ -967,6 +1010,7 @@ export async function analyzeWithAI(appData: AppData): Promise<AIAnalysis | null
     title: t.title || { issues: [], suggestions: [], reasoning: "" },
     subtitle: t.subtitle,
     titleSubtitlePairs: t.titleSubtitlePairs,
+    titleShortDescPairs: t.titleShortDescPairs,
     shortDescription: t.shortDescription,
     keywordField: t.keywordField,
     description: t.description || {
@@ -1119,11 +1163,11 @@ function buildTitleDeepDivePrompt(data: AppData): string {
   const isIOS = data.platform === "ios";
   let p = isIOS
     ? `You are a senior ASO consultant. Provide an exhaustive TITLE + SUBTITLE paired optimization analysis for iOS.\n\n`
-    : `You are a senior ASO consultant. Provide an exhaustive TITLE optimization analysis.\n\n`;
+    : `You are a senior ASO consultant. Provide an exhaustive TITLE + SHORT DESCRIPTION paired optimization analysis for Android Google Play.\n\n`;
 
-  p += `## FIELD BEING ANALYZED: ${isIOS ? "APP TITLE + SUBTITLE (as a coordinated pair)" : "APP TITLE"}\n`;
-  p += `**HARD CHARACTER LIMIT: 30 characters per field** (both platforms use 30 chars)\n`;
-  p += `**EVERY variant you suggest MUST be ≤30 characters. No exceptions.**\n`;
+  p += `## FIELD BEING ANALYZED: ${isIOS ? "APP TITLE + SUBTITLE (as a coordinated pair)" : "APP TITLE + SHORT DESCRIPTION (as a coordinated keyword pair)"}\n`;
+  p += `**Title HARD CHARACTER LIMIT: 30 characters** (both platforms use 30 chars)\n`;
+  p += `**EVERY title variant you suggest MUST be ≤30 characters. No exceptions.**\n`;
   p += `**NEVER repeat the same word within a single title** (e.g., "Rock Radio - Hard Rock" repeats "Rock" — this wastes characters on a word already indexed)\n\n`;
 
   p += `## CURRENT APP METADATA\n`;
@@ -1132,9 +1176,10 @@ function buildTitleDeepDivePrompt(data: AppData): string {
     p += data.subtitle
       ? `**Current subtitle:** "${data.subtitle}" (${data.subtitle.length}/30 chars)\n`
       : `**Current subtitle:** (not set — empty, 30 chars available)\n`;
-  }
-  if (!isIOS && data.shortDescription) {
-    p += `**Short description:** "${data.shortDescription}" (${data.shortDescription.length}/80 chars)\n`;
+  } else {
+    p += data.shortDescription
+      ? `**Current short description:** "${data.shortDescription}" (${data.shortDescription.length}/80 chars)\n`
+      : `**Current short description:** (not set — empty, 80 chars available)\n`;
   }
   p += `**Category:** ${data.category}\n`;
   p += `**Platform:** ${isIOS ? "iOS" : "Android"}\n`;
@@ -1184,38 +1229,46 @@ function buildTitleDeepDivePrompt(data: AppData): string {
     p += `4. ZERO word overlap between a title and its paired subtitle — check BEFORE writing\n`;
     p += `5. Maximize unique keyword count per pair — if a pair covers 8 unique terms, that's better than one covering 5`;
   } else {
-    p += `## TITLE OPTIMIZATION RULES\n`;
-    p += `- Most heavily weighted metadata field on Google Play\n`;
-    p += `- NEVER repeat the same word within a title (wastes chars, zero additional ranking)\n`;
-    p += `- Front-load keywords in the first 15 characters (highest algorithmic weight + most visible in search results)\n`;
+    p += `## ANDROID TITLE + SHORT DESCRIPTION OPTIMIZATION RULES\n`;
+    p += `- Title is the most heavily weighted field on Google Play; short description is second-most indexed\n`;
+    p += `- They appear TOGETHER in search results — users see both before tapping; design them as a PAIR\n`;
+    p += `- Google indexes both fields. A word in the title is already captured — the short description should expand to DIFFERENT keyword territory\n`;
+    p += `- Short description dual role: (1) RANKING — front-load a primary keyword in the first 3 words; (2) CONVERSION — it's the first copy users see in search, must compel a tap\n`;
+    p += `- Short description: 80 characters MAX\n`;
+    p += `- ZERO repeated words within a single title (each word = unique ranking term)\n`;
+    p += `- Minimize keyword overlap between title and short description — wasted characters on terms already indexed from the title\n`;
+    p += `- Front-load keywords in the first 15 characters of the TITLE (highest algorithmic weight + most visible in search results)\n`;
     p += `- Format options: "Brand – Keyword" or "Keyword – Brand" (if brand isn't well-known)\n`;
-    p += `- Write for humans first, SEO second — must read naturally\n`;
     p += `- No superlatives (#1, best, top) — stores reject these\n`;
-    p += `- Use every available character — unused chars = wasted ranking potential\n`;
-    p += `- Google indexes the title + short description + full description — the title should target the highest-value keywords\n\n`;
+    p += `- Use every available character in both fields\n\n`;
 
     p += `Return JSON:\n{\n`;
-    p += `  "currentAnalysis": "Detailed analysis — what's good, what's missing, character efficiency, keyword coverage vs competitors",\n`;
-    p += `  "variants": [\n`;
-    for (let i = 1; i <= 8; i++) {
+    p += `  "currentAnalysis": "Detailed analysis of the CURRENT title+short description pair — keyword coverage, overlap between fields, character efficiency, conversion quality of the short description, what's missing",\n`;
+    p += `  "pairedSets": [\n`;
+    for (let i = 1; i <= 5; i++) {
       p += `    {\n`;
-      p += `      "title": "Title variant ${i} — ≤30 CHARS, NO repeated words within it",\n`;
-      p += `      "charCount": 0,\n`;
-      p += `      "strategy": "keyword-first | brand-first | hybrid",\n`;
-      p += `      "reasoning": "Why this variant improves on the current title"\n`;
-      p += `    }${i < 8 ? "," : ""}\n`;
+      p += `      "title": "Title variant ${i} (≤30 chars, NO repeated words within it)",\n`;
+      p += `      "titleCharCount": 0,\n`;
+      p += `      "shortDescription": "Paired short description (≤80 chars). Front-load a DIFFERENT keyword from the title in the FIRST 3 WORDS. Cover fresh keyword territory. Write as a compelling, human-readable conversion pitch — not a keyword list. ZERO words repeated from the paired title.",\n`;
+      p += `      "shortDescCharCount": 0,\n`;
+      p += `      "keywordsCovered": ["list", "every", "unique", "keyword", "across", "BOTH", "fields"],\n`;
+      p += `      "strategy": "keyword-first | benefit-first | social-proof",\n`;
+      p += `      "reasoning": "Why this PAIR maximizes indexed keyword coverage AND conversion — which high-value terms anchor the title vs short description, and how the short description expands coverage while staying compelling"\n`;
+      p += `    }${i < 5 ? "," : ""}\n`;
     }
     p += `  ],\n`;
     p += `  "keywordCoverage": [\n`;
-    p += `    { "keyword": "target keyword", "presentIn": ["variant 1", "variant 3"], "searchVolume": "high | medium | low" }\n`;
+    p += `    { "keyword": "target keyword", "presentIn": ["pair 1 title", "pair 3 shortDescription"], "searchVolume": "high | medium | low" }\n`;
     p += `  ],\n`;
-    p += `  "recommendation": "Which variant is the top recommendation and why"\n`;
+    p += `  "recommendation": "Which pair is the top recommendation and why — how many unique ranking terms does it cover across title+short description, and why does the short description work as a conversion pitch?"\n`;
     p += `}\n\n`;
     p += `CRITICAL RULES:\n`;
-    p += `1. "charCount" must be the ACTUAL character count you computed, NOT 30\n`;
-    p += `2. EVERY title variant MUST be ≤30 characters — count BEFORE writing each one\n`;
-    p += `3. NEVER repeat the same word within a single title suggestion\n`;
-    p += `4. If a title exceeds 30 chars, it is INVALID and will be rejected by the store`;
+    p += `1. "titleCharCount" and "shortDescCharCount" must be ACTUAL character counts you computed\n`;
+    p += `2. EVERY title MUST be ≤30 characters — count BEFORE writing each one\n`;
+    p += `3. EVERY short description MUST be ≤80 characters — count BEFORE writing each one\n`;
+    p += `4. NEVER repeat the same word within a single title\n`;
+    p += `5. Minimize title word repetition in the paired short description — use different keywords\n`;
+    p += `6. Short description must read as a compelling human sentence, NOT a keyword list`;
   }
   return p;
 }

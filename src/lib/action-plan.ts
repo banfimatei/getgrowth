@@ -266,7 +266,12 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
     return iosTitleSubtitleBrief(data, p, cats, ai);
   }
 
-  // ── Android, or iOS without paired sets → title-only item ──
+  // ── Android with AI paired sets → generate a combined Title + Short Desc item ──
+  if (data.platform === "android" && ai?.titleShortDescPairs && ai.titleShortDescPairs.pairs.length > 0) {
+    return androidTitleShortDescBrief(data, p, cats, ai);
+  }
+
+  // ── iOS without paired sets → title-only item ──
   const lengthR = cat.results.find(r => r.ruleId === "title-length");
   const kwR = cat.results.find(r => r.ruleId === "title-keywords");
   const frontR = cat.results.find(r => r.ruleId === "title-frontload");
@@ -477,6 +482,109 @@ function iosTitleSubtitleBrief(data: AppData, p: AppProfile, cats: AuditCategory
 }
 
 // ---------------------------------------------------------------------------
+// ANDROID TITLE + SHORT DESCRIPTION COMBINED BRIEF (paired keyword strategy)
+// Sources: ASO skill §2 metadata — "Google has no separate keyword field — keywords
+// extracted from title and description."
+// Title (30ch, most weighted) + short description (80ch, second-most indexed, visible in
+// search results) must be optimized as a coordinated unit — not independently.
+// ---------------------------------------------------------------------------
+
+function androidTitleShortDescBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai: AIAnalysis): ActionItem[] {
+  const titleMax = 30;
+  const titleCat = cats.find(c => c.id === "title");
+  const shortDescCat = cats.find(c => c.id === "short-description");
+  const titleScore = titleCat?.score ?? 0;
+  const shortDescScore = shortDescCat?.score ?? 0;
+  const emptyShortDesc = !data.shortDescription || data.shortDescription.length === 0;
+  const pairs = ai.titleShortDescPairs!.pairs;
+
+  let b = "";
+
+  // AI analysis for both fields
+  if (ai.title?.issues?.length) {
+    b += `**AI Title Analysis:**\n`;
+    for (const issue of ai.title.issues) b += `  \u2022 ${issue}\n`;
+    if (ai.title.reasoning) b += `\n${ai.title.reasoning}\n\n`;
+  }
+  if (ai.shortDescription?.issues?.length) {
+    b += `**AI Short Description Analysis:**\n`;
+    for (const issue of ai.shortDescription.issues) b += `  \u2022 ${issue}\n`;
+    if (ai.shortDescription.reasoning) b += `\n${ai.shortDescription.reasoning}\n\n`;
+  }
+
+  b += `**Current title:** "${data.title}" (${data.title.length}/${titleMax} chars)\n`;
+  b += `**Current short description:** ${data.shortDescription ? `"${data.shortDescription}" (${data.shortDescription.length}/80 chars)` : "(empty \u2014 not set)"}\n`;
+  const usedChars = data.title.length + (data.shortDescription?.length || 0);
+  b += `**Combined usage:** ${usedChars}/110 chars across both indexed fields\n\n`;
+
+  // Keyword strategy from AI
+  if (ai.titleShortDescPairs!.keywordStrategy) {
+    b += `**Keyword distribution strategy:**\n${ai.titleShortDescPairs!.keywordStrategy}\n\n`;
+  }
+
+  b += `**Key principle:** On Google Play, title (30ch) + short description (80ch) are your two most indexed fields AND they appear together in search results. The title targets your highest-value keywords; the short description should (1) front-load a DIFFERENT primary keyword in the first 3 words for ranking, AND (2) function as a compelling conversion pitch since users read it before tapping. Repeating title keywords wastes the 80 characters Google has already indexed from the title.\n\n`;
+
+  b += `**Rules:**\n`;
+  b += `  \u2022 Title: 30 chars max \u2014 front-load highest-volume keywords in first 15 chars\n`;
+  b += `  \u2022 Short description: 80 chars max \u2014 front-load a DIFFERENT keyword in first 3 words\n`;
+  b += `  \u2022 Minimize overlap: each field should cover distinct keyword territory\n`;
+  b += `  \u2022 Short description is visible to users in search \u2014 it must also read as a compelling pitch\n`;
+  b += `  \u2022 No superlatives ("#1", "best", "top") \u2014 stores reject these\n`;
+  b += `  \u2022 Write for humans first, SEO second \u2014 both fields must read naturally\n`;
+  b += `  \u2022 Use every available character in both fields`;
+
+  // Combined priority
+  const combinedScore = Math.round((titleScore + shortDescScore) / 2);
+  const fallback: ActionItem["priority"] = emptyShortDesc ? "critical" : combinedScore < 65 ? "high" : "medium";
+  const priority = resolveAiPriority(ai.titleShortDescPairs!.priority, fallback);
+
+  const scoreBoost = emptyShortDesc
+    ? "+40-70 on Title + Short Description scores"
+    : combinedScore < 65
+      ? "+20-35 on Title + Short Description scores"
+      : combinedScore < 80
+        ? "+10-20 on Title + Short Description scores"
+        : `+5-${Math.max(10, 100 - combinedScore)} on Title + Short Description scores`;
+
+  // Copy options: formatted as paired sets
+  const copyOptions: string[] = [];
+  for (let i = 0; i < pairs.length; i++) {
+    const pair = pairs[i];
+    if (pair.title.length <= 30 && pair.shortDescription.length <= 80) {
+      copyOptions.push(
+        `Title: "${pair.title}" (${pair.title.length}ch) + Short desc: "${pair.shortDescription}" (${pair.shortDescription.length}ch) \u2014 Keywords: ${pair.keywordsCovered.join(", ")}`
+      );
+    }
+  }
+
+  const actionTitle = emptyShortDesc
+    ? "Set up title + short description as a coordinated keyword pair"
+    : "Optimize title + short description keyword distribution";
+
+  return [{
+    id: "title-shortdesc-optimize",
+    priority,
+    effort: "quick",
+    category: "Title + Short Description",
+    title: actionTitle,
+    currentState: `Title: "${data.title}" (${data.title.length}/30) | Short desc: ${data.shortDescription ? `"${data.shortDescription}" (${data.shortDescription.length}/80)` : "(empty)"}`,
+    action: b, brief: b,
+    copyOptions: copyOptions.length > 0 ? copyOptions : undefined,
+    deliverables: [
+      "Choose one of the paired title + short description sets above (or adapt them)",
+      "Verify the short description front-loads a different keyword from the title",
+      "Update both in Google Play Console \u203A Store Listing",
+      "Both take effect immediately without an app update",
+      "Run a Store Listing Experiment to A/B test the paired variants for 7+ days",
+    ],
+    impact: "Title and short description are Google Play's two most indexed fields and appear together in every search result — optimizing them as a coordinated pair maximizes both keyword coverage and search result CTR",
+    scoreBoost,
+    aiStatus: "reviewed",
+    deepDiveSection: "title",
+  }];
+}
+
+// ---------------------------------------------------------------------------
 // SUBTITLE BRIEF (iOS) — standalone fallback when AI paired sets aren't available
 // Sources: ASO skill §2 metadata, book Ch.2
 // ---------------------------------------------------------------------------
@@ -650,6 +758,8 @@ function keywordFieldBrief(data: AppData, p: AppProfile, cats: AuditCategory[], 
 
 function shortDescBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AIAnalysis | null): ActionItem[] {
   if (data.platform !== "android") return [];
+  // Skip if we already generated the combined title+short description item
+  if (ai?.titleShortDescPairs && ai.titleShortDescPairs.pairs.length > 0) return [];
   const cat = cats.find(c => c.id === "short-description");
   if (!cat) return [];
   const rule = cat.results[0];
