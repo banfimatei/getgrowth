@@ -2007,6 +2007,26 @@ function stripMarkdown(text: string): string {
 }
 
 function extractDesignDirection(brief: string): string {
+  // If this brief contains a "Redesign brief for designer" section (from icon deep-dive),
+  // extract it as the primary design direction — it's the most specific and actionable content.
+  const redesignMatch = brief.match(/Redesign brief for designer[:\s*\n]+([\s\S]+?)(?:\n---|\n\*\*Actionable|\n\*\*Icon specs|$)/i);
+  const colorMatch = brief.match(/Color analysis[:\s*\n]+([\s\S]+?)(?:\n\n\*\*|\n---|\n✅|$)/i);
+  const competitorMatch = brief.match(/Category comparison[:\s*\n]+([\s\S]+?)(?:\n\n\*\*|\n---|\n✅|$)/i);
+  const issuesMatch = brief.match(/Issues found[:\s*\n]+([\s\S]+?)(?:\n\n\*\*|\n---|\n✅|$)/i);
+  const strengthsMatch = brief.match(/Strengths[:\s*\n]+([\s\S]+?)(?:\n\n\*\*|\n---|\n❌|$)/i);
+
+  if (redesignMatch) {
+    // Deep-dive output detected — build a structured design direction block
+    const parts: string[] = [];
+    if (redesignMatch[1]?.trim()) parts.push(`REDESIGN BRIEF:\n${redesignMatch[1].trim()}`);
+    if (colorMatch?.[1]?.trim()) parts.push(`COLOR ANALYSIS:\n${colorMatch[1].trim()}`);
+    if (competitorMatch?.[1]?.trim()) parts.push(`CATEGORY CONTEXT:\n${competitorMatch[1].trim()}`);
+    if (issuesMatch?.[1]?.trim()) parts.push(`CURRENT ICON ISSUES TO FIX:\n${issuesMatch[1].trim()}`);
+    if (strengthsMatch?.[1]?.trim()) parts.push(`ELEMENTS TO PRESERVE:\n${strengthsMatch[1].trim()}`);
+    return parts.join("\n\n").substring(0, 3000);
+  }
+
+  // Fallback: keyword-filtered lines from the initial (non-deep-dive) brief
   const cleaned = stripMarkdown(brief);
   const lines = cleaned.split("\n").filter(l => l.trim().length > 0);
   const designLines = lines.filter(l => {
@@ -2034,7 +2054,8 @@ CATEGORY: ${appData.category || "Apps"}
 WHAT IT DOES: ${desc}
 ${appData.subtitle ? `TAGLINE: ${appData.subtitle}` : ""}
 
-AUDIT FINDINGS — use these to inform visual direction:
+AUDIT FINDINGS — use everything below as your primary design brief. If a "REDESIGN BRIEF" section is present, it was written by an expert ASO analyst specifically for this icon and is your single most important input. Follow it precisely.
+
 ${designDirection}
 
 ICON DESIGN BRIEF:
@@ -2150,6 +2171,10 @@ export async function generateVisualConcepts(
       {
         label: "Light & Minimal",
         suffix: "\n\nSTYLE DIRECTION C — Light & Minimal:\nOff-white or very light background. One simple symbol in a single medium-dark color. Lots of breathing room — symbol is well-centered with generous padding. Think Notion, Bear, or Linear. No decoration beyond the essential symbol. Elegant restraint.",
+      },
+      {
+        label: "Geometric & Distinctive",
+        suffix: "\n\nSTYLE DIRECTION D — Geometric & Distinctive:\nBold, abstract geometric composition that doesn't literally depict the app function, but creates a strong, ownable visual identity. Think Figma (overlapping shapes), Stripe (diagonal gradient stripe), Dropbox (open box wireframe). Use 2-3 geometric shapes maximum. Background is a single solid or very subtle two-tone color. Distinctive within the category — deliberately avoids the 'obvious' icon choice.",
       },
     ];
 

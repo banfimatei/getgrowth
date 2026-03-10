@@ -432,11 +432,28 @@ function BriefContent({ text }: { text: string }) {
   );
 }
 
+function downloadConcept(data: string, mimeType: string, label: string, section: "icon" | "screenshots") {
+  const ext = mimeType.split("/")[1]?.replace("jpeg", "jpg") || "png";
+  const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const filename = `${section}-concept-${slug}.${ext}`;
+  const link = document.createElement("a");
+  link.href = `data:${mimeType};base64,${data}`;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 function VisualConceptsGallery({ concepts, section }: {
   concepts: VisualConceptResult[];
   section: "icon" | "screenshots";
 }) {
   const isIcon = section === "icon";
+  // 4 concepts → 2×2 grid; 3 → 3 cols; moodboard → single column
+  const gridClass = isIcon
+    ? concepts.length >= 4 ? "grid grid-cols-2 gap-3" : "grid grid-cols-3 gap-3"
+    : "space-y-3";
+
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
@@ -453,12 +470,15 @@ function VisualConceptsGallery({ concepts, section }: {
         >
           AI Concept
         </span>
+        <span className="text-[10px]" style={{ color: "var(--text-tertiary)" }}>
+          {concepts.length} {concepts.length === 1 ? "result" : "results"} · click ↓ to download
+        </span>
       </div>
-      <div className={isIcon ? "grid grid-cols-3 gap-3" : "space-y-3"}>
+      <div className={gridClass}>
         {concepts.map((concept, i) => (
           <div key={i} className="space-y-1.5">
             <div
-              className="relative rounded-lg overflow-hidden border"
+              className="relative rounded-lg overflow-hidden border group"
               style={{ borderColor: "rgba(234, 179, 8, 0.2)" }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -468,11 +488,27 @@ function VisualConceptsGallery({ concepts, section }: {
                 className={isIcon ? "w-full aspect-square object-cover" : "w-full object-contain"}
                 style={{ backgroundColor: "var(--bg-inset)" }}
               />
+              {/* Overlay: label + download button */}
               <div
-                className="absolute bottom-0 left-0 right-0 px-2 py-1"
-                style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.7))" }}
+                className="absolute bottom-0 left-0 right-0 px-2 py-1.5 flex items-center justify-between"
+                style={{ background: "linear-gradient(transparent, rgba(0,0,0,0.8))" }}
               >
                 <p className="text-[10px] font-semibold text-white">{concept.label}</p>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    downloadConcept(concept.data, concept.mimeType, concept.label, section);
+                  }}
+                  className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded cursor-pointer transition-opacity opacity-70 hover:opacity-100"
+                  style={{
+                    backgroundColor: "rgba(255,255,255,0.15)",
+                    color: "#fff",
+                    border: "1px solid rgba(255,255,255,0.25)",
+                  }}
+                  title={`Download ${concept.label}`}
+                >
+                  ↓ Download
+                </button>
               </div>
             </div>
             {concept.commentary && (
@@ -484,7 +520,7 @@ function VisualConceptsGallery({ concepts, section }: {
         ))}
       </div>
       <p className="text-[10px] italic" style={{ color: "var(--text-tertiary)" }}>
-        These are AI-generated concepts for creative direction only — not production-ready assets.
+        AI-generated concepts for creative direction only — not production-ready assets.
       </p>
     </div>
   );
