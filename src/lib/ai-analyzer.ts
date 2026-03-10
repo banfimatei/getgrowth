@@ -29,6 +29,16 @@ export interface AIAnalysis {
     reasoning: string;
     priority?: string;
   };
+  titleSubtitlePairs?: {
+    pairs: {
+      title: string;
+      subtitle: string;
+      keywordsCovered: string[];
+      reasoning: string;
+    }[];
+    keywordStrategy: string;
+    priority?: string;
+  };
   shortDescription?: {
     issues: string[];
     suggestions: string[];
@@ -462,10 +472,20 @@ function buildTextPrompt(data: AppData): string {
     p += `## WHAT'S NEW (latest release notes)\n${data.whatsNew.substring(0, 500)}\n\n`;
   }
 
+  p += `## CRITICAL KEYWORD RULES FOR ALL SUGGESTIONS\n`;
+  p += `- NEVER repeat the same word within a single title suggestion (e.g., "Rock Radio - Hard Rock" repeats "Rock" — this wastes 5 of your 30 characters on a word the algorithm already saw)\n`;
+  p += `- Each unique word is only indexed ONCE — repeating it provides zero additional ranking benefit and wastes character budget\n`;
+  p += `- Maximize unique keyword coverage: every word in every suggestion should be a DISTINCT ranking term\n`;
+  if (isIOS) {
+    p += `- On iOS, title + subtitle + keyword field are combined for indexing. A word in the title is AUTOMATICALLY indexed from the subtitle and keyword field too — never repeat across fields\n`;
+    p += `- Think of title (30ch) + subtitle (30ch) as a SINGLE 60-character keyword strategy split across two fields. Design them AS A PAIR.\n`;
+  }
+  p += `\n`;
+
   p += `Return JSON matching this exact structure:\n{\n`;
   p += `  "title": {\n`;
   p += `    "issues": ["specific issue — title limit is 30 chars on BOTH iOS and Android"],\n`;
-  p += `    "suggestions": ["Title Option 1 (MUST be ≤${titleMax} chars)", "Title Option 2 (≤${titleMax}ch)", "Title Option 3 (≤${titleMax}ch)"],\n`;
+  p += `    "suggestions": ["Title Option 1 (MUST be ≤${titleMax} chars, ZERO repeated words)", "Title Option 2 (≤${titleMax}ch)", "Title Option 3 (≤${titleMax}ch)"],\n`;
   p += `    "reasoning": "Why these changes improve ranking and conversion",\n`;
   p += `    "priority": "high | medium | low — high if title is missing key ranking terms, wastes >20% of the 30-char budget, or brand-only; medium if functional but keyword selection can be improved; low if well-optimized and near full usage"\n`;
   p += `  },\n`;
@@ -477,10 +497,36 @@ function buildTextPrompt(data: AppData): string {
     p += `    "reasoning": "Why — zero overlap with title",\n`;
     p += `    "priority": "high | medium | low — high if empty, heavily duplicates title, or wastes >40% of 30 chars; medium if underusing or weak keywords; low if well-optimized"\n`;
     p += `  },\n`;
+
+    p += `  "titleSubtitlePairs": {\n`;
+    p += `    "pairs": [\n`;
+    p += `      {\n`;
+    p += `        "title": "Title option (≤30ch, NO repeated words within it)",\n`;
+    p += `        "subtitle": "Matching subtitle (≤30ch, ZERO word overlap with the title above)",\n`;
+    p += `        "keywordsCovered": ["list", "every", "unique", "keyword", "across", "both", "fields"],\n`;
+    p += `        "reasoning": "Why this pair maximizes the 60-char keyword budget"\n`;
+    p += `      },\n`;
+    p += `      {\n`;
+    p += `        "title": "Alternative title (≤30ch)",\n`;
+    p += `        "subtitle": "Matching subtitle for this title (≤30ch, zero overlap)",\n`;
+    p += `        "keywordsCovered": ["different", "keyword", "set"],\n`;
+    p += `        "reasoning": "Why this pair works — different keyword strategy"\n`;
+    p += `      },\n`;
+    p += `      {\n`;
+    p += `        "title": "Third option (≤30ch)",\n`;
+    p += `        "subtitle": "Matching subtitle (≤30ch, zero overlap)",\n`;
+    p += `        "keywordsCovered": ["keywords"],\n`;
+    p += `        "reasoning": "Reasoning"\n`;
+    p += `      }\n`;
+    p += `    ],\n`;
+    p += `    "keywordStrategy": "Explain the overall keyword distribution strategy across title+subtitle. How many unique ranking terms does each pair cover? Which high-volume terms are prioritized in the title (heavier weight) vs subtitle?",\n`;
+    p += `    "priority": "high | medium | low — combined priority for the title+subtitle pair as a unit"\n`;
+    p += `  },\n`;
+
     p += `  "keywordField": {\n`;
-    p += `    "suggestedKeywords": ["keyword1", "keyword2", "...up to 20 single words that complement title+subtitle"],\n`;
-    p += `    "avoidKeywords": ["word already in title", "plural form", "category name"],\n`;
-    p += `    "reasoning": "Strategy explanation"\n`;
+    p += `    "suggestedKeywords": ["keyword1", "keyword2", "...up to 20 single words that complement title+subtitle — NONE of which appear in your title or subtitle suggestions above"],\n`;
+    p += `    "avoidKeywords": ["word already in title/subtitle", "plural form", "category name"],\n`;
+    p += `    "reasoning": "Strategy: these keywords fill gaps left by the title+subtitle pair"\n`;
     p += `  },\n`;
     p += `  "promotionalText": {\n`;
     p += `    "suggestions": ["Promotional text option 1 (≤170ch)", "Option 2 (≤170ch)"],\n`;
@@ -919,6 +965,7 @@ export async function analyzeWithAI(appData: AppData): Promise<AIAnalysis | null
   const analysis: AIAnalysis = {
     title: t.title || { issues: [], suggestions: [], reasoning: "" },
     subtitle: t.subtitle,
+    titleSubtitlePairs: t.titleSubtitlePairs,
     shortDescription: t.shortDescription,
     keywordField: t.keywordField,
     description: t.description || {
@@ -1069,11 +1116,14 @@ function buildScreenshotsDeepDivePrompt(data: AppData): string {
 
 function buildTitleDeepDivePrompt(data: AppData): string {
   const isIOS = data.platform === "ios";
-  let p = `You are a senior ASO consultant. Provide an exhaustive TITLE optimization analysis.\n\n`;
+  let p = isIOS
+    ? `You are a senior ASO consultant. Provide an exhaustive TITLE + SUBTITLE paired optimization analysis for iOS.\n\n`
+    : `You are a senior ASO consultant. Provide an exhaustive TITLE optimization analysis.\n\n`;
 
-  p += `## FIELD BEING ANALYZED: APP TITLE\n`;
-  p += `**HARD CHARACTER LIMIT: 30 characters** (${isIOS ? "iOS App Store" : "Google Play Store"} — both platforms use 30 chars)\n`;
-  p += `**EVERY variant you suggest MUST be ≤30 characters. No exceptions.**\n\n`;
+  p += `## FIELD BEING ANALYZED: ${isIOS ? "APP TITLE + SUBTITLE (as a coordinated pair)" : "APP TITLE"}\n`;
+  p += `**HARD CHARACTER LIMIT: 30 characters per field** (both platforms use 30 chars)\n`;
+  p += `**EVERY variant you suggest MUST be ≤30 characters. No exceptions.**\n`;
+  p += `**NEVER repeat the same word within a single title** (e.g., "Rock Radio - Hard Rock" repeats "Rock" — this wastes characters on a word already indexed)\n\n`;
 
   p += `## CURRENT APP METADATA\n`;
   p += `**Current title:** "${data.title}" (${data.title.length}/30 chars)\n`;
@@ -1092,42 +1142,80 @@ function buildTitleDeepDivePrompt(data: AppData): string {
   p += `## DESCRIPTION (for feature/keyword context)\n`;
   p += `${data.description.substring(0, 1200)}\n\n`;
 
-  p += `## TITLE OPTIMIZATION RULES\n`;
-  p += `- Most heavily weighted metadata field on both stores\n`;
-  p += `- Front-load keywords in the first 15 characters (highest algorithmic weight + most visible in search results)\n`;
-  p += `- Format options: "Brand – Keyword" or "Keyword – Brand" (if brand isn't well-known)\n`;
-  p += `- Write for humans first, SEO second — must read naturally\n`;
-  p += `- No superlatives (#1, best, top) — stores reject these\n`;
-  p += `- Use every available character — unused chars = wasted ranking potential\n`;
   if (isIOS) {
-    p += `- iOS indexable budget: title (30) + subtitle (30) + keyword field (100) = 160 chars — avoid duplicating words across these fields\n`;
-    p += `- Don't include words already in the subtitle "${data.subtitle || ""}" — Apple combines them automatically\n`;
-  } else {
-    p += `- Google indexes the title + short description + full description — the title should target the highest-value keywords\n`;
-  }
-  p += `\n`;
+    p += `## iOS TITLE + SUBTITLE OPTIMIZATION RULES\n`;
+    p += `- Title is the most heavily weighted field; subtitle is second-most weighted\n`;
+    p += `- Together they are a SINGLE 60-character keyword strategy — design them as a PAIR\n`;
+    p += `- Apple combines title + subtitle + keyword field = 160 indexable chars. A word only needs to appear ONCE across all three fields.\n`;
+    p += `- ZERO word overlap between title and subtitle — repeating a word across fields wastes budget with zero additional ranking benefit\n`;
+    p += `- ZERO repeated words within a single title (each word must be a unique ranking term)\n`;
+    p += `- Front-load keywords in the first 15 characters of the TITLE (highest weight + most visible in search results)\n`;
+    p += `- Format options: "Brand – Keyword" or "Keyword – Brand" (if brand isn't well-known)\n`;
+    p += `- Write for humans first, SEO second — both fields must read naturally\n`;
+    p += `- No superlatives (#1, best, top) — Apple rejects these\n`;
+    p += `- Don't repeat the category name (already indexed for free)\n`;
+    p += `- Use every available character in both fields\n\n`;
 
-  p += `Return JSON:\n{\n`;
-  p += `  "currentAnalysis": "Detailed analysis — what's good, what's missing, character efficiency, keyword coverage vs competitors",\n`;
-  p += `  "variants": [\n`;
-  for (let i = 1; i <= 8; i++) {
-    p += `    {\n`;
-    p += `      "title": "Title variant ${i} — MUST BE ≤30 CHARS, count carefully before writing",\n`;
-    p += `      "charCount": 0,\n`;
-    p += `      "strategy": "keyword-first | brand-first | hybrid",\n`;
-    p += `      "reasoning": "Why this variant improves on the current title"\n`;
-    p += `    }${i < 8 ? "," : ""}\n`;
+    p += `Return JSON:\n{\n`;
+    p += `  "currentAnalysis": "Detailed analysis of the CURRENT title+subtitle pair — what's good, what's missing, keyword coverage, overlap issues, character efficiency",\n`;
+    p += `  "pairedSets": [\n`;
+    for (let i = 1; i <= 5; i++) {
+      p += `    {\n`;
+      p += `      "title": "Title variant ${i} (≤30 chars, NO repeated words within it)",\n`;
+      p += `      "titleCharCount": 0,\n`;
+      p += `      "subtitle": "Matching subtitle for title ${i} (≤30 chars, ZERO word overlap with its title)",\n`;
+      p += `      "subtitleCharCount": 0,\n`;
+      p += `      "keywordsCovered": ["list", "every", "unique", "keyword", "across", "BOTH", "fields"],\n`;
+      p += `      "strategy": "keyword-first | brand-first | hybrid",\n`;
+      p += `      "reasoning": "Why this PAIR maximizes the 60-char keyword budget — which high-volume terms go in title vs subtitle and why"\n`;
+      p += `    }${i < 5 ? "," : ""}\n`;
+    }
+    p += `  ],\n`;
+    p += `  "keywordCoverage": [\n`;
+    p += `    { "keyword": "target keyword", "presentIn": ["pair 1 title", "pair 3 subtitle"], "searchVolume": "high | medium | low" }\n`;
+    p += `  ],\n`;
+    p += `  "recommendation": "Which pair is the top recommendation and why — how many unique ranking terms does it cover across title+subtitle?"\n`;
+    p += `}\n\n`;
+    p += `CRITICAL RULES:\n`;
+    p += `1. "titleCharCount" and "subtitleCharCount" must be ACTUAL character counts, NOT 30\n`;
+    p += `2. EVERY title AND subtitle MUST be ≤30 characters — count BEFORE writing each one\n`;
+    p += `3. ZERO repeated words within a single title — each word must be unique\n`;
+    p += `4. ZERO word overlap between a title and its paired subtitle — check BEFORE writing\n`;
+    p += `5. Maximize unique keyword count per pair — if a pair covers 8 unique terms, that's better than one covering 5`;
+  } else {
+    p += `## TITLE OPTIMIZATION RULES\n`;
+    p += `- Most heavily weighted metadata field on Google Play\n`;
+    p += `- NEVER repeat the same word within a title (wastes chars, zero additional ranking)\n`;
+    p += `- Front-load keywords in the first 15 characters (highest algorithmic weight + most visible in search results)\n`;
+    p += `- Format options: "Brand – Keyword" or "Keyword – Brand" (if brand isn't well-known)\n`;
+    p += `- Write for humans first, SEO second — must read naturally\n`;
+    p += `- No superlatives (#1, best, top) — stores reject these\n`;
+    p += `- Use every available character — unused chars = wasted ranking potential\n`;
+    p += `- Google indexes the title + short description + full description — the title should target the highest-value keywords\n\n`;
+
+    p += `Return JSON:\n{\n`;
+    p += `  "currentAnalysis": "Detailed analysis — what's good, what's missing, character efficiency, keyword coverage vs competitors",\n`;
+    p += `  "variants": [\n`;
+    for (let i = 1; i <= 8; i++) {
+      p += `    {\n`;
+      p += `      "title": "Title variant ${i} — ≤30 CHARS, NO repeated words within it",\n`;
+      p += `      "charCount": 0,\n`;
+      p += `      "strategy": "keyword-first | brand-first | hybrid",\n`;
+      p += `      "reasoning": "Why this variant improves on the current title"\n`;
+      p += `    }${i < 8 ? "," : ""}\n`;
+    }
+    p += `  ],\n`;
+    p += `  "keywordCoverage": [\n`;
+    p += `    { "keyword": "target keyword", "presentIn": ["variant 1", "variant 3"], "searchVolume": "high | medium | low" }\n`;
+    p += `  ],\n`;
+    p += `  "recommendation": "Which variant is the top recommendation and why"\n`;
+    p += `}\n\n`;
+    p += `CRITICAL RULES:\n`;
+    p += `1. "charCount" must be the ACTUAL character count you computed, NOT 30\n`;
+    p += `2. EVERY title variant MUST be ≤30 characters — count BEFORE writing each one\n`;
+    p += `3. NEVER repeat the same word within a single title suggestion\n`;
+    p += `4. If a title exceeds 30 chars, it is INVALID and will be rejected by the store`;
   }
-  p += `  ],\n`;
-  p += `  "keywordCoverage": [\n`;
-  p += `    { "keyword": "target keyword", "presentIn": ["variant 1", "variant 3"], "searchVolume": "high | medium | low" }\n`;
-  p += `  ],\n`;
-  p += `  "recommendation": "Which variant is the top recommendation and why"\n`;
-  p += `}\n\n`;
-  p += `CRITICAL RULES:\n`;
-  p += `1. "charCount" must be the ACTUAL character count you computed, NOT 30\n`;
-  p += `2. EVERY title variant MUST be ≤30 characters — count BEFORE writing each one\n`;
-  p += `3. If a title exceeds 30 chars, it is INVALID and will be rejected by the store`;
   return p;
 }
 

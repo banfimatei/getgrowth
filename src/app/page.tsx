@@ -231,11 +231,27 @@ function formatDescriptionDeepDive(ai: any, platform: string): DeepDiveEnhanceme
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function formatTitleDeepDive(ai: any): DeepDiveEnhancement {
-  let b = "**AI Title Analysis** (deep-dive):\n\n";
+  const hasPairedSets = ai.pairedSets?.length > 0;
+
+  let b = hasPairedSets
+    ? "**AI Title + Subtitle Analysis** (deep-dive, paired strategy):\n\n"
+    : "**AI Title Analysis** (deep-dive):\n\n";
 
   if (ai.currentAnalysis) b += `${ai.currentAnalysis}\n\n`;
 
-  if (ai.variants?.length) {
+  if (hasPairedSets) {
+    b += `**Paired Title + Subtitle Sets** (designed as coordinated keyword strategies):\n\n`;
+    for (let i = 0; i < ai.pairedSets.length; i++) {
+      const pair = ai.pairedSets[i];
+      b += `  **Set ${i + 1}** (${pair.strategy || "hybrid"}):\n`;
+      b += `    Title: "${pair.title}" (${pair.titleCharCount || pair.title?.length || "?"}ch)\n`;
+      b += `    Subtitle: "${pair.subtitle}" (${pair.subtitleCharCount || pair.subtitle?.length || "?"}ch)\n`;
+      if (pair.keywordsCovered?.length) {
+        b += `    Keywords covered: ${pair.keywordsCovered.join(", ")} (${pair.keywordsCovered.length} unique terms)\n`;
+      }
+      b += `    ${pair.reasoning}\n\n`;
+    }
+  } else if (ai.variants?.length) {
     b += `**Title Variants:**\n`;
     for (const v of ai.variants) {
       b += `  \u2022 "${v.title}" (${v.charCount}ch) \u2014 ${v.strategy}: ${v.reasoning}\n`;
@@ -244,7 +260,7 @@ function formatTitleDeepDive(ai: any): DeepDiveEnhancement {
   }
 
   if (ai.keywordCoverage?.length) {
-    b += `**Keyword coverage across variants:**\n`;
+    b += `**Keyword coverage across ${hasPairedSets ? "paired sets" : "variants"}:**\n`;
     for (const k of ai.keywordCoverage) {
       b += `  \u2022 "${k.keyword}" (${k.searchVolume}) \u2014 in: ${k.presentIn?.join(", ") || "none"}\n`;
     }
@@ -254,17 +270,32 @@ function formatTitleDeepDive(ai: any): DeepDiveEnhancement {
   if (ai.recommendation) b += `**Recommendation:** ${ai.recommendation}\n`;
 
   const copyOptions: string[] = [];
-  if (ai.variants?.length) {
+  if (hasPairedSets) {
+    for (const pair of ai.pairedSets) {
+      if (pair.title && pair.subtitle) {
+        copyOptions.push(`Title: "${pair.title}" + Subtitle: "${pair.subtitle}"`);
+      }
+    }
+  } else if (ai.variants?.length) {
     for (const v of ai.variants) {
       if (v.title) copyOptions.push(v.title);
     }
   }
 
-  const deliverables = [
-    "Choose preferred title variant",
-    "Update in store listing and submit for review",
-    "Monitor keyword rankings for 2 weeks after change",
-  ];
+  const deliverables = hasPairedSets
+    ? [
+        "Choose a paired title + subtitle set (or adapt)",
+        "Verify zero word overlap between chosen title and subtitle",
+        "Update both in App Store Connect \u203A App Information",
+        "Update keyword field to complement (remove words now covered by title/subtitle)",
+        "A/B test with Apple PPO for 7+ days",
+        "Monitor keyword rankings for 2 weeks after change",
+      ]
+    : [
+        "Choose preferred title variant",
+        "Update in store listing and submit for review",
+        "Monitor keyword rankings for 2 weeks after change",
+      ];
 
   return { brief: b, copyOptions: copyOptions.length > 0 ? copyOptions : undefined, deliverables };
 }

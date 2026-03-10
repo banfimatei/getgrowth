@@ -259,10 +259,17 @@ function resolveAiPriority(
 function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AIAnalysis | null): ActionItem[] {
   const cat = cats.find(c => c.id === "title");
   if (!cat) return [];
+  const titleMax = 30;
+
+  // ── iOS with AI paired sets → generate a combined Title + Subtitle item ──
+  if (data.platform === "ios" && ai?.titleSubtitlePairs && ai.titleSubtitlePairs.pairs.length > 0) {
+    return iosTitleSubtitleBrief(data, p, cats, ai);
+  }
+
+  // ── Android, or iOS without paired sets → title-only item ──
   const lengthR = cat.results.find(r => r.ruleId === "title-length");
   const kwR = cat.results.find(r => r.ruleId === "title-keywords");
   const frontR = cat.results.find(r => r.ruleId === "title-frontload");
-  const titleMax = 30;
   const remaining = titleMax - data.title.length;
   const needsKw = kwR && kwR.score < 60;
   const needsLen = lengthR && lengthR.score < 90 && remaining > 3;
@@ -297,8 +304,6 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
     for (const issue of ai!.title.issues) b += `  \u2022 ${issue}\n`;
     b += `\n${ai!.title.reasoning}\n\n`;
   }
-  // When AI has analyzed the title, extract keyword targets from its suggestions instead of
-  // using the noisy deterministic extractKeywords output (which can surface junk like "itunes").
   const aiDerivedKeywords = hasAiTitle
     ? [...new Set(
         ai!.title.suggestions
@@ -314,10 +319,8 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
   const kwLabel = hasAiTitle ? "Target keywords (from AI-suggested titles)" : "Missing high-value keywords";
   b += `**${kwLabel}:** ${aiDerivedKeywords.map(w => '"' + w + '"').join(", ")}\n\n`;
 
-  // Per ASO skill: "Front-load keywords in title (first 15 chars most important)"
-  // Per ASO skill: "Write for humans first, SEO second"
   if (needsKw) {
-    b += `Your title is brand-heavy with limited keyword coverage. Users searching for "${aiDerivedKeywords[0] || data.category.toLowerCase()}" won't find your app unless those terms appear in the title or subtitle.\n\n`;
+    b += `Your title is brand-heavy with limited keyword coverage. Users searching for "${aiDerivedKeywords[0] || data.category.toLowerCase()}" won't find your app unless those terms appear in the title.\n\n`;
     b += `**Title format options** (per ASO best practice: "Brand \u2013 Keyword Phrase"):\n`;
     b += `  \u2022 "Brand \u2013 Keyword Phrase" \u2014 safe, clear separation\n`;
     b += `  \u2022 "Keyword Phrase \u2013 Brand" \u2014 if brand isn't a household name, this front-loads search terms\n`;
@@ -335,7 +338,7 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
   b += `  \u2022 Front-load keywords in first 15 chars (most weight, always visible in search)\n`;
   b += `  \u2022 Write for humans first, SEO second \u2014 it must read naturally\n`;
   b += `  \u2022 No superlatives ("#1", "best", "top") \u2014 stores reject these\n`;
-  b += `  \u2022 ${data.platform === "ios" ? "Apple combines title + subtitle + keyword field \u2014 don't duplicate across them" : "Google extracts keywords from title + description \u2014 title keywords carry the most weight"}`;
+  b += `  \u2022 Google extracts keywords from title + description \u2014 title keywords carry the most weight`;
 
   const titleScore = cat.score;
   const titleScoreFallback: ActionItem["priority"] = titleScore < 65 ? "high" : "medium";
@@ -361,11 +364,11 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
     copyOptions: validOpts.length > 0 ? validOpts : undefined,
     deliverables: [
       `Draft 2-3 title variants (${titleMax} chars max each)`,
-      `Update in ${data.platform === "ios" ? "App Store Connect" : "Google Play Console"}`,
-      data.platform === "ios" ? "Requires app update submission \u2014 coordinate with next release" : "Takes effect immediately",
-      "A/B test for 7+ days before committing (Apple PPO or Google Play Experiments)",
+      `Update in Google Play Console`,
+      "Takes effect immediately",
+      "A/B test for 7+ days before committing (Google Play Experiments)",
     ],
-    impact: "Title is the single most weighted metadata field for search ranking on both stores",
+    impact: "Title is the single most weighted metadata field for search ranking",
     scoreBoost: titleScoreBoost,
     aiStatus: hasAiTitle ? "reviewed" : "available",
     deepDiveSection: "title",
@@ -373,12 +376,116 @@ function titleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AI
 }
 
 // ---------------------------------------------------------------------------
-// SUBTITLE BRIEF (iOS)
+// iOS TITLE + SUBTITLE COMBINED BRIEF (paired keyword strategy)
+// Sources: ASO skill §2 metadata, book Ch.2
+// Apple combines title + subtitle + keyword field = 160 indexable chars.
+// These must be optimized as a unit, not independently.
+// ---------------------------------------------------------------------------
+
+function iosTitleSubtitleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai: AIAnalysis): ActionItem[] {
+  const titleMax = 30;
+  const titleCat = cats.find(c => c.id === "title");
+  const subtitleCat = cats.find(c => c.id === "subtitle");
+  const titleScore = titleCat?.score ?? 0;
+  const subtitleScore = subtitleCat?.score ?? 0;
+  const empty = !data.subtitle || data.subtitle.length === 0;
+  const pairs = ai.titleSubtitlePairs!.pairs;
+
+  let b = "";
+
+  // AI analysis for both fields
+  if (ai.title?.issues?.length) {
+    b += `**AI Title Analysis:**\n`;
+    for (const issue of ai.title.issues) b += `  \u2022 ${issue}\n`;
+    if (ai.title.reasoning) b += `\n${ai.title.reasoning}\n\n`;
+  }
+  if (ai.subtitle?.issues?.length) {
+    b += `**AI Subtitle Analysis:**\n`;
+    for (const issue of ai.subtitle.issues) b += `  \u2022 ${issue}\n`;
+    if (ai.subtitle.reasoning) b += `\n${ai.subtitle.reasoning}\n\n`;
+  }
+
+  b += `**Current title:** "${data.title}" (${data.title.length}/${titleMax} chars)\n`;
+  b += `**Current subtitle:** ${data.subtitle ? `"${data.subtitle}" (${data.subtitle.length}/${titleMax} chars)` : "(empty \u2014 not set)"}\n`;
+  const usedChars = data.title.length + (data.subtitle?.length || 0);
+  b += `**Combined usage:** ${usedChars}/60 chars (${Math.round((usedChars / 60) * 100)}% of your visible keyword budget)\n\n`;
+
+  // Keyword strategy
+  if (ai.titleSubtitlePairs!.keywordStrategy) {
+    b += `**Keyword distribution strategy:**\n${ai.titleSubtitlePairs!.keywordStrategy}\n\n`;
+  }
+
+  b += `**Key principle:** On iOS, title (30ch) + subtitle (30ch) + keyword field (100ch) = 160 indexable characters. Apple combines all three automatically \u2014 every word only needs to appear ONCE across the three fields. Repeating a word in two fields wastes budget with zero additional ranking benefit.\n\n`;
+
+  b += `**Rules:**\n`;
+  b += `  \u2022 Title: 30 chars max \u2014 front-load highest-volume keywords in first 15 chars\n`;
+  b += `  \u2022 Subtitle: 30 chars max \u2014 zero word overlap with title\n`;
+  b += `  \u2022 No word should appear in both fields \u2014 Apple indexes it once regardless\n`;
+  b += `  \u2022 No superlatives ("#1", "best", "top") \u2014 Apple rejects these\n`;
+  b += `  \u2022 Don't repeat the category name (already indexed for free)\n`;
+  b += `  \u2022 Write for humans first, SEO second \u2014 both fields must read naturally\n`;
+  b += `  \u2022 Use every available character in both fields`;
+
+  // Combined priority from AI or score-based fallback
+  const combinedScore = Math.round((titleScore + subtitleScore) / 2);
+  const fallback: ActionItem["priority"] = empty ? "critical" : combinedScore < 65 ? "high" : "medium";
+  const priority = resolveAiPriority(ai.titleSubtitlePairs!.priority, fallback);
+
+  const scoreBoost = empty
+    ? "+40-70 on Title + Subtitle scores"
+    : combinedScore < 65
+      ? "+20-35 on Title + Subtitle scores"
+      : combinedScore < 80
+        ? "+10-20 on Title + Subtitle scores"
+        : `+5-${Math.max(10, 100 - combinedScore)} on Title + Subtitle scores`;
+
+  // Copy options: formatted as paired sets
+  const copyOptions: string[] = [];
+  for (let i = 0; i < pairs.length; i++) {
+    const pair = pairs[i];
+    if (pair.title.length <= 30 && pair.subtitle.length <= 30) {
+      copyOptions.push(`Title: "${pair.title}" (${pair.title.length}ch) + Subtitle: "${pair.subtitle}" (${pair.subtitle.length}ch) \u2014 Keywords: ${pair.keywordsCovered.join(", ")}`);
+    }
+  }
+
+  const actionTitle = empty
+    ? "Set up title + subtitle as a coordinated keyword pair"
+    : "Optimize title + subtitle keyword distribution";
+
+  return [{
+    id: "title-subtitle-optimize",
+    priority,
+    effort: "quick",
+    category: "Title + Subtitle",
+    title: actionTitle,
+    currentState: `Title: "${data.title}" (${data.title.length}/30) | Subtitle: ${data.subtitle ? `"${data.subtitle}" (${data.subtitle.length}/30)` : "(empty)"}`,
+    action: b, brief: b,
+    copyOptions: copyOptions.length > 0 ? copyOptions : undefined,
+    deliverables: [
+      "Choose one of the paired title + subtitle sets above (or adapt them)",
+      "Verify zero word overlap between title and subtitle",
+      "Update both in App Store Connect \u203A App Information",
+      "Requires app update submission \u2014 coordinate with next release",
+      "Update keyword field to complement (remove words now covered by title/subtitle)",
+      "A/B test with Apple PPO for 7+ days before committing",
+    ],
+    impact: "Title + subtitle together control 60 of your 160 indexable characters and are the two most heavily weighted fields for iOS search ranking",
+    scoreBoost,
+    aiStatus: "reviewed",
+    deepDiveSection: "title",
+  }];
+}
+
+// ---------------------------------------------------------------------------
+// SUBTITLE BRIEF (iOS) — standalone fallback when AI paired sets aren't available
 // Sources: ASO skill §2 metadata, book Ch.2
 // ---------------------------------------------------------------------------
 
 function subtitleBrief(data: AppData, p: AppProfile, cats: AuditCategory[], ai?: AIAnalysis | null): ActionItem[] {
   if (data.platform !== "ios") return [];
+  // Skip if we already generated the combined title+subtitle item
+  if (ai?.titleSubtitlePairs && ai.titleSubtitlePairs.pairs.length > 0) return [];
+
   const cat = cats.find(c => c.id === "subtitle");
   if (!cat) return [];
   const lengthR = cat.results.find(r => r.ruleId === "subtitle-length");
