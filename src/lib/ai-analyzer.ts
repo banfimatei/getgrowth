@@ -1275,7 +1275,7 @@ function buildTitleDeepDivePrompt(data: AppData): string {
     }
     p += `  ],\n`;
     p += `  "keywordCoverage": [\n`;
-    p += `    { "keyword": "target keyword", "presentIn": ["pair 1 title", "pair 3 subtitle"], "searchVolume": "high | medium | low" }\n`;
+    p += `    { "keyword": "target keyword", "presentIn": ["pair 1 title", "pair 3 subtitle"], "estimatedVolume": "est. high | est. medium | est. low (AI-estimated from category knowledge — not live search data)" }\n`;
     p += `  ],\n`;
     p += `  "recommendation": "Which pair is the top recommendation and why — how many unique ranking terms does it cover across title+subtitle? Does both fields hit the 28-30ch target?"\n`;
     p += `}\n\n`;
@@ -1318,7 +1318,7 @@ function buildTitleDeepDivePrompt(data: AppData): string {
     }
     p += `  ],\n`;
     p += `  "keywordCoverage": [\n`;
-    p += `    { "keyword": "target keyword", "presentIn": ["pair 1 title", "pair 3 shortDescription"], "searchVolume": "high | medium | low" }\n`;
+    p += `    { "keyword": "target keyword", "presentIn": ["pair 1 title", "pair 3 shortDescription"], "estimatedVolume": "est. high | est. medium | est. low (AI-estimated from category knowledge — not live search data)" }\n`;
     p += `  ],\n`;
     p += `  "recommendation": "Which pair is the top recommendation and why — how many unique ranking terms does it cover, do both fields hit their char targets (title ≥28ch, short desc ≥78ch), and why does the short description work as a conversion pitch?"\n`;
     p += `}\n\n`;
@@ -1752,7 +1752,7 @@ function buildCppDeepDivePrompt(data: AppData): string {
     p += `- Each CPP has its own URL and can have unique: screenshots, app preview video, and promotional text\n`;
     p += `- CPPs do NOT support custom titles, subtitles, or icons — only visual assets and promo text\n`;
     p += `- CPPs can be linked to Apple Search Ads campaigns for keyword-specific landing pages\n`;
-    p += `- Average result: 8.6% conversion lift, up to 60% CPA reduction, 2.5pp average conversion increase vs default page\n`;
+    p += `- Industry benchmarks (published averages, not guaranteed): ~8.6% avg conversion lift, up to 60% CPA reduction vs generic pages\n`;
     p += `- Apple OCR indexes screenshot captions — align CPP captions with the target keyword cluster\n`;
     p += `- Each CPP should target a distinct user intent or keyword cluster (not just cosmetic variations)\n`;
     p += `- Seasonal CPPs (holiday, back-to-school, new year) can be scheduled and rotated\n`;
