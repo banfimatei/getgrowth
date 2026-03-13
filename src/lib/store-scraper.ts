@@ -44,7 +44,12 @@ export async function fetchAppStoreData(appId: string, country = "us"): Promise<
 
   let subtitle = "";
   let promotionalText = "";
-  let screenshotUrls: string[] = app.screenshotUrls || [];
+  // iTunes API splits screenshots by device: screenshotUrls (iPhone) and ipadScreenshotUrls (iPad).
+  // Some apps — including universal/iPad-first apps — only populate ipadScreenshotUrls,
+  // which causes screenshotCount to be 0 even when screenshots exist. Combine both.
+  const iphoneScreenshots: string[] = app.screenshotUrls || [];
+  const ipadScreenshots: string[] = app.ipadScreenshotUrls || [];
+  let screenshotUrls: string[] = iphoneScreenshots.length > 0 ? iphoneScreenshots : ipadScreenshots;
   try {
     const storeUrl = app.trackViewUrl || `https://apps.apple.com/${country}/app/id${appId}`;
     const pageResp = await fetch(storeUrl, {
