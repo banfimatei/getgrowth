@@ -182,7 +182,7 @@ export default function LandingPage() {
       <section
         className="relative grain-bg"
         style={{
-          background: "linear-gradient(180deg, var(--bg-page) 0%, #f5f0e8 50%, var(--bg-page) 100%)",
+          background: "linear-gradient(180deg, var(--bg-page) 0%, #EEF2FF 50%, var(--bg-page) 100%)",
           paddingTop: "clamp(48px, 8vh, 80px)",
           paddingBottom: "clamp(48px, 8vh, 80px)",
         }}
@@ -250,7 +250,7 @@ export default function LandingPage() {
               <div
                 className="p-2 rounded-2xl"
                 style={{
-                  background: "linear-gradient(135deg, rgba(180,83,9,0.04), rgba(22,163,74,0.03))",
+                  background: "linear-gradient(135deg, rgba(30,27,75,0.04), rgba(16,185,129,0.03))",
                   border: "1px solid var(--border)",
                 }}
               >
@@ -265,7 +265,7 @@ export default function LandingPage() {
               <div
                 className="p-2 rounded-2xl"
                 style={{
-                  background: "linear-gradient(135deg, rgba(180,83,9,0.04), rgba(22,163,74,0.03))",
+                  background: "linear-gradient(135deg, rgba(30,27,75,0.04), rgba(16,185,129,0.03))",
                   border: "1px solid var(--border)",
                 }}
               >
@@ -496,7 +496,7 @@ export default function LandingPage() {
                 style={{
                   backgroundColor: "var(--bg-card)",
                   border: p.highlight ? "2px solid var(--accent)" : "1px solid var(--border)",
-                  boxShadow: p.highlight ? "0 0 0 3px rgba(180,83,9,0.1)" : undefined,
+                  boxShadow: p.highlight ? "0 0 0 3px rgba(30,27,75,0.1)" : undefined,
                 }}
               >
                 {p.highlight && (

@@ -188,7 +188,7 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled }: {
               {aiBadge === "enhanced" && (
                 <span
                   className="inline-block ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none align-middle"
-                  style={{ background: "linear-gradient(135deg, #b45309, #d97706)", color: "#fff" }}
+                  style={{ background: "linear-gradient(135deg, #1E1B4B, #F59E0B)", color: "#fff" }}
                   title="Enhanced by deep AI analysis"
                 >
                   AI+
@@ -197,7 +197,7 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled }: {
               {aiBadge === "reviewed" && (
                 <span
                   className="inline-block ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none align-middle"
-                  style={{ background: "linear-gradient(135deg, #b45309, #d97706)", color: "#fff" }}
+                  style={{ background: "linear-gradient(135deg, #1E1B4B, #F59E0B)", color: "#fff" }}
                   title="Analyzed by AI"
                 >
                   AI
@@ -292,9 +292,9 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled }: {
                   onClick={(e) => { e.stopPropagation(); router.push("/pricing"); }}
                   className="flex items-center gap-1.5 text-xs font-medium py-1.5 px-3 rounded cursor-pointer transition-opacity hover:opacity-80"
                   style={{
-                    backgroundColor: "rgba(180,83,9,0.07)",
+                    backgroundColor: "rgba(30,27,75,0.07)",
                     color: "var(--accent)",
-                    border: "1px dashed rgba(180,83,9,0.35)",
+                    border: "1px dashed rgba(30,27,75,0.35)",
                   }}
                 >
                   🔒 Get full AI audit — €29 one-time
@@ -336,7 +336,7 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled }: {
                   }}
                   className="flex items-center gap-1.5 text-xs font-medium py-1.5 px-3 rounded cursor-pointer transition-colors"
                   style={{
-                    background: "linear-gradient(135deg, rgba(124,58,237,0.1), rgba(180,83,9,0.1))",
+                    background: "linear-gradient(135deg, rgba(30,27,75,0.1), rgba(16,185,129,0.03))",
                     color: "var(--info-text)",
                     border: "1px solid var(--info-border)",
                   }}

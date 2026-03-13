@@ -1,15 +1,8 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
-import { Instrument_Serif, Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import NavBar from "@/components/NavBar";
 import "./globals.css";
-
-const displayFont = Instrument_Serif({
-  weight: "400",
-  subsets: ["latin"],
-  variable: "--font-display",
-  display: "swap",
-});
 
 const bodyFont = Plus_Jakarta_Sans({
   weight: ["400", "500", "600", "700"],
@@ -19,7 +12,7 @@ const bodyFont = Plus_Jakarta_Sans({
 });
 
 const monoFont = JetBrains_Mono({
-  weight: ["400", "500"],
+  weight: ["400", "500", "600"],
   subsets: ["latin"],
   variable: "--font-mono",
   display: "swap",
@@ -39,10 +32,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider>
-      <html lang="en" className={`${displayFont.variable} ${bodyFont.variable} ${monoFont.variable}`}>
+      <html lang="en" className={`${bodyFont.variable} ${monoFont.variable}`}>
         <head>
           <meta name="color-scheme" content="light" />
-          <meta name="theme-color" content="#faf9f7" />
+          <meta name="theme-color" content="#F8FAFC" />
           <link
             rel="icon"
             href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1F4C8;</text></svg>"

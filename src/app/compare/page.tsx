@@ -32,7 +32,7 @@ interface AuditResult {
 type CompareState = "idle" | "loading" | "done" | "error";
 
 const CATEGORY_COLORS: Record<string, string> = {
-  metadata: "#b45309",
+  metadata: "#1E1B4B",
   visuals:  "#8b5cf6",
   ratings:  "#f59e0b",
   conversion: "#10b981",
@@ -122,7 +122,7 @@ function CompareContent() {
       {!isSignedIn && (
         <div
           className="rounded-2xl border p-6 mb-8 flex items-center justify-between flex-wrap gap-4"
-          style={{ borderColor: "var(--accent)", backgroundColor: "rgba(180,83,9,0.04)" }}
+          style={{ borderColor: "var(--accent)", backgroundColor: "rgba(30,27,75,0.04)" }}
         >
           <div>
             <p className="text-sm font-semibold mb-1" style={{ color: "var(--text-primary)" }}>
@@ -172,7 +172,7 @@ function CompareContent() {
                   className="flex-1 py-1.5 text-xs rounded-lg border transition-colors"
                   style={{
                     borderColor: col.platform === p ? "var(--accent)" : "var(--border)",
-                    backgroundColor: col.platform === p ? "rgba(180,83,9,0.08)" : "transparent",
+                    backgroundColor: col.platform === p ? "rgba(30,27,75,0.08)" : "transparent",
                     color: col.platform === p ? "var(--accent)" : "var(--text-secondary)",
                   }}
                 >
@@ -282,7 +282,7 @@ function CompareContent() {
             return (
               <div
                 className="rounded-2xl p-5 text-sm"
-                style={{ backgroundColor: "rgba(180,83,9,0.06)", border: "1px solid rgba(180,83,9,0.2)" }}
+                style={{ backgroundColor: "rgba(30,27,75,0.06)", border: "1px solid rgba(30,27,75,0.2)" }}
               >
                 <p style={{ color: "var(--text-primary)" }}>
                   <strong>{winner.app.title}</strong> leads by <strong style={{ color: getColor(winner.overallScore) }}>{gap} points</strong>.{" "}

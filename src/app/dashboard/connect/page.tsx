@@ -200,7 +200,7 @@ export default function ConnectPage() {
                 className="p-5 rounded-2xl border-2 transition-all text-left"
                 style={{
                   borderColor: platform === p ? "var(--accent)" : "var(--border)",
-                  backgroundColor: platform === p ? "rgba(180,83,9,0.04)" : "var(--bg-card)",
+                  backgroundColor: platform === p ? "rgba(30,27,75,0.04)" : "var(--bg-card)",
                 }}
               >
                 <div className="text-2xl mb-2">{p === "ios" ? "🍎" : "🤖"}</div>
@@ -375,7 +375,7 @@ export default function ConnectPage() {
                         className="w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all"
                         style={{
                           borderColor: selected ? "var(--accent)" : "var(--border)",
-                          backgroundColor: selected ? "rgba(180,83,9,0.04)" : "var(--bg-card)",
+                          backgroundColor: selected ? "rgba(30,27,75,0.04)" : "var(--bg-card)",
                         }}
                       >
                         <div

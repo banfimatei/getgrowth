@@ -1,50 +1,57 @@
 @import "tailwindcss";
 
 :root {
-  --font-display: 'Instrument Serif', Georgia, serif;
+  /* Typography — JetBrains Mono for headings, Plus Jakarta Sans for body */
+  --font-display: var(--font-mono);   /* JetBrains Mono — digital-native headings */
   --font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  /* Brand palette — warm, distinctive, not generic SaaS blue */
-  --accent: #b45309;
-  --accent-hover: #92400e;
-  --accent-muted: #d97706;
-  --accent-bg: #fffbeb;
+  /* Brand palette — deep indigo primary, amber accent */
+  --accent: #1E1B4B;           /* Deep indigo — primary CTAs, links, active states */
+  --accent-hover: #2D2A6B;     /* Lighter indigo on hover */
+  --accent-muted: #4338CA;     /* Mid indigo for secondary UI */
+  --accent-bg: #EEF2FF;        /* Indigo tint background */
 
-  --success: #16a34a;
-  --success-bg: #f0fdf4;
-  --success-border: #bbf7d0;
+  --amber: #F59E0B;            /* Amber — highlights, badges, the [^] caret */
+  --amber-hover: #D97706;
+  --amber-bg: #FEF3C7;
+  --amber-text: #92400E;
+
+  --success: #10B981;
+  --success-bg: #F0FDF4;
+  --success-border: #BBF7D0;
   --success-text: #166534;
 
-  --warning: #ea580c;
-  --warning-bg: #fff7ed;
-  --warning-border: #fed7aa;
-  --warning-text: #9a3412;
+  --warning: #F59E0B;
+  --warning-bg: #FFFBEB;
+  --warning-border: #FDE68A;
+  --warning-text: #92400E;
 
-  --error: #dc2626;
-  --error-bg: #fef2f2;
-  --error-border: #fecaca;
-  --error-text: #991b1b;
+  --error: #EF4444;
+  --error-bg: #FEF2F2;
+  --error-border: #FECACA;
+  --error-text: #991B1B;
 
-  /* Surfaces — warm neutrals, not cool slates */
-  --bg-page: #faf9f7;
-  --bg-card: #ffffff;
-  --bg-card-hover: #fefdfb;
-  --bg-inset: #f3f1ed;
-  --bg-section: #f5f3ef;
-  --border: #e5e0d8;
-  --border-focus: #b45309;
+  /* Surfaces — cool off-white matching logo background */
+  --bg-page: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --bg-card-hover: #F8FAFC;
+  --bg-inset: #F1F5F9;
+  --bg-section: #EEF2FF;       /* Indigo-tinted section backgrounds */
+  --bg-dark: #111827;          /* Charcoal — code blocks, dark cards */
+  --border: #E2E8F0;
+  --border-focus: #1E1B4B;
 
-  --text-primary: #1c1917;
-  --text-secondary: #78716c;
-  --text-tertiary: #a8a29e;
-  --text-muted: #a8a29e;
+  --text-primary: #0F172A;     /* Near-black with indigo tint */
+  --text-secondary: #475569;
+  --text-tertiary: #94A3B8;
+  --text-muted: #94A3B8;
 
   /* Scoring (audit-specific) */
-  --score-excellent: #16a34a;
-  --score-good: #ca8a04;
-  --score-warning: #ea580c;
-  --score-fail: #dc2626;
+  --score-excellent: #10B981;
+  --score-good: #F59E0B;
+  --score-warning: #F97316;
+  --score-fail: #EF4444;
 
   --pass-bg: var(--success-bg);
   --pass-border: var(--success-border);
@@ -58,12 +65,12 @@
   --fail-border: var(--error-border);
   --fail-text: var(--error-text);
 
-  --info-bg: #eff6ff;
-  --info-border: #bfdbfe;
-  --info-text: #1e40af;
+  --info-bg: #EEF2FF;
+  --info-border: #C7D2FE;
+  --info-text: #3730A3;
 
-  --emerald: #16a34a;
-  --emerald-bg: rgba(22, 163, 74, 0.06);
+  --emerald: #10B981;
+  --emerald-bg: rgba(16, 185, 129, 0.06);
 
   /* Spacing tokens */
   --space-xs: 4px;
@@ -98,21 +105,23 @@ h1, h2, h3 {
   color: var(--text-primary);
 }
 
-/* Display serif only for h1 — big marketing/page titles */
+/* JetBrains Mono for h1 — signals product-led, digital-native */
 h1 {
   font-family: var(--font-display);
-  font-weight: 400;
-  font-size: clamp(28px, 4vw, 40px);
-  line-height: 1.15;
+  font-weight: 500;
+  font-size: clamp(26px, 3.8vw, 42px);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
 }
 
-h2 { font-size: clamp(22px, 3vw, 30px); line-height: 1.2; }
-h3 { font-size: 18px; line-height: 1.35; }
+h2 { font-size: clamp(20px, 2.8vw, 28px); line-height: 1.2; }
+h3 { font-size: 17px; line-height: 1.35; }
 
-/* Utility class: apply display font to any element (e.g. landing page section h2s) */
+/* Utility class: apply display (mono) font explicitly */
 .font-display {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 500;
+  letter-spacing: -0.02em;
 }
 
 .font-mono { font-family: var(--font-mono); }
@@ -157,8 +166,8 @@ h3 { font-size: 18px; line-height: 1.35; }
 }
 
 @keyframes pulseGlow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(180, 83, 9, 0.18); }
-  50% { box-shadow: 0 0 0 8px rgba(180, 83, 9, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(30, 27, 75, 0.2); }
+  50% { box-shadow: 0 0 0 8px rgba(30, 27, 75, 0); }
 }
 
 .hero-animate {
@@ -241,17 +250,6 @@ h3 { font-size: 18px; line-height: 1.35; }
   font-variant-numeric: tabular-nums;
 }
 
-/* Grain texture overlay for alternating sections */
-.grain-bg::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.02'/%3E%3C/svg%3E");
-  background-repeat: repeat;
-  pointer-events: none;
-  z-index: 0;
-}
-
 /* Product mock card styles */
 .mock-card {
   background: #fff;
@@ -268,5 +266,5 @@ h3 { font-size: 18px; line-height: 1.35; }
   border-radius: var(--radius-lg);
   box-shadow:
     0 2px 8px rgba(0,0,0,0.04),
-    0 8px 32px rgba(0,0,0,0.06);
+    0 8px 32px rgba(0,0,0,0.08);
 }

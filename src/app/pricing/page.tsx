@@ -127,8 +127,8 @@ export default function PricingPage() {
             className="rounded-2xl border p-6 flex flex-col"
             style={{
               borderColor: pack.highlight ? "var(--accent)" : "var(--border)",
-              backgroundColor: pack.highlight ? "rgba(180,83,9,0.04)" : "var(--bg-card)",
-              boxShadow: pack.highlight ? "0 0 0 2px rgba(180,83,9,0.25)" : undefined,
+              backgroundColor: pack.highlight ? "rgba(30,27,75,0.04)" : "var(--bg-card)",
+              boxShadow: pack.highlight ? "0 0 0 2px rgba(30,27,75,0.25)" : undefined,
             }}
           >
             {pack.highlight && (

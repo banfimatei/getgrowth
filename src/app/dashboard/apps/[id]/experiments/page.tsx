@@ -10,7 +10,7 @@ const COLUMNS: Array<{ status: ExperimentStatus; label: string; color: string }>
   { status: "backlog", label: "Backlog", color: "var(--text-muted)" },
   { status: "in_progress", label: "In Progress", color: "#f59e0b" },
   { status: "live", label: "Live", color: "#10b981" },
-  { status: "evaluated", label: "Evaluated", color: "#b45309" },
+  { status: "evaluated", label: "Evaluated", color: "#1E1B4B" },
 ];
 
 const TARGET_METRICS: TargetMetric[] = ["installs", "conversion_rate", "impressions", "crashes", "rating_avg"];
@@ -270,7 +270,7 @@ function NewExperimentForm({
   }
 
   return (
-    <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: "var(--accent)", backgroundColor: "rgba(180,83,9,0.04)" }}>
+    <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: "var(--accent)", backgroundColor: "rgba(30,27,75,0.04)" }}>
       <input
         type="text"
         value={title}

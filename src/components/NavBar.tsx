@@ -12,6 +12,20 @@ const NAV_LINKS = [
   { href: "/#faq", label: "Resources" },
 ];
 
+/* [^] logo mark — square brackets in indigo, caret in amber */
+function LogoMark({ size = 28 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Left bracket */}
+      <path d="M9 5H6V23H9" stroke="#1E1B4B" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+      {/* Right bracket */}
+      <path d="M19 5H22V23H19" stroke="#1E1B4B" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+      {/* Amber caret ^ */}
+      <path d="M10.5 17L14 11L17.5 17" stroke="#F59E0B" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
 export default function NavBar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -23,24 +37,24 @@ export default function NavBar() {
   return (
     <header
       className="sticky top-0 z-50 border-b backdrop-blur-md"
-      style={{ backgroundColor: "rgba(250, 248, 245, 0.88)", borderColor: "var(--border)" }}
+      style={{ backgroundColor: "rgba(248, 250, 252, 0.9)", borderColor: "var(--border)" }}
     >
       <div className="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between">
         {/* Logo */}
         <Link
           href="/"
-          className="flex items-center gap-2.5 font-semibold text-sm shrink-0"
+          className="flex items-center gap-2 font-semibold text-sm shrink-0"
         >
+          <LogoMark size={28} />
           <span
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold"
-            style={{ backgroundColor: "var(--accent)", color: "#fff" }}
+            className="hidden sm:inline text-[15px] font-semibold tracking-tight"
+            style={{ color: "var(--text-primary)", fontFamily: "var(--font-body)" }}
           >
-            G
+            getgrowth
           </span>
-          <span className="hidden sm:inline">GetGrowth</span>
         </Link>
 
-        {/* Desktop nav — max 4 links per brand spec */}
+        {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-1">
           {NAV_LINKS.map((link) => {
             const isActive = link.href === "/pricing" ? pathname === "/pricing" : false;
@@ -97,7 +111,7 @@ export default function NavBar() {
               </SignInButton>
               <button
                 onClick={() => router.push("/audit")}
-                className="text-[13px] px-4 py-1.5 rounded-lg font-semibold transition-all hover:brightness-110"
+                className="text-[13px] px-4 py-1.5 rounded-lg font-semibold transition-all hover:brightness-110 pulse-cta"
                 style={{ backgroundColor: "var(--accent)", color: "#fff" }}
               >
                 {isLanding ? "Run your first audit" : "Run audit"}

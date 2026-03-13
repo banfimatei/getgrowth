@@ -40,7 +40,7 @@ interface ConnectedAppDetail {
 type MetricKey = "impressions" | "installs" | "conversion_rate" | "crashes" | "page_views";
 
 const METRIC_OPTIONS: Array<{ key: MetricKey; label: string; color: string; format: (v: number) => string }> = [
-  { key: "impressions", label: "Impressions", color: "#b45309", format: (v) => v.toLocaleString() },
+  { key: "impressions", label: "Impressions", color: "#1E1B4B", format: (v) => v.toLocaleString() },
   { key: "installs", label: "Installs", color: "#10b981", format: (v) => v.toLocaleString() },
   { key: "page_views", label: "Page Views", color: "#f59e0b", format: (v) => v.toLocaleString() },
   { key: "conversion_rate", label: "CVR", color: "#8b5cf6", format: (v) => `${(v * 100).toFixed(2)}%` },
@@ -120,7 +120,7 @@ function AppDetailContent() {
     backlog: "var(--text-muted)",
     in_progress: "#f59e0b",
     live: "#10b981",
-    evaluated: "#b45309",
+    evaluated: "#1E1B4B",
   };
 
   if (loading) {

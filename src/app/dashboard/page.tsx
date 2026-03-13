@@ -266,7 +266,7 @@ function DashboardContent() {
       {connectedApps.length === 0 && (apps.length > 0 || unlocks.length > 0) && (
         <div
           className="rounded-2xl border p-4 mb-6 flex items-center justify-between gap-4 flex-wrap"
-          style={{ borderColor: "rgba(180,83,9,0.2)", backgroundColor: "rgba(180,83,9,0.04)" }}
+          style={{ borderColor: "rgba(30,27,75,0.2)", backgroundColor: "rgba(30,27,75,0.04)" }}
         >
           <div>
             <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Track experiment outcomes</p>

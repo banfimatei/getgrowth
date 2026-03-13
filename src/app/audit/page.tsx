@@ -1343,7 +1343,7 @@ function AuditContent() {
             {!report.aiEnabled && (
               <div
                 className="border rounded-lg p-4 mb-6 fade-in"
-                style={{ backgroundColor: "rgba(180,83,9,0.05)", borderColor: "rgba(180,83,9,0.2)" }}
+                style={{ backgroundColor: "rgba(30,27,75,0.05)", borderColor: "rgba(30,27,75,0.2)" }}
               >
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
