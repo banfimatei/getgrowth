@@ -166,7 +166,7 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled }: {
       className="border rounded-lg overflow-hidden"
       style={{
         backgroundColor: "var(--bg-card)",
-        borderColor: isLoading ? "var(--info-border)" : isEnhanced ? "rgba(124,58,237,0.3)" : "var(--border)",
+        borderColor: isLoading ? "var(--info-border)" : isEnhanced ? "rgba(30,27,75,0.3)" : "var(--border)",
         transition: "border-color 0.3s ease",
       }}
     >

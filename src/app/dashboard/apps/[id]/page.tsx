@@ -43,7 +43,7 @@ const METRIC_OPTIONS: Array<{ key: MetricKey; label: string; color: string; form
   { key: "impressions", label: "Impressions", color: "#1E1B4B", format: (v) => v.toLocaleString() },
   { key: "installs", label: "Installs", color: "#10b981", format: (v) => v.toLocaleString() },
   { key: "page_views", label: "Page Views", color: "#f59e0b", format: (v) => v.toLocaleString() },
-  { key: "conversion_rate", label: "CVR", color: "#8b5cf6", format: (v) => `${(v * 100).toFixed(2)}%` },
+  { key: "conversion_rate", label: "CVR", color: "#4338CA", format: (v) => `${(v * 100).toFixed(2)}%` },
   { key: "crashes", label: "Crashes", color: "#ef4444", format: (v) => v.toLocaleString() },
 ];
 
