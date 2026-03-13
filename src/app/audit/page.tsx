@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useState, useCallback, useEffect, Suspense, type FormEvent } from "react";
 import { useUser, SignInButton } from "@clerk/nextjs";
 import { useSearchParams, useRouter } from "next/navigation";
