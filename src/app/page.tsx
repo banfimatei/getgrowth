@@ -281,7 +281,7 @@ export default function LandingPage() {
       <section id="how-it-works" className="py-20 lg:py-28" style={{ backgroundColor: "var(--bg-page)" }}>
         <div className="max-w-6xl mx-auto px-5">
           <div ref={addRef} className="reveal text-center mb-14">
-            <h2 className="mb-3">From audit to proven ASO wins in 3 steps</h2>
+            <h2 className="mb-3 font-display">From audit to proven ASO wins in 3 steps</h2>
             <p className="text-sm" style={{ color: "var(--text-secondary)", maxWidth: 480, margin: "0 auto" }}>
               No complex setup. No agency retainers. Paste a URL and start improving.
             </p>
@@ -331,7 +331,7 @@ export default function LandingPage() {
                     <p className="text-[10px]" style={{ color: "var(--text-tertiary)" }}>Step {s.step}</p>
                   </div>
                 </div>
-                <h3 className="text-base mb-2">{s.title}</h3>
+                <h3 className="text-base mb-2 font-display">{s.title}</h3>
                 <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{s.body}</p>
                 {s.step === "02" && (
                   <p className="text-[11px] mt-3 px-2 py-1 rounded-md inline-block" style={{ backgroundColor: "var(--bg-inset)", color: "var(--text-tertiary)" }}>
@@ -357,7 +357,7 @@ export default function LandingPage() {
       <section id="who-its-for" className="py-20 lg:py-28 relative grain-bg" style={{ backgroundColor: "var(--bg-section)" }}>
         <div className="relative z-10 max-w-6xl mx-auto px-5">
           <div ref={addRef} className="reveal text-center mb-14">
-            <h2 className="mb-3">Built for teams who don&rsquo;t live in ASO all day</h2>
+            <h2 className="mb-3 font-display">Built for teams who don&rsquo;t live in ASO all day</h2>
             <p className="text-sm" style={{ color: "var(--text-secondary)", maxWidth: 480, margin: "0 auto" }}>
               No jargon, no 50-tab dashboards. Clear experiments and measured outcomes.
             </p>
@@ -393,7 +393,7 @@ export default function LandingPage() {
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center mb-3" style={{ backgroundColor: "var(--accent-bg)", color: "var(--accent)" }}>
                   {p.icon}
                 </div>
-                <h3 className="text-base mb-2">{p.persona}</h3>
+                <h3 className="text-base mb-2 font-display">{p.persona}</h3>
                 <p className="text-sm leading-relaxed mb-4 flex-1" style={{ color: "var(--text-secondary)" }}>{p.pitch}</p>
                 <div className="rounded-md px-3 py-2 text-xs" style={{ backgroundColor: "var(--bg-inset)", color: "var(--text-tertiary)" }}>
                   <span style={{ color: "var(--text-secondary)" }} className="font-medium">Typical outcome:</span> {p.outcome}
@@ -408,7 +408,7 @@ export default function LandingPage() {
       <section className="py-20 lg:py-28" style={{ backgroundColor: "var(--bg-page)" }}>
         <div className="max-w-6xl mx-auto px-5">
           <div ref={addRef} className="reveal text-center mb-14">
-            <h2 className="mb-3">Why teams pick GetGrowth</h2>
+            <h2 className="mb-3 font-display">Why teams pick GetGrowth</h2>
           </div>
 
           <div ref={addRef} className="reveal grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -478,7 +478,7 @@ export default function LandingPage() {
       <section id="pricing" className="py-20 lg:py-28 relative grain-bg" style={{ backgroundColor: "var(--bg-section)" }}>
         <div className="relative z-10 max-w-4xl mx-auto px-5">
           <div ref={addRef} className="reveal text-center mb-10">
-            <h2 className="mb-3">Start with one audit, upgrade when experiments matter</h2>
+            <h2 className="mb-3 font-display">Start with one audit, upgrade when experiments matter</h2>
             <p className="text-sm" style={{ color: "var(--text-secondary)", maxWidth: 460, margin: "0 auto" }}>
               No subscription required. Pay per audit, connect your stores for free, track unlimited experiments.
             </p>
@@ -528,7 +528,7 @@ export default function LandingPage() {
       <section id="credibility" className="py-20 lg:py-28" style={{ backgroundColor: "var(--bg-page)" }}>
         <div className="max-w-5xl mx-auto px-5">
           <div ref={addRef} className="reveal text-center mb-10">
-            <h2 className="mb-3">Built by people who&rsquo;ve grown mobile apps</h2>
+            <h2 className="mb-3 font-display">Built by people who&rsquo;ve grown mobile apps</h2>
             <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)", maxWidth: 540, margin: "0 auto" }}>
               GetGrowth is created by app marketers who&rsquo;ve optimized dozens of apps. We turned our playbooks into a repeatable, AI-powered process &mdash; so you don&rsquo;t start from scratch.
             </p>
@@ -557,7 +557,7 @@ export default function LandingPage() {
       <section id="faq" className="py-20 lg:py-28 relative grain-bg" style={{ backgroundColor: "var(--bg-section)" }}>
         <div className="relative z-10 max-w-4xl mx-auto px-5">
           <div ref={addRef} className="reveal text-center mb-10">
-            <h2 className="mb-3">Frequently asked questions</h2>
+            <h2 className="mb-3 font-display">Frequently asked questions</h2>
           </div>
 
           <div ref={addRef} className="reveal grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
@@ -582,7 +582,7 @@ export default function LandingPage() {
       <section id="sample-report" className="py-20 lg:py-28" style={{ backgroundColor: "var(--bg-page)" }}>
         <div className="max-w-4xl mx-auto px-5">
           <div ref={addRef} className="reveal text-center mb-10">
-            <h2 className="mb-3">See what&rsquo;s blocking your next 1,000 installs</h2>
+            <h2 className="mb-3 font-display">See what&rsquo;s blocking your next 1,000 installs</h2>
             <p className="text-sm" style={{ color: "var(--text-secondary)", maxWidth: 460, margin: "0 auto" }}>
               Run an AI ASO audit and get a prioritized experiment plan in under 10 minutes.
             </p>

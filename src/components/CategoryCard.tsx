@@ -47,7 +47,7 @@ export default function CategoryCard({ category }: { category: AuditCategory }) 
       >
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-1">
-            <h3 className="text-base font-semibold" style={{ color: "var(--text-primary)", fontFamily: "var(--font-body)" }}>
+            <h3 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
               {category.name}
             </h3>
           </div>
