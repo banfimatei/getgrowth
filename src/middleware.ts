@@ -2,9 +2,12 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 const isPublicRoute = createRouteMatcher([
   "/",
+  "/audit",          // free audit accessible without login
   "/pricing",
+  "/compare",        // comparison tool also accessible without login
   "/api/search(.*)",
   "/api/audit((?!/deep-dive|/visualize|/export-pdf).*)", // basic audit is public; deep-dive/visualize/export are protected
+  "/api/compare(.*)",
   "/api/webhooks/(.*)",
 ]);
 
