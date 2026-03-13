@@ -2,14 +2,15 @@
 
 export const dynamic = "force-dynamic";
 
-import { useState, useCallback, useEffect, Suspense, type FormEvent } from "react";
-import { useUser, SignInButton } from "@clerk/nextjs";
+import { useState, useCallback, useEffect, useRef, Suspense, type FormEvent } from "react";
+import { useUser, useSignIn, useClerk } from "@clerk/nextjs";
 import { useSearchParams, useRouter } from "next/navigation";
 import ScoreRing from "@/components/ScoreRing";
 import CategoryCard from "@/components/CategoryCard";
 import ActionPlan from "@/components/ActionPlan";
 import type { AuditCategory } from "@/lib/aso-rules";
 import type { ActionItem } from "@/lib/action-plan";
+import { generateExperimentSuggestions, type SuggestedExperiment } from "@/lib/experiment-generator";
 
 interface DeepDiveEnhancement {
   brief: string;
@@ -889,6 +890,8 @@ type ViewState = "search" | "results" | "auditing" | "report";
 
 function AuditContent() {
   const { isSignedIn } = useUser();
+  const { signIn } = useSignIn();
+  const { setActive } = useClerk();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [view, setView] = useState<ViewState>("search");
@@ -902,14 +905,178 @@ function AuditContent() {
   const [deepDiveLoading, setDeepDiveLoading] = useState<string | null>(null);
   const [exportLoading, setExportLoading] = useState(false);
 
+  // Post-payment auto-audit state
+  const [unlockLoading, setUnlockLoading] = useState(false);
+  const [autoDeepDiveProgress, setAutoDeepDiveProgress] = useState<{ total: number; done: number; current: string } | null>(null);
+  const [autoDeepDiveResults, setAutoDeepDiveResults] = useState<Record<string, DeepDiveEnhancement>>({});
+  const [suggestedExperiments, setSuggestedExperiments] = useState<SuggestedExperiment[]>([]);
+  const [postPaymentEmail, setPostPaymentEmail] = useState<string | null>(null);
+  const activationAttempted = useRef(false);
+
+  // Post-payment flow: detect session_id, activate account, auto-run full audit
   useEffect(() => {
+    const sessionId = searchParams.get("session_id");
     const id = searchParams.get("id");
     const p = searchParams.get("platform") as "ios" | "android" | null;
+    const c = searchParams.get("country") || "us";
+
+    if (sessionId && id && p && !activationAttempted.current) {
+      activationAttempted.current = true;
+      window.history.replaceState({}, "", "/audit");
+      handlePostPaymentFlow(sessionId, id, p, c);
+      return;
+    }
+
     if (id && p) {
       handleAudit({ id, name: id, developer: "", icon: "", rating: 0, platform: p, url: "" });
       window.history.replaceState({}, "", "/audit");
     }
   }, [searchParams]);
+
+  const runAutoDeepDives = useCallback(async (
+    auditData: AuditReport & { appData?: CachedAppData },
+    appPlatform: string,
+    extraSections?: string[],
+  ) => {
+    const coreSections = ["title", "keywords", "description", "screenshots", "icon"];
+    const actionSections = (auditData.actionPlan || [])
+      .filter((a: ActionItem) => a.deepDiveSection && a.priority !== "low")
+      .map((a: ActionItem) => a.deepDiveSection as string);
+    const allSections = [...new Set([...coreSections, ...actionSections, ...(extraSections || [])])];
+
+    setAutoDeepDiveProgress({ total: allSections.length, done: 0, current: allSections[0] });
+
+    const rawResults: Record<string, Record<string, unknown>> = {};
+    let doneCount = 0;
+
+    await Promise.allSettled(
+      allSections.map(async (section) => {
+        try {
+          const resp = await fetch("/api/audit/deep-dive", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              appData: auditData.appData,
+              section,
+              storeId: auditData.app?.url || auditData.appData?.url,
+            }),
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            rawResults[section] = data.analysis;
+            const formatted = formatDeepDiveResult(section, data.analysis, appPlatform);
+            if (formatted) {
+              setAutoDeepDiveResults((prev) => ({ ...prev, [section]: formatted }));
+            }
+          }
+        } catch {
+          // Individual deep dive failure is non-blocking
+        } finally {
+          doneCount++;
+          setAutoDeepDiveProgress((prev) => prev ? { ...prev, done: doneCount } : null);
+        }
+      })
+    );
+
+    setAutoDeepDiveProgress(null);
+
+    if (auditData.actionPlan?.length) {
+      const experiments = generateExperimentSuggestions(auditData.actionPlan, rawResults);
+      setSuggestedExperiments(experiments);
+    }
+  }, []);
+
+  const handlePostPaymentFlow = useCallback(async (
+    sessionId: string,
+    appId: string,
+    appPlatform: "ios" | "android",
+    appCountry: string,
+  ) => {
+    setView("auditing");
+    setUnlockLoading(true);
+    setError("");
+    setAutoDeepDiveResults({});
+    setSuggestedExperiments([]);
+
+    try {
+      let extraSections: string[] = [];
+
+      // If sessionId is provided, this is a Stripe redirect — activate the payment
+      if (sessionId) {
+        const activateResp = await fetch("/api/audit/activate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId }),
+        });
+
+        if (!activateResp.ok) {
+          const err = await activateResp.json().catch(() => null);
+          throw new Error(err?.error || "Payment verification failed");
+        }
+
+        const activation = await activateResp.json();
+        extraSections = activation.deepDiveSections || [];
+        setPostPaymentEmail(activation.userId ? "your email" : null);
+
+        // Auto-sign in with Clerk ticket
+        if (activation.signInToken && signIn && setActive) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const result = await (signIn as any).create({
+              strategy: "ticket",
+              ticket: activation.signInToken,
+            });
+            if (result?.createdSessionId) {
+              await setActive({ session: result.createdSessionId });
+            }
+          } catch (signInErr) {
+            console.warn("[post-payment] Auto sign-in failed:", signInErr);
+          }
+        }
+      }
+
+      // Re-run audit (now AI-enabled)
+      const auditParams = new URLSearchParams({ id: appId, platform: appPlatform, country: appCountry });
+      const auditResp = await fetch(`/api/audit?${auditParams}`);
+      if (!auditResp.ok) throw new Error("Audit failed");
+
+      const auditData = await auditResp.json();
+      setReport(auditData);
+      setView("report");
+      setUnlockLoading(false);
+
+      // Auto-fire deep dives
+      await runAutoDeepDives(auditData, appPlatform, extraSections);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+      setView("search");
+      setUnlockLoading(false);
+    }
+  }, [signIn, setActive, runAutoDeepDives]);
+
+  const handleGuestCheckout = useCallback(async () => {
+    if (!report) return;
+    setUnlockLoading(true);
+    try {
+      const storeId = report.app.url || report.appData?.url || "";
+      const appPlatform = report.app.platform;
+      const resp = await fetch("/api/stripe/guest-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          appId: storeId,
+          platform: appPlatform,
+          country,
+        }),
+      });
+      if (!resp.ok) throw new Error("Could not start checkout");
+      const { url } = await resp.json();
+      if (url) window.location.href = url;
+    } catch {
+      setError("Checkout failed. Please try again.");
+      setUnlockLoading(false);
+    }
+  }, [report, country]);
 
   const handleDeepDive = useCallback(async (section: string, actionId: string): Promise<DeepDiveEnhancement | string | null> => {
     if (!report?.appData) return null;
@@ -1238,10 +1405,10 @@ function AuditContent() {
               </svg>
             </div>
             <h2 className="text-xl mb-2" style={{ color: "var(--text-primary)" }}>
-              Running ASO Audit
+              {unlockLoading ? "Payment verified \u2014 running full AI audit" : "Running ASO Audit"}
             </h2>
             <p className="text-sm loading-ellipsis" style={{ color: "var(--text-secondary)" }}>
-              Fetching store data and analyzing metadata
+              {unlockLoading ? "Setting up your account and analyzing with AI" : "Fetching store data and analyzing metadata"}
             </p>
           </div>
         )}
@@ -1339,23 +1506,49 @@ function AuditContent() {
               </div>
             )}
 
-            {/* No credits ? upsell nudge */}
+            {/* Upsell: inline guest checkout */}
             {!report.aiEnabled && (
               <div
-                className="border rounded-lg p-4 mb-6 fade-in"
-                style={{ backgroundColor: "rgba(30,27,75,0.05)", borderColor: "rgba(30,27,75,0.2)" }}
+                className="border rounded-lg p-5 mb-6 fade-in"
+                style={{ backgroundColor: "rgba(30,27,75,0.04)", borderColor: "rgba(30,27,75,0.15)" }}
               >
                 <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                    <strong style={{ color: "var(--accent)" }}>Free audit</strong> ? Scores + action plan included.
-                    Buy a Full Audit (?29) to unlock AI-powered deep analysis, rewrite suggestions, visual concepts, and PDF export.
-                  </p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold mb-1" style={{ color: "var(--accent)" }}>
+                      Unlock the full AI audit
+                    </p>
+                    <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                      Deep analysis across all sections, AI-written rewrites for title, description &amp; keywords, visual concepts, experiment suggestions, and PDF export. No signup required.
+                    </p>
+                  </div>
                   <button
-                    onClick={() => router.push("/pricing")}
-                    className="text-xs px-4 py-2 rounded-lg font-medium shrink-0 transition-opacity hover:opacity-80"
+                    onClick={isSignedIn && (report.creditsRemaining ?? 0) > 0
+                      ? async () => {
+                          setUnlockLoading(true);
+                          setAutoDeepDiveResults({});
+                          setSuggestedExperiments([]);
+                          try {
+                            const id = report.app.url || report.appData?.url || "";
+                            const p = report.app.platform as "ios" | "android";
+                            const auditParams = new URLSearchParams({ id, platform: p, country });
+                            const auditResp = await fetch(`/api/audit?${auditParams}`);
+                            if (!auditResp.ok) throw new Error("Audit failed");
+                            const auditData = await auditResp.json();
+                            setReport(auditData);
+                            setUnlockLoading(false);
+                            await runAutoDeepDives(auditData, p);
+                          } catch {
+                            setError("Failed to unlock. Please try again.");
+                            setUnlockLoading(false);
+                          }
+                        }
+                      : handleGuestCheckout
+                    }
+                    disabled={unlockLoading}
+                    className="px-5 py-2.5 rounded-lg font-semibold text-sm shrink-0 transition-all hover:brightness-110 pulse-cta disabled:opacity-50"
                     style={{ backgroundColor: "var(--accent)", color: "#fff" }}
                   >
-                    Get full audit
+                    {unlockLoading ? "Processing\u2026" : isSignedIn && (report.creditsRemaining ?? 0) > 0 ? "Use 1 credit" : "Unlock full audit \u2014 \u20AC29"}
                   </button>
                 </div>
               </div>
@@ -1396,6 +1589,123 @@ function AuditContent() {
                   onVisualize={report.aiEnabled ? handleVisualize : undefined}
                   aiEnabled={report.aiEnabled ?? false}
                 />
+              </div>
+            )}
+
+            {/* Auto deep-dive progress */}
+            {autoDeepDiveProgress && (
+              <div
+                className="border rounded-lg p-4 mb-6 fade-in"
+                style={{ backgroundColor: "rgba(30,27,75,0.04)", borderColor: "rgba(30,27,75,0.15)" }}
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="animate-spin" style={{ animationDuration: "2s" }}>
+                    <circle cx="12" cy="12" r="10" stroke="var(--border)" strokeWidth="2" />
+                    <path d="M12 2a10 10 0 019.95 9" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  <p className="text-sm font-medium" style={{ color: "var(--accent)" }}>
+                    Running deep AI analysis ({autoDeepDiveProgress.done}/{autoDeepDiveProgress.total})
+                  </p>
+                </div>
+                <div className="w-full rounded-full h-1.5" style={{ backgroundColor: "var(--border)" }}>
+                  <div
+                    className="h-1.5 rounded-full transition-all"
+                    style={{
+                      backgroundColor: "var(--accent)",
+                      width: `${(autoDeepDiveProgress.done / autoDeepDiveProgress.total) * 100}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Post-payment email banner */}
+            {postPaymentEmail && !autoDeepDiveProgress && Object.keys(autoDeepDiveResults).length > 0 && (
+              <div
+                className="border rounded-lg p-4 mb-6 fade-in"
+                style={{ backgroundColor: "rgba(16,185,129,0.08)", borderColor: "rgba(16,185,129,0.3)" }}
+              >
+                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                  <strong style={{ color: "#10b981" }}>Full AI audit complete.</strong>{" "}
+                  Check your email to set a password and access your audit anytime from the dashboard.
+                </p>
+              </div>
+            )}
+
+            {/* Recommended Experiments */}
+            {suggestedExperiments.length > 0 && (
+              <div className="mb-8 fade-in">
+                <h3 className="text-lg mb-1" style={{ color: "var(--text-primary)" }}>
+                  Recommended Experiments
+                </h3>
+                <p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>
+                  Top experiments generated from your audit findings. Connect your store to track impact.
+                </p>
+                <div className="space-y-3">
+                  {suggestedExperiments.map((exp, i) => (
+                    <div
+                      key={i}
+                      className="border rounded-lg p-4"
+                      style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border)" }}
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-xs font-mono font-medium px-1.5 py-0.5 rounded" style={{
+                              backgroundColor: exp.priority === "high" ? "var(--error-bg)" : "var(--warning-bg)",
+                              color: exp.priority === "high" ? "var(--error-text)" : "var(--warning-text)",
+                            }}>
+                              {exp.priority}
+                            </span>
+                            <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                              {exp.title}
+                            </span>
+                          </div>
+                          <p className="text-xs mb-2" style={{ color: "var(--text-secondary)" }}>
+                            {exp.hypothesis}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-xs font-mono" style={{ color: "var(--text-tertiary)" }}>
+                            {exp.suggestedDuration}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-medium px-2 py-0.5 rounded" style={{
+                          backgroundColor: "var(--accent-bg)",
+                          color: "var(--accent)",
+                        }}>
+                          Target: {exp.targetMetric}
+                        </span>
+                        {exp.changes.slice(0, 2).map((change, j) => (
+                          <span key={j} className="text-xs px-2 py-0.5 rounded" style={{
+                            backgroundColor: "var(--bg-inset)",
+                            color: "var(--text-secondary)",
+                          }}>
+                            {change.length > 60 ? change.substring(0, 57) + "\u2026" : change}
+                          </span>
+                        ))}
+                      </div>
+                      {isSignedIn && (
+                        <button
+                          onClick={() => {
+                            const params = new URLSearchParams({
+                              title: exp.title,
+                              hypothesis: exp.hypothesis,
+                              target_metric: exp.targetMetric,
+                            });
+                            router.push(`/dashboard?newExperiment=1&${params}`);
+                          }}
+                          className="mt-3 text-xs font-medium px-3 py-1.5 rounded-md transition-opacity hover:opacity-80"
+                          style={{ backgroundColor: "var(--success)", color: "#fff" }}
+                        >
+                          Save to experiment board
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

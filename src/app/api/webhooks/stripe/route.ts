@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { supabaseAdmin, creditsForPriceId } from "@/lib/supabase";
-import { addCredits } from "@/lib/tier-guard";
+import { addCredits, createAiUnlock } from "@/lib/tier-guard";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -27,34 +27,68 @@ export async function POST(request: NextRequest) {
   try {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
-      const clerkUserId = session.metadata?.clerk_user_id;
 
-      if (clerkUserId) {
-        let credits = parseInt(session.metadata?.credits ?? "0", 10);
+      // Idempotency: skip if already processed by /api/audit/activate
+      const { count: existingPurchase } = await supabaseAdmin
+        .from("purchases")
+        .select("*", { count: "exact", head: true })
+        .eq("stripe_session_id", session.id);
 
-        if (!credits) {
-          const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
-          const priceId = lineItems.data[0]?.price?.id;
-          if (priceId) credits = creditsForPriceId(priceId) ?? 0;
+      if ((existingPurchase ?? 0) > 0) {
+        console.log(`[webhook] Session ${session.id} already processed — skipping`);
+        return NextResponse.json({ received: true });
+      }
+
+      // Resolve user: prefer metadata clerk_user_id, then lookup by email
+      let clerkUserId = session.metadata?.clerk_user_id;
+
+      if (!clerkUserId) {
+        const email = session.customer_details?.email;
+        if (email) {
+          const { data: dbUser } = await supabaseAdmin
+            .from("users")
+            .select("id")
+            .eq("email", email)
+            .single();
+          clerkUserId = dbUser?.id;
+        }
+      }
+
+      if (!clerkUserId) {
+        console.warn(`[webhook] No user found for session ${session.id} — will be reconciled on next login`);
+        return NextResponse.json({ received: true });
+      }
+
+      let credits = parseInt(session.metadata?.credits ?? "0", 10);
+      if (!credits) {
+        const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 });
+        const priceId = lineItems.data[0]?.price?.id;
+        if (priceId) credits = creditsForPriceId(priceId) ?? 0;
+      }
+
+      if (credits > 0) {
+        await addCredits(clerkUserId, credits);
+
+        // If this was a guest checkout with app metadata, create the unlock
+        const appId = session.metadata?.appId;
+        const platform = session.metadata?.platform;
+        if (appId && platform) {
+          await createAiUnlock(clerkUserId, appId, platform);
         }
 
-        if (credits > 0) {
-          await addCredits(clerkUserId, credits);
+        await supabaseAdmin.from("purchases").insert({
+          user_id:           clerkUserId,
+          stripe_session_id: session.id,
+          credits,
+          amount_cents:      session.amount_total ?? 0,
+          currency:          session.currency ?? "eur",
+        });
 
-          await supabaseAdmin.from("purchases").insert({
-            user_id:           clerkUserId,
-            stripe_session_id: session.id,
-            credits,
-            amount_cents:      session.amount_total ?? 0,
-            currency:          session.currency ?? "eur",
-          });
-
-          console.log(`Added ${credits} credits to user ${clerkUserId} (session ${session.id})`);
-        }
+        console.log(`[webhook] Added ${credits} credits to user ${clerkUserId} (session ${session.id})`);
       }
     }
   } catch (err) {
-    console.error("Stripe webhook handler error:", err);
+    console.error("[webhook] Stripe handler error:", err);
     return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 });
   }
 
