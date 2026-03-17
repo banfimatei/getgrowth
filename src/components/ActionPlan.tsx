@@ -146,10 +146,10 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled }: {
   const pConfig = priorityConfig[action.priority];
   const eConfig = effortConfig[action.effort];
 
-  // Show deep-dive area for any item that supports it — locked or unlocked
+  // Show deep-dive area only when AI is enabled (page-level CTA already handles the upgrade prompt)
   const hasDeepDiveSection = !!action.deepDiveSection;
   const canDeepDive = hasDeepDiveSection && !!onDeepDive && !!aiEnabled;
-  const showDeepDive = hasDeepDiveSection; // always show the row — locked if !aiEnabled
+  const showDeepDive = hasDeepDiveSection && !!aiEnabled;
 
   const isEnhanced = !!enhanced;
   const activeBrief = enhanced?.brief || action.brief;
