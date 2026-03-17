@@ -102,13 +102,18 @@ export async function consumeCredit(
 // ---------------------------------------------------------------------------
 
 export async function addCredits(userId: string, credits: number): Promise<void> {
-  const user = await getDbUser(userId);
-  if (!user) return;
-  await supabaseAdmin
-    .from("users")
-    .update({
-      audit_credits: user.audit_credits + credits,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", userId);
+  const { error } = await supabaseAdmin.rpc("increment_credits", { uid: userId, amount: credits });
+  if (error) {
+    console.error("addCredits RPC error:", error);
+    // Fallback: non-atomic update (best-effort)
+    const user = await getDbUser(userId);
+    if (!user) return;
+    await supabaseAdmin
+      .from("users")
+      .update({
+        audit_credits: user.audit_credits + credits,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", userId);
+  }
 }

@@ -135,13 +135,13 @@ export interface DbExperiment {
 }
 
 // ---------------------------------------------------------------------------
-// Credit packs — map Stripe price IDs to credit amounts
+// Credit packs \u2014 map Stripe price IDs to credit amounts
 // ---------------------------------------------------------------------------
 
 export const CREDIT_PACKS: Record<string, { credits: number; label: string; price: number }> = {
-  [process.env.STRIPE_PRICE_STARTER  ?? "__"]: { credits: 1, label: "1 Audit",   price: 29 },
-  [process.env.STRIPE_PRICE_GROWTH   ?? "__"]: { credits: 2, label: "2 Audits",  price: 49 },
-  [process.env.STRIPE_PRICE_PORTFOLIO ?? "__"]: { credits: 5, label: "5 Audits", price: 99 },
+  ...(process.env.STRIPE_PRICE_STARTER   ? { [process.env.STRIPE_PRICE_STARTER]:   { credits: 1, label: "1 Audit",   price: 29 } } : {}),
+  ...(process.env.STRIPE_PRICE_GROWTH    ? { [process.env.STRIPE_PRICE_GROWTH]:    { credits: 2, label: "2 Audits",  price: 49 } } : {}),
+  ...(process.env.STRIPE_PRICE_PORTFOLIO ? { [process.env.STRIPE_PRICE_PORTFOLIO]: { credits: 5, label: "5 Audits",  price: 99 } } : {}),
 };
 
 export function creditsForPriceId(priceId: string): number | null {

@@ -16,9 +16,12 @@ export async function POST(request: NextRequest) {
   }
 
   const resolvedPriceId = priceId || STARTER_PRICE_ID;
+  if (!resolvedPriceId) {
+    return NextResponse.json({ error: "STRIPE_PRICE_STARTER is not configured" }, { status: 500 });
+  }
   const pack = CREDIT_PACKS[resolvedPriceId];
   if (!pack) {
-    return NextResponse.json({ error: "Invalid price configuration" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid price configuration \u2014 price ID not found in CREDIT_PACKS" }, { status: 400 });
   }
 
   // If user is already signed in, redirect to the normal checkout
@@ -42,7 +45,7 @@ export async function POST(request: NextRequest) {
   if (userId) {
     sessionParams.metadata!.clerk_user_id = userId;
   } else {
-    // Guest checkout — Stripe collects email, creates a Customer object
+    // Guest checkout \u2014 Stripe collects email, creates a Customer object
     sessionParams.customer_creation = "always";
   }
 
