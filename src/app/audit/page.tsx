@@ -873,6 +873,7 @@ interface AuditReport {
     ratingsCount: number;
     icon?: string;
     url?: string;
+    storeId?: string;
   };
   overallScore: number;
   categories: AuditCategory[];
@@ -1058,7 +1059,7 @@ function AuditContent() {
     if (!report) return;
     setUnlockLoading(true);
     try {
-      const storeId = report.app.url || report.appData?.url || "";
+      const storeId = report.app.storeId || report.app.url || report.appData?.url || "";
       const appPlatform = report.app.platform;
       const resp = await fetch("/api/stripe/guest-checkout", {
         method: "POST",
