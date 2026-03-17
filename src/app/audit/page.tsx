@@ -1555,28 +1555,6 @@ function AuditContent() {
               </div>
             )}
 
-            {/* AI Status Banner — only shown to paid users when AI vision specifically failed */}
-            {report.aiEnabled && report.aiPowered && !report.aiScreenshots && (
-              <div
-                className="border rounded-lg p-4 mb-6 fade-in fade-in-delay-2"
-                style={{ backgroundColor: "rgba(234, 179, 8, 0.08)", borderColor: "rgba(234, 179, 8, 0.3)" }}
-              >
-                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                  <strong style={{ color: "rgb(234, 179, 8)" }}>AI Vision Unavailable</strong> ? Screenshot and icon analysis fell back to rule-based mode. This usually means images couldn&apos;t be downloaded or the visual AI call timed out. Use the &quot;Enhance with AI&quot; button on screenshot items to retry per-item analysis.
-                </p>
-              </div>
-            )}
-            {/* Only show "unavailable" error when user has paid but AI still failed to run */}
-            {report.aiEnabled && !report.aiPowered && (
-              <div
-                className="border rounded-lg p-4 mb-6 fade-in fade-in-delay-2"
-                style={{ backgroundColor: "rgba(239, 68, 68, 0.08)", borderColor: "rgba(239, 68, 68, 0.3)" }}
-              >
-                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                  <strong style={{ color: "rgb(239, 68, 68)" }}>AI Analysis Unavailable</strong> — The audit used rule-based analysis only. AI-powered recommendations were not generated. Use the &quot;Enhance with AI&quot; buttons to get AI analysis per item.
-                </p>
-              </div>
-            )}
 
             {/* Action Plan */}
             {report.actionPlan && report.actionPlan.length > 0 && (
