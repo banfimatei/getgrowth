@@ -1568,6 +1568,7 @@ function AuditContent() {
                   deepDiveLoading={deepDiveLoading}
                   onVisualize={report.aiEnabled ? handleVisualize : undefined}
                   aiEnabled={report.aiEnabled ?? false}
+                  onCheckout={handleGuestCheckout}
                 />
               </div>
             )}

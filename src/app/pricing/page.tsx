@@ -2,9 +2,10 @@
 
 export const dynamic = "force-dynamic";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useUser, SignInButton } from "@clerk/nextjs";
+import { useState, useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useUser, useSignIn } from "@clerk/nextjs";
+import { Suspense } from "react";
 
 // ---------------------------------------------------------------------------
 // Audit credit packs
@@ -58,28 +59,91 @@ const ADVISORY_FEATURES = [
   "Ongoing Slack access for 30 days",
 ];
 
-export default function PricingPage() {
+// ---------------------------------------------------------------------------
+// Inner component (needs useSearchParams)
+// ---------------------------------------------------------------------------
+function PricingContent() {
   const { isSignedIn } = useUser();
+  const { signIn, setActive } = useSignIn();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [selectedQty, setSelectedQty] = useState<1 | 2 | 5>(1);
   const [buyingAudit, setBuyingAudit] = useState(false);
+  const [activating, setActivating] = useState(false);
+  const activationAttempted = useRef(false);
 
   const selectedPack = AUDIT_PACKS.find((p) => p.qty === selectedQty)!;
+
+  // Post-payment: handle Stripe redirect back to /pricing?session_id=...
+  useEffect(() => {
+    const sessionId = searchParams.get("session_id");
+    if (!sessionId || activationAttempted.current) return;
+    activationAttempted.current = true;
+
+    // Clear URL immediately so a reload doesn't re-trigger
+    window.history.replaceState({}, "", "/pricing");
+
+    (async () => {
+      setActivating(true);
+      try {
+        const res = await fetch("/api/audit/activate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId }),
+        });
+        if (!res.ok) throw new Error("Activation failed");
+        const activation = await res.json();
+
+        // Sign the user in with the ticket Clerk issued
+        if (activation.signInToken && signIn && setActive) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const result = await (signIn as any).create({
+              strategy: "ticket",
+              ticket: activation.signInToken,
+            });
+            if (result?.createdSessionId) {
+              await setActive({ session: result.createdSessionId });
+            }
+          } catch {
+            // sign-in token errors are non-fatal; user can log in manually
+          }
+        }
+
+        router.push("/dashboard?purchased=1");
+      } catch {
+        setActivating(false);
+      }
+    })();
+  }, [searchParams, signIn, setActive, router]);
 
   async function buyAuditPack() {
     if (!selectedPack.priceId) return;
     setBuyingAudit(true);
     try {
-      const res = await fetch("/api/stripe/checkout", {
+      const endpoint = isSignedIn ? "/api/stripe/checkout" : "/api/stripe/guest-checkout";
+      const body = isSignedIn
+        ? { priceId: selectedPack.priceId }
+        : { priceId: selectedPack.priceId };
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ priceId: selectedPack.priceId }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (data.url) window.location.href = data.url;
     } finally {
       setBuyingAudit(false);
     }
+  }
+
+  if (activating) {
+    return (
+      <main className="max-w-5xl mx-auto px-5 py-32 text-center">
+        <div className="inline-block w-6 h-6 border-2 rounded-full animate-spin mb-4" style={{ borderColor: "var(--border)", borderTopColor: "var(--accent)" }} />
+        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Setting up your account…</p>
+      </main>
+    );
   }
 
   return (
@@ -89,7 +153,7 @@ export default function PricingPage() {
         <p className="text-xs font-semibold tracking-widest uppercase mb-3" style={{ color: "var(--accent)", letterSpacing: "0.12em" }}>
           Pricing
         </p>
-        <h1 className="text-4xl font-bold mb-4 leading-tight" style={{ color: "var(--text-primary)", fontFamily: "var(--font-body)" }}>
+        <h1 className="text-4xl font-bold mb-4 leading-tight" style={{ color: "var(--text-primary)" }}>
           Grow your app on your terms
         </h1>
         <p className="text-base max-w-xl mx-auto" style={{ color: "var(--text-secondary)" }}>
@@ -173,26 +237,15 @@ export default function PricingPage() {
           )}
           {!("savings" in selectedPack && selectedPack.savings) && <div className="mb-4" />}
 
-          {/* CTA */}
-          {isSignedIn ? (
-            <button
-              onClick={buyAuditPack}
-              disabled={buyingAudit || !selectedPack.priceId}
-              className="w-full py-2.5 rounded-xl text-sm font-semibold mb-6 transition-all hover:brightness-110 disabled:opacity-50"
-              style={{ backgroundColor: "var(--text-primary)", color: "#fff" }}
-            >
-              {buyingAudit ? "Loading…" : `Buy ${selectedPack.label}`}
-            </button>
-          ) : (
-            <SignInButton mode="modal" forceRedirectUrl="/pricing">
-              <button
-                className="w-full py-2.5 rounded-xl text-sm font-semibold mb-6 transition-all hover:brightness-110"
-                style={{ backgroundColor: "var(--text-primary)", color: "#fff" }}
-              >
-                Sign in to buy
-              </button>
-            </SignInButton>
-          )}
+          {/* CTA — no sign-in gate; guest checkout collects email via Stripe */}
+          <button
+            onClick={buyAuditPack}
+            disabled={buyingAudit || !selectedPack.priceId}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold mb-6 transition-all hover:brightness-110 disabled:opacity-50"
+            style={{ backgroundColor: "var(--text-primary)", color: "#fff" }}
+          >
+            {buyingAudit ? "Loading…" : `Buy ${selectedPack.label}`}
+          </button>
 
           {/* Features */}
           <ul className="space-y-2.5 flex-1">
@@ -311,16 +364,16 @@ export default function PricingPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {[
             {
+              q: "Do I need to create an account?",
+              a: "No. Enter your email at checkout — we create your account automatically and sign you straight in. No separate sign-up step needed.",
+            },
+            {
               q: "What does one audit credit unlock?",
               a: "A full AI-powered audit for one app: deep analysis on every metadata field, AI-written rewrites, visual concept generation, experiment suggestions, and PDF export. Re-running the same app never costs an extra credit.",
             },
             {
               q: "Do credits expire?",
               a: "No. Credits are yours forever. Buy a 5-pack now and use them across different apps over the next year.",
-            },
-            {
-              q: "What's included in the Platform plan?",
-              a: "Everything in the audit, plus your connected App Store Connect and Google Play data: live keyword rankings, experiment result tracking, and the full dashboard. 2 AI audit credits are included every month.",
             },
             {
               q: "Is the free audit actually useful?",
@@ -335,5 +388,13 @@ export default function PricingPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function PricingPage() {
+  return (
+    <Suspense>
+      <PricingContent />
+    </Suspense>
   );
 }

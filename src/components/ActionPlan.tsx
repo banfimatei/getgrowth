@@ -25,6 +25,7 @@ interface ActionPlanProps {
   onVisualize?: (section: "icon" | "screenshots", brief: string) => Promise<VisualConceptResult[] | string>;
   aiEnabled?: boolean;
   appName?: string;
+  onCheckout?: () => void;
 }
 
 const priorityConfig = {
@@ -40,7 +41,7 @@ const effortConfig = {
   heavy: { label: "Significant effort", color: "var(--text-tertiary)" },
 };
 
-export default function ActionPlan({ actions, onDeepDive, deepDiveLoading, onVisualize, aiEnabled = false, appName }: ActionPlanProps) {
+export default function ActionPlan({ actions, onDeepDive, deepDiveLoading, onVisualize, aiEnabled = false, appName, onCheckout }: ActionPlanProps) {
   const router = useRouter();
   const { isSignedIn } = useUser();
 
@@ -64,13 +65,13 @@ export default function ActionPlan({ actions, onDeepDive, deepDiveLoading, onVis
   return (
     <div className="space-y-4">
       {quickWins.length > 0 && (
-        <ActionGroup title="Quick Wins" subtitle="Can be done today" actions={quickWins} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} onVisualize={onVisualize} aiEnabled={aiEnabled} />
+        <ActionGroup title="Quick Wins" subtitle="Can be done today" actions={quickWins} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} onVisualize={onVisualize} aiEnabled={aiEnabled} onCheckout={onCheckout} />
       )}
       {mediumEffort.length > 0 && (
-        <ActionGroup title="This Sprint" subtitle="Medium effort, high impact" actions={mediumEffort} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} onVisualize={onVisualize} aiEnabled={aiEnabled} />
+        <ActionGroup title="This Sprint" subtitle="Medium effort, high impact" actions={mediumEffort} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} onVisualize={onVisualize} aiEnabled={aiEnabled} onCheckout={onCheckout} />
       )}
       {heavyEffort.length > 0 && (
-        <ActionGroup title="Roadmap" subtitle="Significant effort" actions={heavyEffort} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} onVisualize={onVisualize} aiEnabled={aiEnabled} />
+        <ActionGroup title="Roadmap" subtitle="Significant effort" actions={heavyEffort} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} onVisualize={onVisualize} aiEnabled={aiEnabled} onCheckout={onCheckout} />
       )}
 
       {/* Connect store nudge — shown to signed-in users to close the audit→experiment loop */}
@@ -103,7 +104,7 @@ export default function ActionPlan({ actions, onDeepDive, deepDiveLoading, onVis
   );
 }
 
-function ActionGroup({ title, subtitle, actions, onDeepDive, deepDiveLoading, onVisualize, aiEnabled }: {
+function ActionGroup({ title, subtitle, actions, onDeepDive, deepDiveLoading, onVisualize, aiEnabled, onCheckout }: {
   title: string;
   subtitle: string;
   actions: ActionItem[];
@@ -111,6 +112,7 @@ function ActionGroup({ title, subtitle, actions, onDeepDive, deepDiveLoading, on
   onDeepDive?: (section: DeepDiveSection, actionId: string) => Promise<DeepDiveEnhancement | string | null>;
   deepDiveLoading?: string | null;
   onVisualize?: (section: "icon" | "screenshots", brief: string) => Promise<VisualConceptResult[] | string>;
+  onCheckout?: () => void;
 }) {
   return (
     <div>
@@ -120,19 +122,20 @@ function ActionGroup({ title, subtitle, actions, onDeepDive, deepDiveLoading, on
       </div>
       <div className="space-y-2">
         {actions.map((action) => (
-          <ActionCard key={action.id} action={action} onDeepDive={onDeepDive} isLoading={deepDiveLoading === action.id} onVisualize={onVisualize} aiEnabled={aiEnabled} />
+          <ActionCard key={action.id} action={action} onDeepDive={onDeepDive} isLoading={deepDiveLoading === action.id} onVisualize={onVisualize} aiEnabled={aiEnabled} onCheckout={onCheckout} />
         ))}
       </div>
     </div>
   );
 }
 
-function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled }: {
+function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled, onCheckout }: {
   action: ActionItem;
   onDeepDive?: (section: DeepDiveSection, actionId: string) => Promise<DeepDiveEnhancement | string | null>;
   isLoading?: boolean;
   onVisualize?: (section: "icon" | "screenshots", brief: string) => Promise<VisualConceptResult[] | string>;
   aiEnabled?: boolean;
+  onCheckout?: () => void;
 }) {
   const router = useRouter();
   const { isSignedIn } = useUser();
@@ -287,9 +290,9 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled }: {
           {showDeepDive && (
             <div className="pt-2 border-t" style={{ borderColor: "var(--border)" }}>
               {!aiEnabled ? (
-                /* No credits — buy prompt */
+                /* No credits — go straight to checkout */
                 <button
-                  onClick={(e) => { e.stopPropagation(); router.push("/pricing"); }}
+                  onClick={(e) => { e.stopPropagation(); onCheckout?.(); }}
                   className="flex items-center gap-1.5 text-xs font-medium py-1.5 px-3 rounded cursor-pointer transition-opacity hover:opacity-80"
                   style={{
                     backgroundColor: "rgba(30,27,75,0.07)",
@@ -326,7 +329,7 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled }: {
                     if (canDeepDive && onDeepDive && action.deepDiveSection) {
                       const result = await onDeepDive(action.deepDiveSection, action.id);
                       if (typeof result === "string" && result === "__ERROR__NEEDS_CREDITS") {
-                        router.push("/pricing");
+                        onCheckout?.();
                       } else if (typeof result === "string" && result.startsWith("__ERROR__")) {
                         setDeepDiveError(result.replace("__ERROR__", ""));
                       } else if (result && typeof result === "object") {
@@ -404,7 +407,7 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled }: {
                           activeBrief,
                         );
                         if (typeof result === "string" && result === "__ERROR__NEEDS_CREDITS") {
-                          router.push("/pricing");
+                          onCheckout?.();
                         } else if (typeof result === "string" && result.startsWith("__ERROR__")) {
                           setVisualError(result.replace("__ERROR__", ""));
                         } else if (Array.isArray(result)) {

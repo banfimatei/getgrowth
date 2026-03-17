@@ -11,30 +11,34 @@ const STARTER_PRICE_ID = process.env.STRIPE_PRICE_STARTER ?? "";
 export async function POST(request: NextRequest) {
   const { appId, platform, country, priceId } = await request.json();
 
-  if (!appId || !platform) {
-    return NextResponse.json({ error: "Missing appId or platform" }, { status: 400 });
-  }
-
   const resolvedPriceId = priceId || STARTER_PRICE_ID;
   if (!resolvedPriceId) {
     return NextResponse.json({ error: "STRIPE_PRICE_STARTER is not configured" }, { status: 500 });
   }
   const pack = CREDIT_PACKS[resolvedPriceId];
   if (!pack) {
-    return NextResponse.json({ error: "Invalid price configuration \u2014 price ID not found in CREDIT_PACKS" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid price configuration — price ID not found in CREDIT_PACKS" }, { status: 400 });
   }
 
-  // If user is already signed in, redirect to the normal checkout
   const { userId } = await auth();
+
+  // Success/cancel URLs differ depending on whether we have an audit context
+  const hasAppContext = !!(appId && platform);
+  const successUrl = hasAppContext
+    ? `${APP_URL}/audit?session_id={CHECKOUT_SESSION_ID}&id=${encodeURIComponent(appId)}&platform=${platform}&country=${country || "us"}`
+    : `${APP_URL}/pricing?session_id={CHECKOUT_SESSION_ID}`;
+  const cancelUrl = hasAppContext
+    ? `${APP_URL}/audit?id=${encodeURIComponent(appId)}&platform=${platform}&country=${country || "us"}`
+    : `${APP_URL}/pricing`;
 
   const sessionParams: Stripe.Checkout.SessionCreateParams = {
     mode: "payment",
     line_items: [{ price: resolvedPriceId, quantity: 1 }],
-    success_url: `${APP_URL}/audit?session_id={CHECKOUT_SESSION_ID}&id=${encodeURIComponent(appId)}&platform=${platform}&country=${country || "us"}`,
-    cancel_url: `${APP_URL}/audit?id=${encodeURIComponent(appId)}&platform=${platform}&country=${country || "us"}`,
+    success_url: successUrl,
+    cancel_url: cancelUrl,
     metadata: {
-      appId,
-      platform,
+      ...(appId ? { appId } : {}),
+      ...(platform ? { platform } : {}),
       country: country || "us",
       credits: String(pack.credits),
       ...(userId ? { clerk_user_id: userId } : {}),
@@ -42,10 +46,8 @@ export async function POST(request: NextRequest) {
     allow_promotion_codes: true,
   };
 
-  if (userId) {
-    sessionParams.metadata!.clerk_user_id = userId;
-  } else {
-    // Guest checkout \u2014 Stripe collects email, creates a Customer object
+  if (!userId) {
+    // Guest checkout — Stripe collects the email and creates a Customer record
     sessionParams.customer_creation = "always";
   }
 
