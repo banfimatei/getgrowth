@@ -6,7 +6,9 @@
 
 import type { AppData, AuditCategory } from "./aso-rules";
 import type { AIAnalysis } from "./ai-analyzer";
-import type { KeywordAnalysis } from "./keyword-intelligence";
+import type { KeywordAnalysis, KeywordAnalysisFree } from "./keyword-intelligence";
+
+type AnyKeywordAnalysis = KeywordAnalysis | KeywordAnalysisFree;
 
 export type DeepDiveSection =
   | "title"
@@ -757,7 +759,7 @@ function keywordFieldBrief(data: AppData, p: AppProfile, cats: AuditCategory[], 
 // KEYWORD OPPORTUNITIES (from keyword intelligence data)
 // ---------------------------------------------------------------------------
 
-function keywordOpportunities(data: AppData, kwIntel?: KeywordAnalysis[]): ActionItem[] {
+function keywordOpportunities(data: AppData, kwIntel?: AnyKeywordAnalysis[]): ActionItem[] {
   if (data.platform !== "ios" || !kwIntel || kwIntel.length === 0) return [];
 
   const sweetSpots = kwIntel.filter(
@@ -775,8 +777,9 @@ function keywordOpportunities(data: AppData, kwIntel?: KeywordAnalysis[]): Actio
     b += `**High-opportunity keywords to prioritize:**\n`;
     for (const k of sweetSpots.slice(0, 5)) {
       const rank = k.appRank ? `#${k.appRank}` : "not ranked";
-      const dl = k.downloadEstimate.tiers.top5;
-      b += `  \u2022 **"${k.keyword}"** — ${k.targetingAdvice.icon} ${k.targetingAdvice.label} | Popularity ${k.popularity}/100, Difficulty ${k.difficulty}/100 (${k.difficultyLabel}) | ~${Math.round(k.dailySearches)} daily searches | Est. ${Math.round(dl.low)}-${Math.round(dl.high)} downloads/day at Top 5 | Currently ${rank}\n`;
+      const dl = "downloadEstimate" in k ? k.downloadEstimate.tiers.top5 : null;
+      const dlText = dl ? ` | Est. ${Math.round(dl.low)}–${Math.round(dl.high)} downloads/day at Top 5` : "";
+      b += `  \u2022 **"${k.keyword}"** — ${k.targetingAdvice.icon} ${k.targetingAdvice.label} | Popularity ${k.popularity}/100, Difficulty ${k.difficulty}/100 (${k.difficultyLabel}) | ~${Math.round(k.dailySearches)} daily searches (estimated)${dlText} | Currently ${rank}\n`;
     }
     b += `\n`;
   }
@@ -2113,7 +2116,7 @@ export function generateActionPlan(
   categories: AuditCategory[],
   _overallScore: number,
   ai?: AIAnalysis | null,
-  kwIntel?: KeywordAnalysis[],
+  kwIntel?: AnyKeywordAnalysis[],
 ): ActionItem[] {
   const p = buildProfile(appData);
 

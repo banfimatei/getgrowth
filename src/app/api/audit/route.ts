@@ -109,15 +109,17 @@ export async function GET(request: NextRequest) {
     ]);
 
     const overallScore = calculateOverallScore(categories);
-    const actionPlan = generateActionPlan(appData, categories, overallScore, aiAnalysis ?? undefined, keywordResults.length > 0 ? keywordResults : undefined);
 
     const hasTextAI   = !!(aiAnalysis?.title?.suggestions?.length);
     const hasVisualAI = !!(aiAnalysis?.screenshots?.perScreenshot?.length);
 
-    // Gate keyword intelligence: free users get partial view
+    // Gate keyword intelligence: free users get partial view (no download/tier details)
     const keywordIntelligence: (KeywordAnalysis | KeywordAnalysisFree)[] = aiEnabled
       ? keywordResults
       : keywordResults.map(toFreeView);
+
+    // Action plan uses the same gated view so free users don't see paid-only details
+    const actionPlan = generateActionPlan(appData, categories, overallScore, aiAnalysis ?? undefined, keywordIntelligence.length > 0 ? keywordIntelligence : undefined);
 
     return NextResponse.json({
       app: {

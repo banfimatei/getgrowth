@@ -1437,7 +1437,7 @@ function AuditContent() {
               <div className="text-center mb-8">
                 <h2 className="mb-2 font-display">See exactly where you stand</h2>
                 <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                  Every audit produces a scored breakdown across 6 ASO categories.
+                  Every audit produces a scored breakdown across 9 ASO categories.
                 </p>
               </div>
 
@@ -1546,7 +1546,7 @@ function AuditContent() {
                   {
                     step: "02",
                     title: "See your ASO score",
-                    body: "Get a scored breakdown across 6 categories, keyword intelligence with targeting advice, and a prioritized action plan.",
+                    body: "Get a scored breakdown across 9 categories, keyword intelligence with targeting advice, and a prioritized action plan.",
                     icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="2" /><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="2" /><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="2" /><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="2" /></svg>,
                   },
                   {
