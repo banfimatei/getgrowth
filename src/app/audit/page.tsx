@@ -864,6 +864,29 @@ interface CachedAppData {
   featureGraphicUrl?: string;
 }
 
+interface KWIntelItem {
+  keyword: string;
+  popularity: number;
+  difficulty: number;
+  difficultyLabel: string;
+  targetingAdvice: { label: string; icon: string; description: string };
+  dailySearches: number;
+  opportunity: number;
+  appRank: number | null;
+  // Full detail (paid only — absent for free users)
+  competitors?: Array<{ trackId: number; name: string; icon: string; rating: number; reviews: number; genre: string; price: string; storeUrl: string }>;
+  rankingTiers?: {
+    top5: { tierScore: number; label: string; minReviews: number; weakestApp: string; weakCount: number; freshCount: number; highlights: string[] };
+    top10: { tierScore: number; label: string; minReviews: number; weakestApp: string; weakCount: number; freshCount: number; highlights: string[] };
+    top20: { tierScore: number; label: string; minReviews: number; weakestApp: string; weakCount: number; freshCount: number; highlights: string[] };
+  };
+  downloadEstimate?: {
+    dailySearches: number;
+    tiers: { top5: { low: number; high: number }; top6_10: { low: number; high: number }; top11_20: { low: number; high: number } };
+  };
+  opportunitySignals?: Array<{ signal: string; icon: string; strength: string; detail: string }>;
+}
+
 interface AuditReport {
   app: {
     title: string;
@@ -878,6 +901,7 @@ interface AuditReport {
   overallScore: number;
   categories: AuditCategory[];
   actionPlan: ActionItem[];
+  keywordIntelligence?: KWIntelItem[];
   aiPowered?: boolean;
   aiText?: boolean;
   aiScreenshots?: boolean;
@@ -913,6 +937,116 @@ function AuditContent() {
   const [suggestedExperiments, setSuggestedExperiments] = useState<SuggestedExperiment[]>([]);
   const [postPaymentEmail, setPostPaymentEmail] = useState<string | null>(null);
   const activationAttempted = useRef(false);
+
+  // Keyword tracking state (for signed-in paid users)
+  const [trackedKws, setTrackedKws] = useState<Set<string>>(new Set());
+  const [trackingKw, setTrackingKw] = useState<string | null>(null);
+
+  // Lead capture state
+  const [leadCaptureVisible, setLeadCaptureVisible] = useState(false);
+  const [leadEmail, setLeadEmail] = useState("");
+  const [leadSubmitting, setLeadSubmitting] = useState(false);
+  const [leadSaved, setLeadSaved] = useState(false);
+  const [leadToken, setLeadToken] = useState<string | null>(null);
+  const actionPlanSentinelRef = useRef<HTMLDivElement | null>(null);
+
+  const handleTrackAuditKeyword = async (keyword: string) => {
+    if (!report?.app?.storeId || !isSignedIn) return;
+    setTrackingKw(keyword);
+    try {
+      // Find saved_app_id for this store ID — auto-save the app if not yet saved
+      const appsRes = await fetch("/api/apps");
+      const appsData = appsRes.ok ? await appsRes.json() : null;
+      let savedApp = appsData?.apps?.find(
+        (a: { store_id: string; platform: string; id: string }) =>
+          a.store_id === report.app.storeId && a.platform === report.app.platform
+      );
+
+      if (!savedApp) {
+        // Auto-save the app so we have a saved_app_id
+        const saveRes = await fetch("/api/apps", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            storeId: report.app.storeId,
+            platform: report.app.platform,
+            name: report.app.title,
+            iconUrl: report.app.icon ?? null,
+          }),
+        });
+        if (saveRes.ok) {
+          const saveData = await saveRes.json();
+          savedApp = saveData.app;
+        }
+      }
+
+      if (!savedApp?.id) return; // can't track without saved_app_id
+
+      const res = await fetch("/api/keywords/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          saved_app_id: savedApp.id,
+          keyword,
+          country: "us",
+          store_id: report.app.storeId,
+          platform: report.app.platform,
+          track_id: report.app.platform === "ios" ? parseInt(report.app.storeId ?? "", 10) || null : null,
+        }),
+      });
+      if (res.ok) {
+        setTrackedKws((prev) => new Set([...prev, keyword]));
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setTrackingKw(null);
+    }
+  };
+
+  // Scroll sentinel: show lead capture prompt when user passes the action plan
+  useEffect(() => {
+    const sentinel = actionPlanSentinelRef.current;
+    if (!sentinel || isSignedIn || leadSaved) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setLeadCaptureVisible(true); },
+      { threshold: 0.1 }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [isSignedIn, leadSaved, report]); // re-run when report loads
+
+  const handleLeadCapture = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!leadEmail || !report) return;
+    setLeadSubmitting(true);
+    try {
+      const res = await fetch("/api/leads/capture", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: leadEmail,
+          store_id: report.app.storeId,
+          platform: report.app.platform,
+          app_name: report.app.title,
+          app_icon_url: report.app.icon ?? null,
+          score: report.overallScore,
+          category_scores: Object.fromEntries(
+            report.categories.map((c: { id: string; score: number }) => [c.id, c.score])
+          ),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setLeadSaved(true);
+        setLeadToken(data.token);
+      }
+    } catch {
+      // silently fail — don't block the user
+    } finally {
+      setLeadSubmitting(false);
+    }
+  };
 
   // Post-payment flow: detect session_id, activate account, auto-run full audit
   useEffect(() => {
@@ -1057,9 +1191,13 @@ function AuditContent() {
 
   const handleGuestCheckout = useCallback(async () => {
     if (!report) return;
+    const storeId = report.app.storeId || "";
+    if (!storeId) {
+      setError("Cannot start checkout — app ID missing. Please run the audit again.");
+      return;
+    }
     setUnlockLoading(true);
     try {
-      const storeId = report.app.storeId || report.app.url || report.appData?.url || "";
       const appPlatform = report.app.platform;
       const resp = await fetch("/api/stripe/guest-checkout", {
         method: "POST",
@@ -1070,11 +1208,15 @@ function AuditContent() {
           country,
         }),
       });
-      if (!resp.ok) throw new Error("Could not start checkout");
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => null);
+        throw new Error(errData?.error || "Could not start checkout");
+      }
       const { url } = await resp.json();
       if (url) window.location.href = url;
-    } catch {
-      setError("Checkout failed. Please try again.");
+      else throw new Error("No checkout URL returned");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Checkout failed. Please try again.");
       setUnlockLoading(false);
     }
   }, [report, country]);
@@ -1172,137 +1314,382 @@ function AuditContent() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "var(--bg-page)" }}>
-      {view !== "search" && (
-        <div className="max-w-3xl mx-auto px-6 pt-4">
-          <button
-            onClick={handleBack}
-            className="text-sm font-medium px-3 py-1.5 rounded-md transition-colors"
-            style={{ color: "var(--text-secondary)", backgroundColor: "transparent" }}
-            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-inset)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
-          >
-            &larr; Back
-          </button>
-        </div>
-      )}
+      {view === "search" ? (
+        <div>
+          {/* ═══ HERO ═══════════════════════════════════════════ */}
+          <section className="pt-16 pb-12 lg:pt-24 lg:pb-16" style={{ backgroundColor: "var(--bg-section)" }}>
+            <div className="max-w-2xl mx-auto px-6 text-center">
+              <span
+                className="hero-animate inline-block text-xs font-semibold px-3 py-1 rounded-full mb-5"
+                style={{ backgroundColor: "rgba(30,27,75,0.08)", color: "var(--accent)" }}
+              >
+                Free ASO audit &mdash; no signup required
+              </span>
 
-      <main className="max-w-3xl mx-auto px-6 py-10">
-        {/* SEARCH VIEW */}
-        {view === "search" && (
-          <div className="fade-in">
-            <div className="text-center mb-10">
-              <h1 className="text-3xl mb-3" style={{ color: "var(--text-primary)" }}>
-                Free ASO Audit
+              <h1 className="hero-animate hero-animate-delay-1 mb-4">
+                Audit your app store listing
               </h1>
-              <p className="text-base" style={{ color: "var(--text-secondary)", maxWidth: "480px", margin: "0 auto" }}>
-                Analyze any app&rsquo;s metadata, visual assets, ratings, and conversion signals against ASO best practices. Powered by the ASO Stack framework.
+
+              <p
+                className="hero-animate hero-animate-delay-2 text-base mb-8"
+                style={{ color: "var(--text-secondary)", maxWidth: 500, margin: "0 auto" }}
+              >
+                See your ASO score, keyword intelligence, and an action plan to improve installs. Results in under 60 seconds.
+              </p>
+
+              {/* Search form */}
+              <form onSubmit={handleSearch} className="hero-animate hero-animate-delay-3 text-left">
+                <div
+                  className="rounded-xl p-5 border"
+                  style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border)", boxShadow: "0 4px 24px rgba(0,0,0,0.06)" }}
+                >
+                  <div className="relative mb-4">
+                    <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" width="18" height="18" viewBox="0 0 24 24" fill="none">
+                      <circle cx="10" cy="10" r="7" stroke="var(--text-tertiary)" strokeWidth="2" />
+                      <path d="M15 15L21 21" stroke="var(--text-tertiary)" strokeWidth="2.5" strokeLinecap="round" />
+                    </svg>
+                    <input
+                      id="search-input"
+                      type="text"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="App name, store URL, or keyword\u2026"
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="w-full pl-11 pr-4 py-3 text-sm border rounded-lg transition-colors"
+                      style={{
+                        backgroundColor: "var(--bg-page)",
+                        borderColor: "var(--border)",
+                        color: "var(--text-primary)",
+                        fontFamily: "var(--font-body)",
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex items-end gap-3 flex-wrap">
+                    <div className="flex gap-1.5 flex-1 min-w-0" role="radiogroup" aria-label="Platform">
+                      {(["both", "ios", "android"] as const).map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setPlatform(p)}
+                          className="flex-1 text-xs py-2 px-3 border rounded-md transition-colors font-medium"
+                          style={{
+                            backgroundColor: platform === p ? "var(--accent-bg)" : "var(--bg-page)",
+                            borderColor: platform === p ? "var(--accent)" : "var(--border)",
+                            color: platform === p ? "var(--accent)" : "var(--text-secondary)",
+                          }}
+                          aria-pressed={platform === p}
+                        >
+                          {p === "both" ? "Both" : p === "ios" ? "iOS" : "Android"}
+                        </button>
+                      ))}
+                    </div>
+
+                    <select
+                      value={country}
+                      onChange={(e) => setCountry(e.target.value)}
+                      className="px-3 py-2 text-xs border rounded-md"
+                      style={{ backgroundColor: "var(--bg-page)", borderColor: "var(--border)", color: "var(--text-primary)" }}
+                      aria-label="Region"
+                    >
+                      <option value="us">US</option>
+                      <option value="gb">UK</option>
+                      <option value="de">DE</option>
+                      <option value="jp">JP</option>
+                      <option value="br">BR</option>
+                      <option value="kr">KR</option>
+                      <option value="fr">FR</option>
+                      <option value="au">AU</option>
+                    </select>
+
+                    <button
+                      type="submit"
+                      disabled={searching || !query.trim()}
+                      className="px-6 py-2.5 text-sm font-semibold rounded-lg transition-all disabled:opacity-50 hover:brightness-110"
+                      style={{ backgroundColor: "var(--accent)", color: "#fff" }}
+                    >
+                      {searching ? "Searching\u2026" : "Run Audit"}
+                    </button>
+                  </div>
+                </div>
+              </form>
+
+              {error && (
+                <p className="mt-4 text-sm text-center" style={{ color: "var(--fail-text)" }} role="alert">
+                  {error}
+                </p>
+              )}
+
+              <p className="hero-animate hero-animate-delay-4 mt-5 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                Free, instant results. No account needed.
               </p>
             </div>
+          </section>
 
-            <form
-              onSubmit={handleSearch}
-              className="border rounded-lg p-5"
-              style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border)" }}
-            >
-              <div className="mb-4">
-                <label htmlFor="search-input" className="block text-sm font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
-                  App name or keyword
-                </label>
-                <input
-                  id="search-input"
-                  type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="e.g. Spotify, Headspace\u2026"
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="w-full px-3.5 py-2.5 text-sm border rounded-md transition-colors"
-                  style={{
-                    backgroundColor: "var(--bg-page)",
-                    borderColor: "var(--border)",
-                    color: "var(--text-primary)",
-                    fontFamily: "var(--font-body)",
-                  }}
-                />
+          {/* ═══ SCORE PREVIEW MOCK ═════════════════════════════ */}
+          <section className="py-14 lg:py-20" style={{ backgroundColor: "var(--bg-page)" }}>
+            <div className="max-w-3xl mx-auto px-6">
+              <div className="text-center mb-8">
+                <h2 className="mb-2 font-display">See exactly where you stand</h2>
+                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                  Every audit produces a scored breakdown across 6 ASO categories.
+                </p>
               </div>
 
-              <div className="flex gap-4 mb-5">
-                <fieldset className="flex-1">
-                  <legend className="block text-sm font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
-                    Platform
-                  </legend>
-                  <div className="flex gap-2" role="radiogroup" aria-label="Platform selection">
-                    {(["both", "ios", "android"] as const).map((p) => (
-                      <label
-                        key={p}
-                        className="flex-1 cursor-pointer text-center text-sm py-2 px-3 border rounded-md transition-colors"
-                        style={{
-                          backgroundColor: platform === p ? "var(--accent-bg)" : "var(--bg-page)",
-                          borderColor: platform === p ? "var(--accent)" : "var(--border)",
-                          color: platform === p ? "var(--accent)" : "var(--text-secondary)",
-                          fontWeight: platform === p ? 600 : 400,
-                        }}
-                      >
-                        <input
-                          type="radio"
-                          name="platform"
-                          value={p}
-                          checked={platform === p}
-                          onChange={() => setPlatform(p)}
-                          className="sr-only"
+              <div
+                className="rounded-2xl border p-6 lg:p-8"
+                style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border)", boxShadow: "0 2px 16px rgba(0,0,0,0.04)" }}
+              >
+                <div className="flex flex-col sm:flex-row items-center gap-6 mb-6">
+                  <div className="shrink-0">
+                    <div className="relative" style={{ width: 100, height: 100 }}>
+                      <svg width="100" height="100" viewBox="0 0 100 100" aria-hidden="true">
+                        <circle cx="50" cy="50" r="42" fill="none" stroke="var(--border)" strokeWidth="8" opacity="0.4" />
+                        <circle
+                          cx="50" cy="50" r="42" fill="none" stroke="var(--score-good)" strokeWidth="8"
+                          strokeLinecap="round" strokeDasharray="264" strokeDashoffset="74"
+                          transform="rotate(-90 50 50)"
                         />
-                        {p === "both" ? "Both" : p === "ios" ? "iOS" : "Android"}
-                      </label>
-                    ))}
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-2xl font-semibold tabular-nums" style={{ color: "var(--score-good)" }}>72</span>
+                        <span className="text-[10px] font-mono" style={{ color: "var(--text-tertiary)" }}>B</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-center mt-1.5 font-medium" style={{ color: "var(--text-secondary)" }}>ASO Score</p>
                   </div>
-                </fieldset>
 
-                <div className="w-24">
-                  <label htmlFor="country-select" className="block text-sm font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
-                    Region
-                  </label>
-                  <select
-                    id="country-select"
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value)}
-                    className="w-full px-3 py-2.5 text-sm border rounded-md"
-                    style={{
-                      backgroundColor: "var(--bg-page)",
-                      borderColor: "var(--border)",
-                      color: "var(--text-primary)",
-                    }}
-                  >
-                    <option value="us">US</option>
-                    <option value="gb">UK</option>
-                    <option value="de">DE</option>
-                    <option value="jp">JP</option>
-                    <option value="br">BR</option>
-                    <option value="kr">KR</option>
-                    <option value="fr">FR</option>
-                    <option value="au">AU</option>
-                  </select>
+                  <div className="flex-1 w-full">
+                    <div className="flex gap-4 flex-wrap mb-4">
+                      {[
+                        { label: "3 Critical", color: "var(--error)" },
+                        { label: "4 Warnings", color: "var(--warning)" },
+                        { label: "8 Passed", color: "var(--success)" },
+                      ].map((s) => (
+                        <div key={s.label} className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
+                          <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>{s.label}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                      {[
+                        { name: "Title", score: 85 },
+                        { name: "Keywords", score: 45 },
+                        { name: "Screenshots", score: 70 },
+                        { name: "Description", score: 82 },
+                        { name: "Ratings", score: 90 },
+                        { name: "Icon", score: 60 },
+                      ].map((cat) => (
+                        <div key={cat.name} className="text-center py-2 px-1 rounded-md" style={{ backgroundColor: "var(--bg-inset)" }}>
+                          <div
+                            className="text-sm font-semibold tabular-nums"
+                            style={{ color: cat.score >= 80 ? "var(--score-excellent)" : cat.score >= 60 ? "var(--score-good)" : cat.score >= 40 ? "var(--score-warning)" : "var(--score-fail)" }}
+                          >
+                            {cat.score}
+                          </div>
+                          <div className="text-[10px]" style={{ color: "var(--text-tertiary)" }}>{cat.name}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
+
+                <div className="border-t pt-4 space-y-2" style={{ borderColor: "var(--border)" }}>
+                  {[
+                    { status: "fail", text: "Title missing high-volume keywords", section: "Title" },
+                    { status: "fail", text: "Only 3 of 10 screenshot slots used", section: "Screenshots" },
+                    { status: "warn", text: "No app preview video detected", section: "Video" },
+                    { status: "pass", text: "Icon readable at 60px, good category contrast", section: "Icon" },
+                  ].map((finding, i) => (
+                    <div key={i} className="flex items-center gap-2.5 py-1">
+                      <span
+                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                        style={{ backgroundColor: finding.status === "fail" ? "var(--error)" : finding.status === "warn" ? "var(--warning)" : "var(--success)" }}
+                      />
+                      <span className="text-xs flex-1" style={{ color: "var(--text-secondary)" }}>{finding.text}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: "var(--bg-inset)", color: "var(--text-tertiary)" }}>{finding.section}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] mt-3 text-center" style={{ color: "var(--text-tertiary)" }}>
+                  Sample output &mdash; your results will vary.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* ═══ HOW IT WORKS ═══════════════════════════════════ */}
+          <section className="py-14 lg:py-20" style={{ backgroundColor: "var(--bg-section)" }}>
+            <div className="max-w-4xl mx-auto px-6">
+              <div className="text-center mb-10">
+                <h2 className="mb-2 font-display">How it works</h2>
+                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                  Three steps. Under 60 seconds. No setup required.
+                </p>
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {[
+                  {
+                    step: "01",
+                    title: "Search or paste a URL",
+                    body: "Enter any app name or store URL. We fetch metadata, screenshots, ratings, and keyword data automatically.",
+                    icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="2" /><path d="M15 15L21 21" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>,
+                  },
+                  {
+                    step: "02",
+                    title: "See your ASO score",
+                    body: "Get a scored breakdown across 6 categories, keyword intelligence with targeting advice, and a prioritized action plan.",
+                    icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="2" /><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="2" /><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="2" /><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="2" /></svg>,
+                  },
+                  {
+                    step: "03",
+                    title: "Ship improvements",
+                    body: "Follow AI-generated copy rewrites, experiment suggestions, and visual briefs. Connect your store to track which changes move installs.",
+                    icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5L20 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>,
+                  },
+                ].map((s) => (
+                  <div
+                    key={s.step}
+                    className="rounded-xl p-6 border"
+                    style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border)" }}
+                  >
+                    <div className="flex items-center gap-3 mb-3">
+                      <span
+                        className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: "var(--accent-bg)", color: "var(--accent)" }}
+                      >
+                        {s.icon}
+                      </span>
+                      <span className="text-xs font-mono font-semibold" style={{ color: "var(--accent-muted)" }}>
+                        Step {s.step}
+                      </span>
+                    </div>
+                    <h3 className="text-sm font-semibold mb-1.5" style={{ color: "var(--text-primary)" }}>{s.title}</h3>
+                    <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>{s.body}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* ═══ WHAT WE AUDIT ══════════════════════════════════ */}
+          <section className="py-14 lg:py-20" style={{ backgroundColor: "var(--bg-page)" }}>
+            <div className="max-w-4xl mx-auto px-6">
+              <div className="text-center mb-10">
+                <h2 className="mb-2 font-display">What we audit</h2>
+                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                  Every metadata field, visual asset, and conversion signal &mdash; scored and explained.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {[
+                  { name: "Title & Subtitle", desc: "Keyword coverage, character usage, and overlap analysis.", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 7V4h16v3M9 20h6M12 4v16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> },
+                  { name: "Keywords", desc: "Popularity, difficulty, and targeting advice from real search data.", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="2" /><path d="M20 20l-3-3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> },
+                  { name: "Screenshots", desc: "Gallery count, ordering, captions, and visual coherence.", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="2" /><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" /><path d="M21 15l-5-5L5 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg> },
+                  { name: "Description", desc: "Structure, keyword density, and conversion copy quality.", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 10h16M4 14h10M4 18h7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> },
+                  { name: "Ratings & Reviews", desc: "Volume, velocity, and sentiment vs. category benchmarks.", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> },
+                  { name: "Icon & Video", desc: "Readability at small sizes, category contrast, and preview presence.", icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="4" stroke="currentColor" strokeWidth="2" /><path d="M10 8l6 4-6 4V8z" fill="currentColor" /></svg> },
+                ].map((f) => (
+                  <div
+                    key={f.name}
+                    className="rounded-xl p-5 border"
+                    style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border)" }}
+                  >
+                    <div
+                      className="w-9 h-9 rounded-lg flex items-center justify-center mb-3"
+                      style={{ backgroundColor: "var(--accent-bg)", color: "var(--accent)" }}
+                    >
+                      {f.icon}
+                    </div>
+                    <h3 className="text-sm font-semibold mb-1" style={{ color: "var(--text-primary)" }}>{f.name}</h3>
+                    <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>{f.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* ═══ UPGRADE CTA ════════════════════════════════════ */}
+          <section className="py-14 lg:py-20" style={{ backgroundColor: "var(--bg-section)" }}>
+            <div className="max-w-2xl mx-auto px-6 text-center">
+              <h2 className="mb-3 font-display">Go deeper with the full AI audit</h2>
+              <p className="text-sm mb-8" style={{ color: "var(--text-secondary)" }}>
+                Unlock AI-written rewrites, keyword strategy across 30 countries, experiment suggestions, and PDF export.
+              </p>
+
+              <div
+                className="rounded-xl border p-6 inline-block text-left"
+                style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border)", boxShadow: "0 2px 16px rgba(0,0,0,0.04)" }}
+              >
+                <div className="flex items-baseline gap-2 mb-4">
+                  <span className="text-3xl font-semibold" style={{ color: "var(--accent)" }}>&euro;29</span>
+                  <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>one-time per app</span>
+                </div>
+                <ul className="space-y-2 text-xs" style={{ color: "var(--text-secondary)" }}>
+                  {[
+                    "Deep AI analysis with copy rewrites",
+                    "Keyword targeting strategy per keyword",
+                    "Country Opportunity Finder (30 markets)",
+                    "Download estimates and ranking tiers",
+                    "Auto-generated A/B experiments",
+                    "PDF export for your team",
+                  ].map((item) => (
+                    <li key={item} className="flex items-start gap-2">
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0 mt-0.5">
+                        <path d="M3 8l3.5 3.5L13 5" stroke="var(--success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <p className="mt-6 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                Start with the free audit. Upgrade only if you want AI depth.
+              </p>
+            </div>
+          </section>
+
+          {/* ═══ BOTTOM CTA ═════════════════════════════════════ */}
+          <section className="py-14 lg:py-20" style={{ backgroundColor: "var(--bg-page)" }}>
+            <div className="max-w-xl mx-auto px-6 text-center">
+              <h2 className="mb-3 font-display">Ready to see your ASO score?</h2>
+              <p className="text-sm mb-6" style={{ color: "var(--text-secondary)" }}>
+                Free, instant, no signup. Paste a URL or search by name.
+              </p>
               <button
-                type="submit"
-                disabled={searching || !query.trim()}
-                className="w-full py-2.5 text-sm font-semibold rounded-md transition-opacity disabled:opacity-50"
+                onClick={() => {
+                  const el = document.getElementById("search-input");
+                  if (el) { el.scrollIntoView({ behavior: "smooth", block: "center" }); el.focus(); }
+                }}
+                className="px-8 py-3 text-sm font-semibold rounded-lg transition-all hover:brightness-110 pulse-cta"
                 style={{ backgroundColor: "var(--accent)", color: "#fff" }}
               >
-                {searching ? "Searching\u2026" : "Search Apps"}
+                Run free audit
               </button>
-            </form>
-
-            {error && (
-              <p className="mt-4 text-sm text-center" style={{ color: "var(--fail-text)" }} role="alert">
-                {error}
-              </p>
-            )}
+            </div>
+          </section>
+        </div>
+      ) : (
+        <>
+          <div className="max-w-3xl mx-auto px-6 pt-4">
+            <button
+              onClick={handleBack}
+              className="text-sm font-medium px-3 py-1.5 rounded-md transition-colors"
+              style={{ color: "var(--text-secondary)", backgroundColor: "transparent" }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "var(--bg-inset)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+            >
+              &larr; Back
+            </button>
           </div>
-        )}
-
-        {/* RESULTS VIEW */}
+          <main className="max-w-3xl mx-auto px-6 py-10">
+            {/* RESULTS VIEW */}
         {view === "results" && (
           <div>
             <div className="mb-6">
@@ -1417,6 +1804,18 @@ function AuditContent() {
         {/* REPORT VIEW */}
         {view === "report" && report && (
           <div>
+            {/* Inline error banner — checkout / unlock failures */}
+            {error && (
+              <div
+                className="mb-4 px-4 py-3 rounded-xl text-sm flex items-center justify-between gap-3"
+                style={{ backgroundColor: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", color: "var(--fail-text)" }}
+                role="alert"
+              >
+                <span>{error}</span>
+                <button onClick={() => setError("")} className="opacity-60 hover:opacity-100 flex-shrink-0 text-base leading-none">×</button>
+              </div>
+            )}
+
             {/* Report Header */}
             <div className="mb-8 fade-in">
               <div className="flex items-start gap-5 mb-6">
@@ -1491,6 +1890,262 @@ function AuditContent() {
               ))}
             </div>
 
+            {/* Keyword Intelligence (iOS only) */}
+            {report.keywordIntelligence && report.keywordIntelligence.length > 0 && report.app.platform === "ios" && (
+              <div className="mb-8 fade-in fade-in-delay-1">
+                <h3 className="text-lg mb-3 font-display" style={{ color: "var(--text-primary)" }}>
+                  Keyword Intelligence
+                </h3>
+
+                <div className="space-y-3">
+                  {report.keywordIntelligence.map((kw) => {
+                    const isPaid = report.aiEnabled;
+                    const hasFull = !!kw.competitors;
+                    return (
+                      <div
+                        key={kw.keyword}
+                        className="border rounded-lg p-4"
+                        style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border)" }}
+                      >
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-base">{kw.targetingAdvice.icon}</span>
+                            <span className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>
+                              &ldquo;{kw.keyword}&rdquo;
+                            </span>
+                            <span
+                              className="text-xs px-2 py-0.5 rounded-full font-medium"
+                              style={{
+                                backgroundColor: kw.targetingAdvice.label === "Sweet Spot" || kw.targetingAdvice.label === "Hidden Gem"
+                                  ? "rgba(16,185,129,0.12)" : kw.targetingAdvice.label === "Avoid"
+                                  ? "rgba(239,68,68,0.12)" : "rgba(245,158,11,0.12)",
+                                color: kw.targetingAdvice.label === "Sweet Spot" || kw.targetingAdvice.label === "Hidden Gem"
+                                  ? "#10b981" : kw.targetingAdvice.label === "Avoid"
+                                  ? "#ef4444" : "#f59e0b",
+                              }}
+                            >
+                              {kw.targetingAdvice.label}
+                            </span>
+                          </div>
+                          {kw.appRank && (
+                            <span className="text-xs font-medium px-2 py-0.5 rounded" style={{ backgroundColor: "rgba(30,27,75,0.08)", color: "var(--accent)" }}>
+                              Rank #{kw.appRank}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Bars: Popularity + Difficulty */}
+                        <div className="grid grid-cols-2 gap-4 mt-3">
+                          <div>
+                            <div className="flex justify-between text-xs mb-1" style={{ color: "var(--text-secondary)" }}>
+                              <span>Popularity</span>
+                              <span>{kw.popularity}/100</span>
+                            </div>
+                            <div className="w-full h-1.5 rounded-full" style={{ backgroundColor: "var(--bg-inset)" }}>
+                              <div className="h-full rounded-full" style={{ width: `${kw.popularity}%`, backgroundColor: "#10b981" }} />
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex justify-between text-xs mb-1" style={{ color: "var(--text-secondary)" }}>
+                              <span>Difficulty</span>
+                              <span>{kw.difficulty}/100 ({kw.difficultyLabel})</span>
+                            </div>
+                            <div className="w-full h-1.5 rounded-full" style={{ backgroundColor: "var(--bg-inset)" }}>
+                              <div
+                                className="h-full rounded-full"
+                                style={{
+                                  width: `${kw.difficulty}%`,
+                                  backgroundColor: kw.difficulty <= 35 ? "#10b981" : kw.difficulty <= 55 ? "#f59e0b" : "#ef4444",
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Stats row */}
+                        <div className="flex items-center justify-between gap-3 mt-3 flex-wrap">
+                          <div className="flex gap-4 text-xs" style={{ color: "var(--text-secondary)" }}>
+                            <span>~{Math.round(kw.dailySearches)} daily searches</span>
+                            <span>Opportunity: {kw.opportunity}/100</span>
+                            {!kw.appRank && <span style={{ color: "#f59e0b" }}>Not ranked yet</span>}
+                          </div>
+                          {/* Track keyword button — signed-in paid users only */}
+                          {isSignedIn && report?.aiEnabled && report?.app?.platform === "ios" && (
+                            <button
+                              onClick={() => handleTrackAuditKeyword(kw.keyword)}
+                              disabled={trackedKws.has(kw.keyword) || trackingKw === kw.keyword}
+                              className="text-xs px-2.5 py-1 rounded-lg border transition-all"
+                              style={{
+                                borderColor: trackedKws.has(kw.keyword) ? "#10b981" : "var(--border)",
+                                color: trackedKws.has(kw.keyword) ? "#10b981" : "var(--text-muted)",
+                                backgroundColor: "transparent",
+                                opacity: trackingKw === kw.keyword ? 0.5 : 1,
+                              }}
+                            >
+                              {trackedKws.has(kw.keyword) ? "✓ Tracking" : trackingKw === kw.keyword ? "Adding…" : "+ Track rank"}
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Paid-only: Download estimates + Tiers + Competitors */}
+                        {isPaid && hasFull && kw.downloadEstimate && (
+                          <details className="mt-3">
+                            <summary className="text-xs font-medium cursor-pointer" style={{ color: "var(--accent)" }}>
+                              View details: downloads, ranking tiers, competitors
+                            </summary>
+                            <div className="mt-2 space-y-2">
+                              {/* Download estimates */}
+                              <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                                <strong>Est. daily downloads:</strong>{" "}
+                                Top 5: {Math.round(kw.downloadEstimate.tiers.top5.low)}-{Math.round(kw.downloadEstimate.tiers.top5.high)} |{" "}
+                                Top 6-10: {Math.round(kw.downloadEstimate.tiers.top6_10.low)}-{Math.round(kw.downloadEstimate.tiers.top6_10.high)} |{" "}
+                                Top 11-20: {Math.round(kw.downloadEstimate.tiers.top11_20.low)}-{Math.round(kw.downloadEstimate.tiers.top11_20.high)}
+                              </div>
+
+                              {/* Ranking tiers */}
+                              {kw.rankingTiers && (
+                                <div className="grid grid-cols-3 gap-2 text-xs">
+                                  {(["top5", "top10", "top20"] as const).map((tier) => {
+                                    const t = kw.rankingTiers![tier];
+                                    return (
+                                      <div
+                                        key={tier}
+                                        className="border rounded p-2"
+                                        style={{ backgroundColor: "var(--bg-inset)", borderColor: "var(--border)" }}
+                                      >
+                                        <div className="font-semibold mb-1" style={{ color: "var(--text-primary)" }}>
+                                          {tier === "top5" ? "Top 5" : tier === "top10" ? "Top 10" : "Top 20"}
+                                        </div>
+                                        <div style={{ color: t.label === "Easy" || t.label === "Very Easy" ? "#10b981" : t.label === "Moderate" ? "#f59e0b" : "#ef4444" }}>
+                                          {t.label} ({t.tierScore})
+                                        </div>
+                                        {t.highlights.slice(0, 2).map((h, hi) => (
+                                          <div key={hi} className="mt-0.5" style={{ color: "var(--text-secondary)" }}>{h}</div>
+                                        ))}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {/* Top competitors */}
+                              {kw.competitors && kw.competitors.length > 0 && (
+                                <div>
+                                  <div className="text-xs font-medium mb-1" style={{ color: "var(--text-primary)" }}>
+                                    Top competitors ({kw.competitors.length})
+                                  </div>
+                                  <div className="space-y-1">
+                                    {kw.competitors.slice(0, 5).map((comp, ci) => (
+                                      <div key={ci} className="flex items-center gap-2 text-xs" style={{ color: "var(--text-secondary)" }}>
+                                        {comp.icon && (
+                                          <img src={comp.icon} alt="" className="w-5 h-5 rounded" />
+                                        )}
+                                        <span className="font-medium" style={{ color: "var(--text-primary)" }}>{comp.name}</span>
+                                        <span>{comp.rating > 0 ? `${comp.rating.toFixed(1)}\u2605` : ""}</span>
+                                        <span>{comp.reviews.toLocaleString()} reviews</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Opportunity signals */}
+                              {kw.opportunitySignals && kw.opportunitySignals.length > 0 && (
+                                <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                                  {kw.opportunitySignals.map((sig, si) => (
+                                    <div key={si} className="mt-0.5">
+                                      {sig.icon} <strong>{sig.signal}</strong> ({sig.strength}): {sig.detail}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </details>
+                        )}
+
+                        {/* Free locked placeholders */}
+                        {!isPaid && (
+                          <div
+                            className="mt-3 border rounded p-3 text-center text-xs"
+                            style={{ backgroundColor: "rgba(30,27,75,0.03)", borderColor: "rgba(30,27,75,0.1)", color: "var(--text-secondary)" }}
+                          >
+                            <span style={{ opacity: 0.6 }}>🔒</span>{" "}
+                            Competitor analysis, ranking tiers, download estimates, and country opportunities — <strong>unlock with full audit</strong>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Upsell banner for free users */}
+                {!report.aiEnabled && (
+                  <div
+                    className="border rounded-lg p-4 mt-4"
+                    style={{ backgroundColor: "rgba(30,27,75,0.04)", borderColor: "rgba(30,27,75,0.15)" }}
+                  >
+                    <p className="text-sm font-semibold mb-1" style={{ color: "var(--accent)" }}>
+                      Unlock full Keyword Intelligence
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 text-xs mt-2" style={{ color: "var(--text-secondary)" }}>
+                      <div>🎯 <strong>Keyword Targeting Strategy</strong> — AI-classified targeting advice per keyword</div>
+                      <div>🌍 <strong>Country Opportunity Finder</strong> — Scan 30 markets to find easier wins</div>
+                      <div>📊 <strong>Deep AI Analysis</strong> — AI-written rewrites for title, subtitle &amp; keywords</div>
+                      <div>⚗️ <strong>Auto-Generated Experiments</strong> — Ready-to-run A/B tests from audit findings</div>
+                    </div>
+                    <button
+                      onClick={isSignedIn && (report.creditsRemaining ?? 0) > 0 ? undefined : handleGuestCheckout}
+                      className="mt-3 px-4 py-2 rounded-lg font-semibold text-xs transition-all hover:brightness-110 pulse-cta"
+                      style={{ backgroundColor: "var(--accent)", color: "#fff" }}
+                    >
+                      {isSignedIn && (report.creditsRemaining ?? 0) > 0 ? "Use 1 credit" : "Unlock full audit \u2014 \u20AC29"}
+                    </button>
+                  </div>
+                )}
+
+                {/* Country Opportunity buttons for paid users */}
+                {report.aiEnabled && (
+                  <div className="mt-3">
+                    <p className="text-xs mb-2" style={{ color: "var(--text-secondary)" }}>
+                      Find easier markets for your keywords:
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {report.keywordIntelligence.slice(0, 5).map((kw) => (
+                        <button
+                          key={kw.keyword}
+                          onClick={async () => {
+                            const params = new URLSearchParams({
+                              keyword: kw.keyword,
+                              appId: report.app.storeId || "",
+                              platform: report.app.platform,
+                              trackId: report.app.storeId || "",
+                            });
+                            window.open(`/api/keywords/country-scan?${params}`, "_blank");
+                          }}
+                          className="text-xs px-3 py-1.5 rounded-md border transition-colors hover:brightness-95"
+                          style={{ borderColor: "var(--border)", color: "var(--accent)", backgroundColor: "var(--bg-card)" }}
+                        >
+                          🌍 &ldquo;{kw.keyword}&rdquo;
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Android: no keyword intelligence */}
+            {report.app.platform === "android" && (
+              <div
+                className="border rounded-lg p-4 mb-6 fade-in"
+                style={{ backgroundColor: "rgba(245,158,11,0.06)", borderColor: "rgba(245,158,11,0.2)" }}
+              >
+                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  <strong style={{ color: "#f59e0b" }}>Keyword Intelligence</strong> is currently available for iOS apps only (uses Apple&apos;s iTunes Search API). Android keyword data requires Google Play scraping which is less reliable.
+                </p>
+              </div>
+            )}
+
             {/* Just-unlocked banner */}
             {report.justUnlocked && (
               <div
@@ -1529,17 +2184,21 @@ function AuditContent() {
                           setAutoDeepDiveResults({});
                           setSuggestedExperiments([]);
                           try {
-                            const id = report.app.url || report.appData?.url || "";
+                            const id = report.app.storeId || "";
+                            if (!id) throw new Error("App ID missing — please run the audit again.");
                             const p = report.app.platform as "ios" | "android";
                             const auditParams = new URLSearchParams({ id, platform: p, country });
                             const auditResp = await fetch(`/api/audit?${auditParams}`);
-                            if (!auditResp.ok) throw new Error("Audit failed");
+                            if (!auditResp.ok) {
+                              const errData = await auditResp.json().catch(() => null);
+                              throw new Error(errData?.error || "Audit failed");
+                            }
                             const auditData = await auditResp.json();
                             setReport(auditData);
                             setUnlockLoading(false);
                             await runAutoDeepDives(auditData, p);
-                          } catch {
-                            setError("Failed to unlock. Please try again.");
+                          } catch (e) {
+                            setError(e instanceof Error ? e.message : "Failed to unlock. Please try again.");
                             setUnlockLoading(false);
                           }
                         }
@@ -1555,6 +2214,27 @@ function AuditContent() {
               </div>
             )}
 
+            {/* AI Status Banner */}
+            {report.aiPowered && !report.aiScreenshots && (
+              <div
+                className="border rounded-lg p-4 mb-6 fade-in fade-in-delay-2"
+                style={{ backgroundColor: "rgba(234, 179, 8, 0.08)", borderColor: "rgba(234, 179, 8, 0.3)" }}
+              >
+                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                  <strong style={{ color: "rgb(234, 179, 8)" }}>AI Vision Unavailable</strong> ? Screenshot and icon analysis fell back to rule-based mode. This usually means images couldn&apos;t be downloaded or the visual AI call timed out. Use the &quot;Enhance with AI&quot; button on screenshot items to retry per-item analysis.
+                </p>
+              </div>
+            )}
+            {!report.aiPowered && (
+              <div
+                className="border rounded-lg p-4 mb-6 fade-in fade-in-delay-2"
+                style={{ backgroundColor: "rgba(239, 68, 68, 0.08)", borderColor: "rgba(239, 68, 68, 0.3)" }}
+              >
+                <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                  <strong style={{ color: "rgb(239, 68, 68)" }}>AI Analysis Unavailable</strong> ? The audit used rule-based analysis only. AI-powered recommendations were not generated. Use the &quot;Enhance with AI&quot; buttons to get AI analysis per item.
+                </p>
+              </div>
+            )}
 
             {/* Action Plan */}
             {report.actionPlan && report.actionPlan.length > 0 && (
@@ -1568,8 +2248,75 @@ function AuditContent() {
                   deepDiveLoading={deepDiveLoading}
                   onVisualize={report.aiEnabled ? handleVisualize : undefined}
                   aiEnabled={report.aiEnabled ?? false}
-                  onCheckout={handleGuestCheckout}
+                  appName={report.app.title}
+                  platform={report.app.platform}
                 />
+              </div>
+            )}
+
+            {/* Scroll sentinel + Lead capture prompt */}
+            <div ref={actionPlanSentinelRef} />
+            {!isSignedIn && report && leadCaptureVisible && (
+              <div
+                className="mb-8 rounded-2xl border-2 p-6 fade-in"
+                style={{ borderColor: "var(--accent)", backgroundColor: "rgba(30,27,75,0.03)" }}
+              >
+                {leadSaved ? (
+                  <div className="text-center">
+                    <p className="text-2xl mb-1">✓</p>
+                    <p className="font-semibold" style={{ color: "var(--text-primary)" }}>Audit saved!</p>
+                    <p className="text-sm mt-1 mb-4" style={{ color: "var(--text-secondary)" }}>
+                      We&apos;ll email you when your score changes. Check your inbox for a link to your saved audit.
+                    </p>
+                    {leadToken && (
+                      <a
+                        href={`/audit/saved/${leadToken}`}
+                        className="text-sm font-semibold"
+                        style={{ color: "var(--accent)" }}
+                      >
+                        View saved audit →
+                      </a>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "var(--accent)" }}>
+                      Save your audit
+                    </p>
+                    <h3 className="text-lg font-bold mb-1" style={{ color: "var(--text-primary)" }}>
+                      Get notified when things change
+                    </h3>
+                    <p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>
+                      We&apos;ll re-check your listing weekly and email you if your score moves — so you can act before competitors do.
+                    </p>
+                    <form onSubmit={handleLeadCapture} className="flex gap-2 flex-col sm:flex-row">
+                      <input
+                        type="email"
+                        required
+                        value={leadEmail}
+                        onChange={(e) => setLeadEmail(e.target.value)}
+                        placeholder="your@email.com"
+                        className="flex-1 px-4 py-2.5 rounded-xl border text-sm"
+                        style={{
+                          borderColor: "var(--border)",
+                          backgroundColor: "var(--bg-page)",
+                          color: "var(--text-primary)",
+                        }}
+                      />
+                      <button
+                        type="submit"
+                        disabled={leadSubmitting}
+                        className="px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-60 flex-shrink-0"
+                        style={{ backgroundColor: "var(--accent)", color: "#fff" }}
+                      >
+                        {leadSubmitting ? "Saving…" : "Save & get notified"}
+                      </button>
+                    </form>
+                    <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+                      No spam. Just a heads-up when your score changes.
+                    </p>
+                  </>
+                )}
               </div>
             )}
 
@@ -1710,7 +2457,9 @@ function AuditContent() {
             </div>
           </div>
         )}
-      </main>
+          </main>
+        </>
+      )}
     </div>
   );
 }

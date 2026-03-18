@@ -6,6 +6,7 @@
 
 import type { AppData, AuditCategory } from "./aso-rules";
 import type { AIAnalysis } from "./ai-analyzer";
+import type { KeywordAnalysis } from "./keyword-intelligence";
 
 export type DeepDiveSection =
   | "title"
@@ -749,6 +750,66 @@ function keywordFieldBrief(data: AppData, p: AppProfile, cats: AuditCategory[], 
     scoreBoost: "Not directly scored (field is private)",
     aiStatus: hasAiKw ? "reviewed" : "available",
     deepDiveSection: "keywords",
+  }];
+}
+
+// ---------------------------------------------------------------------------
+// KEYWORD OPPORTUNITIES (from keyword intelligence data)
+// ---------------------------------------------------------------------------
+
+function keywordOpportunities(data: AppData, kwIntel?: KeywordAnalysis[]): ActionItem[] {
+  if (data.platform !== "ios" || !kwIntel || kwIntel.length === 0) return [];
+
+  const sweetSpots = kwIntel.filter(
+    (k) => k.targetingAdvice.label === "Sweet Spot" || k.targetingAdvice.label === "Hidden Gem",
+  );
+  const avoidList = kwIntel.filter((k) => k.targetingAdvice.label === "Avoid");
+  const unranked = kwIntel.filter((k) => k.appRank === null && k.opportunity > 20);
+
+  if (sweetSpots.length === 0 && avoidList.length === 0) return [];
+
+  let b = `**Keyword Intelligence Analysis** (based on real App Store search data):\n\n`;
+
+  if (sweetSpots.length > 0) {
+    b += `**High-opportunity keywords to prioritize:**\n`;
+    for (const k of sweetSpots.slice(0, 5)) {
+      const rank = k.appRank ? `#${k.appRank}` : "not ranked";
+      const dl = k.downloadEstimate.tiers.top5;
+      b += `  \u2022 **"${k.keyword}"** — ${k.targetingAdvice.icon} ${k.targetingAdvice.label} | Popularity ${k.popularity}/100, Difficulty ${k.difficulty}/100 (${k.difficultyLabel}) | ~${Math.round(k.dailySearches)} daily searches | Est. ${Math.round(dl.low)}-${Math.round(dl.high)} downloads/day at Top 5 | Currently ${rank}\n`;
+    }
+    b += `\n`;
+  }
+
+  if (avoidList.length > 0) {
+    b += `**Keywords to deprioritize:**\n`;
+    for (const k of avoidList.slice(0, 3)) {
+      b += `  \u2022 **"${k.keyword}"** — ${k.targetingAdvice.icon} ${k.targetingAdvice.label} | Popularity ${k.popularity}/100, Difficulty ${k.difficulty}/100 — low volume with notable competition\n`;
+    }
+    b += `\n`;
+  }
+
+  if (unranked.length > 0) {
+    b += `**Untapped keywords** (you're not ranking yet):\n`;
+    for (const k of unranked.slice(0, 3)) {
+      b += `  \u2022 **"${k.keyword}"** — opportunity score ${k.opportunity} | ${k.targetingAdvice.label}\n`;
+    }
+  }
+
+  const priority = sweetSpots.length >= 2 ? "high" as const : "medium" as const;
+
+  return [{
+    id: "keyword-opportunities",
+    priority,
+    effort: "medium",
+    category: "Keyword Strategy",
+    title: `${sweetSpots.length} high-opportunity keyword${sweetSpots.length !== 1 ? "s" : ""} identified`,
+    currentState: `${kwIntel.length} keywords analyzed with real App Store search data`,
+    action: b,
+    brief: b,
+    impact: `Keywords classified as Sweet Spot or Hidden Gem have high search volume and low competition — prioritizing these in your title, subtitle, and keyword field can significantly increase impressions.`,
+    scoreBoost: "Visibility +10-20 points",
+    aiStatus: "reviewed" as const,
+    deepDiveSection: "keywords" as DeepDiveSection,
   }];
 }
 
@@ -2051,6 +2112,7 @@ export function generateActionPlan(
   categories: AuditCategory[],
   _overallScore: number,
   ai?: AIAnalysis | null,
+  kwIntel?: KeywordAnalysis[],
 ): ActionItem[] {
   const p = buildProfile(appData);
 
@@ -2058,6 +2120,7 @@ export function generateActionPlan(
     ...titleBrief(appData, p, categories, ai),
     ...subtitleBrief(appData, p, categories, ai),
     ...keywordFieldBrief(appData, p, categories, ai),
+    ...keywordOpportunities(appData, kwIntel),
     ...shortDescBrief(appData, p, categories, ai),
     ...descriptionBrief(appData, p, categories, ai),
     ...iconBrief(appData, p, ai),

@@ -1,4 +1,5 @@
 import type { ActionItem } from "./action-plan";
+import type { KeywordAnalysis } from "./keyword-intelligence";
 
 export interface SuggestedExperiment {
   title: string;
@@ -41,13 +42,23 @@ const SECTION_TO_DURATION: Record<string, string> = {
   maintenance: "30 days",
 };
 
+const TARGETING_DURATION: Record<string, string> = {
+  "Sweet Spot": "14 days",
+  "Hidden Gem": "14 days",
+  "Good Target": "21 days",
+  "Decent Option": "21 days",
+  "Worth Competing": "28 days",
+  "Challenging": "28 days",
+};
+
 /**
- * Generate structured experiment suggestions from action plan items
- * and their deep-dive results.
+ * Generate structured experiment suggestions from action plan items,
+ * deep-dive results, and keyword intelligence data.
  */
 export function generateExperimentSuggestions(
   actionPlan: ActionItem[],
   deepDiveResults: Record<string, Record<string, unknown>>,
+  kwIntel?: KeywordAnalysis[],
 ): SuggestedExperiment[] {
   const experiments: SuggestedExperiment[] = [];
   const seenSections = new Set<string>();
@@ -66,11 +77,28 @@ export function generateExperimentSuggestions(
     const changes = extractChanges(action, deepDive);
     if (changes.length === 0) continue;
 
+    let duration = SECTION_TO_DURATION[section] || "14 days";
+    let hypothesis = buildHypothesis(section, action, deepDive);
+
+    if (section === "keywords" && kwIntel && kwIntel.length > 0) {
+      const topKw = kwIntel.filter((k) =>
+        k.targetingAdvice.label === "Sweet Spot" || k.targetingAdvice.label === "Hidden Gem",
+      ).slice(0, 3);
+
+      if (topKw.length > 0) {
+        const kwNames = topKw.map((k) => `"${k.keyword}"`).join(", ");
+        const topDl = topKw[0].downloadEstimate?.tiers?.top5;
+        const dlStr = topDl ? ` (est. ${Math.round(topDl.low)}-${Math.round(topDl.high)} downloads/day at Top 5)` : "";
+        hypothesis = `Targeting ${kwNames}${dlStr} in the keyword field can boost impressions. ${hypothesis}`;
+        duration = TARGETING_DURATION[topKw[0].targetingAdvice.label] || duration;
+      }
+    }
+
     experiments.push({
       title: buildExperimentTitle(section, action),
-      hypothesis: buildHypothesis(section, action, deepDive),
+      hypothesis,
       targetMetric: SECTION_TO_METRIC[section] || "Conversion Rate",
-      suggestedDuration: SECTION_TO_DURATION[section] || "14 days",
+      suggestedDuration: duration,
       changes,
       sourceActionId: action.id,
       sourceSection: section,

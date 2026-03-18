@@ -173,14 +173,16 @@ async function syncGoogleApp(
   const vitals = await fetchYesterdayVitals(sa, packageName);
   if (!vitals) return;
 
+  // Google Play Reporting API only provides rates (crashRate/anrRate), not raw counts.
+  // Store rates in the crashes/anr_count columns for display, and preserve raw values in raw_data.
   await supabaseAdmin
     .from("app_metrics")
     .upsert(
       {
         connected_app_id: connectedAppId,
         date: vitals.date,
-        crashes: vitals.crashes,
-        anr_count: vitals.anrCount,
+        crashes: vitals.crashRate != null ? Math.round(vitals.crashRate * 10000) : null, // store as integer (x10000 for precision)
+        anr_count: vitals.anrRate != null ? Math.round(vitals.anrRate * 10000) : null,
         raw_data: { crashRate: vitals.crashRate, anrRate: vitals.anrRate },
       },
       { onConflict: "connected_app_id,date" }

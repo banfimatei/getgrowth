@@ -38,6 +38,15 @@ export interface AuditPdfData {
   aiPowered: boolean;
   categories: Array<{ id: string; name: string; score: number }>;
   actionPlan: Array<{ title: string; priority: string; brief: string }>;
+  keywordIntelligence?: Array<{
+    keyword: string;
+    popularity: number;
+    difficulty: number;
+    difficultyLabel: string;
+    targetingLabel: string;
+    dailySearches: number;
+    appRank: number | null;
+  }>;
 }
 
 export function AuditPdfDocument({ auditData }: { auditData: AuditPdfData }) {
@@ -85,6 +94,30 @@ export function AuditPdfDocument({ auditData }: { auditData: AuditPdfData }) {
             </View>
           ))}
         </View>
+
+        {auditData.keywordIntelligence && auditData.keywordIntelligence.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Keyword Intelligence ({auditData.keywordIntelligence.length} keywords)</Text>
+            <View style={{ flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#e2e2e2", paddingBottom: 4, marginBottom: 4 }}>
+              <Text style={{ fontSize: 7, fontWeight: "bold", width: "25%", color: "#1E1B4B" }}>Keyword</Text>
+              <Text style={{ fontSize: 7, fontWeight: "bold", width: "15%", color: "#1E1B4B", textAlign: "center" }}>Targeting</Text>
+              <Text style={{ fontSize: 7, fontWeight: "bold", width: "12%", color: "#1E1B4B", textAlign: "center" }}>Pop.</Text>
+              <Text style={{ fontSize: 7, fontWeight: "bold", width: "12%", color: "#1E1B4B", textAlign: "center" }}>Diff.</Text>
+              <Text style={{ fontSize: 7, fontWeight: "bold", width: "16%", color: "#1E1B4B", textAlign: "center" }}>Searches/day</Text>
+              <Text style={{ fontSize: 7, fontWeight: "bold", width: "10%", color: "#1E1B4B", textAlign: "center" }}>Rank</Text>
+            </View>
+            {auditData.keywordIntelligence.map((kw, ki) => (
+              <View key={ki} style={{ flexDirection: "row", paddingVertical: 2, borderBottomWidth: 0.5, borderBottomColor: "#f0f0f0" }}>
+                <Text style={{ fontSize: 7, width: "25%", color: "#333" }}>{kw.keyword}</Text>
+                <Text style={{ fontSize: 7, width: "15%", color: "#555", textAlign: "center" }}>{kw.targetingLabel}</Text>
+                <Text style={{ fontSize: 7, width: "12%", color: "#333", textAlign: "center" }}>{kw.popularity}</Text>
+                <Text style={{ fontSize: 7, width: "12%", color: "#333", textAlign: "center" }}>{kw.difficulty} ({kw.difficultyLabel})</Text>
+                <Text style={{ fontSize: 7, width: "16%", color: "#333", textAlign: "center" }}>~{Math.round(kw.dailySearches)}</Text>
+                <Text style={{ fontSize: 7, width: "10%", color: kw.appRank ? "#1E1B4B" : "#999", textAlign: "center" }}>{kw.appRank ? `#${kw.appRank}` : "—"}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>GetGrowth.eu — ASO Intelligence Platform</Text>

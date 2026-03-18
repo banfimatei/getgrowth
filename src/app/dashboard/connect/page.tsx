@@ -2,8 +2,8 @@
 
 export const dynamic = "force-dynamic";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type Platform = "ios" | "android";
 type Step = "platform" | "credentials" | "apps" | "done";
@@ -28,10 +28,22 @@ interface ConnectedApp {
 }
 
 export default function ConnectPage() {
+  return (
+    <Suspense>
+      <ConnectPageInner />
+    </Suspense>
+  );
+}
+
+function ConnectPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const prefillPlatform = (searchParams.get("platform") as Platform | null) ?? "ios";
+  const prefillAppName = searchParams.get("appName") ?? "";
+
   const [step, setStep] = useState<Step>("platform");
-  const [platform, setPlatform] = useState<Platform>("ios");
-  const [displayName, setDisplayName] = useState("");
+  const [platform, setPlatform] = useState<Platform>(prefillPlatform);
+  const [displayName, setDisplayName] = useState(prefillAppName);
   const [appleCreds, setAppleCreds] = useState<AppleCredentials>({ issuerId: "", keyId: "", privateKey: "" });
   const [androidCreds, setAndroidCreds] = useState<AndroidCredentials>({ serviceAccountJson: "", packageName: "" });
   const [connecting, setConnecting] = useState(false);

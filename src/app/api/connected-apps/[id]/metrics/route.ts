@@ -16,10 +16,13 @@ export async function GET(
   const { id } = await params;
   const days = parseInt(request.nextUrl.searchParams.get("days") ?? "30", 10);
 
-  // Verify ownership
+  // Verify ownership and include store connection + saved_app details
   const { data: app } = await supabaseAdmin
     .from("connected_apps")
-    .select("id, user_id, name, platform")
+    .select(`
+      id, user_id, name, platform, store_app_id, bundle_id, sync_enabled, saved_app_id,
+      store_connections (id, display_name, status, last_synced_at)
+    `)
     .eq("id", id)
     .eq("user_id", userId)
     .single();

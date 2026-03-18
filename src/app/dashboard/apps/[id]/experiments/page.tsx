@@ -91,15 +91,39 @@ function ExperimentCard({
       )}
 
       {exp.outcome && (
-        <span
-          className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full mb-2"
-          style={{
-            backgroundColor: exp.outcome === "win" ? "var(--pass-bg)" : exp.outcome === "loss" ? "var(--fail-bg)" : "var(--bg-section)",
-            color: exp.outcome === "win" ? "var(--pass-text)" : exp.outcome === "loss" ? "var(--fail-text)" : "var(--text-muted)",
-          }}
-        >
-          {exp.outcome === "win" ? "✓ Win" : exp.outcome === "loss" ? "✗ Loss" : "~ Neutral"}
-        </span>
+        <>
+          <span
+            className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full mb-2"
+            style={{
+              backgroundColor: exp.outcome === "win" ? "var(--pass-bg)" : exp.outcome === "loss" ? "var(--fail-bg)" : "var(--bg-section)",
+              color: exp.outcome === "win" ? "var(--pass-text)" : exp.outcome === "loss" ? "var(--fail-text)" : "var(--text-muted)",
+            }}
+          >
+            {exp.outcome === "win" ? "✓ Win" : exp.outcome === "loss" ? "✗ Loss" : "~ Neutral"}
+          </span>
+          {/* Inline verdict summary from persisted metrics_delta */}
+          {exp.metrics_delta && (() => {
+            type DeltaEntry = { relativeDelta: number | null; direction: string };
+            const metricsMap = (exp.metrics_delta as { metrics?: Record<string, DeltaEntry> }).metrics ?? {};
+            const entries = Object.entries(metricsMap)
+              .filter(([, v]) => v.direction !== "no_data" && v.relativeDelta !== null)
+              .sort(([, a], [, b]) => Math.abs(b.relativeDelta ?? 0) - Math.abs(a.relativeDelta ?? 0))
+              .slice(0, 3);
+            if (!entries.length) return null;
+            return (
+              <div className="rounded-lg p-2 mb-2" style={{ backgroundColor: "var(--bg-section)" }}>
+                {entries.map(([key, v]) => (
+                  <div key={key} className="flex justify-between text-xs py-0.5">
+                    <span style={{ color: "var(--text-secondary)" }}>{key.replace(/_/g, " ")}</span>
+                    <span style={{ color: v.direction === "up" ? "#10b981" : v.direction === "down" ? "#ef4444" : "var(--text-muted)" }}>
+                      {v.relativeDelta !== null ? `${v.relativeDelta >= 0 ? "+" : ""}${(v.relativeDelta * 100).toFixed(1)}%` : "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </>
       )}
 
       {/* Expanded detail */}
@@ -372,6 +396,14 @@ function ExperimentsContent() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "evaluated", outcome, outcomeNotes: notes }),
     });
+    // Auto-compute and persist metrics delta after evaluating
+    const deltaRes = await fetch(`/api/experiments/${id}/metrics`);
+    if (deltaRes.ok) {
+      const deltaData = await deltaRes.json();
+      setExperiments((prev) =>
+        prev.map((e) => e.id === id ? { ...e, metrics_delta: deltaData.delta as Record<string, unknown> } : e)
+      );
+    }
   }
 
   if (loading) {

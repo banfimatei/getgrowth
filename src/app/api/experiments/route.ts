@@ -1,7 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import type { ExperimentStatus, TargetMetric } from "@/lib/supabase";
+
+/** Ensure the Clerk user exists in our users table before any FK-dependent insert. */
+async function ensureUser(userId: string) {
+  const { data: existing } = await supabaseAdmin
+    .from("users")
+    .select("id")
+    .eq("id", userId)
+    .single();
+  if (existing) return;
+
+  const clerk = await currentUser();
+  const email = clerk?.emailAddresses?.[0]?.emailAddress ?? "";
+  const name = [clerk?.firstName, clerk?.lastName].filter(Boolean).join(" ") || null;
+  await supabaseAdmin
+    .from("users")
+    .upsert({ id: userId, email, name, updated_at: new Date().toISOString() }, { onConflict: "id" });
+}
 
 /**
  * GET /api/experiments?connectedAppId=&status=
@@ -60,6 +77,9 @@ export async function POST(request: NextRequest) {
   if (!title?.trim()) {
     return NextResponse.json({ error: "title is required" }, { status: 400 });
   }
+
+  // Sync user to Supabase if the Clerk webhook hasn't fired yet
+  await ensureUser(userId);
 
   const { data, error } = await supabaseAdmin
     .from("experiments")

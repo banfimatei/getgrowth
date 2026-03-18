@@ -49,6 +49,23 @@ export interface DbSavedApp {
   platform: "ios" | "android";
   name: string;
   icon_url: string | null;
+  last_regression_email_at: string | null;
+  created_at: string;
+}
+
+export interface DbAuditLead {
+  id: string;
+  token: string;
+  email: string;
+  store_id: string;
+  platform: "ios" | "android";
+  app_name: string;
+  app_icon_url: string | null;
+  score: number;
+  category_scores: Record<string, number>;
+  claimed_user_id: string | null;
+  last_checked_at: string | null;
+  notified_at: string | null;
   created_at: string;
 }
 
@@ -62,6 +79,8 @@ export interface DbAudit {
   action_plan: unknown;
   ai_powered: boolean;
   app_data: unknown;
+  source: "manual" | "auto_public" | "free_audit" | "paid_audit";
+  competitor_id: string | null;
   created_at: string;
 }
 
@@ -132,6 +151,175 @@ export interface DbExperiment {
   metrics_delta: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface DbKeywordTrack {
+  id: string;
+  user_id: string;
+  saved_app_id: string;
+  keyword: string;
+  country: string;
+  track_id: number | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface DbKeywordRankHistory {
+  id: string;
+  keyword_track_id: string;
+  date: string;
+  rank: number | null;
+  popularity: number | null;
+  difficulty: number | null;
+  daily_searches: number | null;
+  opportunity: number | null;
+  created_at: string;
+}
+
+export interface DbCompetitor {
+  id: string;
+  saved_app_id: string;
+  user_id: string;
+  competitor_store_id: string;
+  competitor_platform: "ios" | "android";
+  competitor_name: string;
+  competitor_icon_url: string | null;
+  created_at: string;
+}
+
+export interface DbAppProfile {
+  id: string;
+  saved_app_id: string;
+  user_id: string;
+  context: AppProfileContext;
+  version: number;
+  built_at: string;
+  created_at: string;
+}
+
+export interface AppProfileContext {
+  identity: {
+    storeId: string;
+    platform: "ios" | "android";
+    name: string;
+    developer: string;
+    category: string;
+    iconUrl: string;
+    url: string;
+  };
+  storeListing: {
+    title: string;
+    subtitle: string | null;
+    shortDescription: string | null;
+    description: string;
+    keywordField: string | null;
+    promotionalText: string | null;
+    whatsNew: string | null;
+    screenshotCount: number;
+    hasVideo: boolean;
+    version: string | null;
+    lastUpdated: string | null;
+    rating: number;
+    ratingsCount: number;
+    price: string | null;
+    contentRating: string | null;
+  };
+  asoHealth: {
+    currentScore: number;
+    previousScore: number | null;
+    scoreTrend: "improving" | "declining" | "stable" | "new";
+    categoryScores: Record<string, number>;
+    strengths: string[];
+    weaknesses: string[];
+    lastAuditAt: string;
+    aiPowered: boolean;
+  };
+  auditHistory: Array<{
+    date: string;
+    score: number;
+    source: string;
+    aiPowered: boolean;
+  }>;
+  actionPlan: {
+    total: number;
+    critical: number;
+    high: number;
+    topActions: Array<{
+      title: string;
+      priority: string;
+      effort: string;
+      category: string;
+    }>;
+  };
+  keywords: {
+    tracked: Array<{
+      keyword: string;
+      country: string;
+      currentRank: number | null;
+      popularity: number | null;
+      trend: "improving" | "declining" | "stable" | "new";
+    }>;
+    totalTracked: number;
+  };
+  metrics: {
+    hasStoreConnection: boolean;
+    latestDate: string | null;
+    last7d: { impressions: number; installs: number; cvr: number } | null;
+    last30d: { impressions: number; installs: number; cvr: number } | null;
+    trends: {
+      installs: "improving" | "declining" | "stable" | null;
+      cvr: "improving" | "declining" | "stable" | null;
+      rating: "improving" | "declining" | "stable" | null;
+    };
+  };
+  competitors: Array<{
+    name: string;
+    storeId: string;
+    platform: string;
+    lastAuditScore: number | null;
+  }>;
+  experiments: {
+    total: number;
+    active: number;
+    wins: number;
+    losses: number;
+    recentOutcomes: Array<{
+      title: string;
+      outcome: string | null;
+      topDelta: string | null;
+    }>;
+  };
+  brandVoice: {
+    tone: "formal" | "casual" | "playful" | "technical" | "neutral";
+    sentenceStyle: "short" | "mixed" | "long";
+    usesEmoji: boolean;
+    emojiDensity: "none" | "light" | "heavy";
+    usesBullets: boolean;
+    capitalization: "standard" | "title-case-heavy" | "all-caps-heavy";
+    powerWords: string[];
+    ctaStyle: string | null;
+    vocabularyLevel: "simple" | "moderate" | "technical";
+    samples: {
+      openingLine: string | null;
+      ctaLine: string | null;
+    };
+  };
+  icp: {
+    primaryAudience: string;
+    useCases: string[];
+    painPoints: string[];
+    keyFeatures: string[];
+    pricingPosition: "free" | "freemium" | "premium" | "subscription" | "unknown";
+    platformSignals: string[];
+    demographicSignals: {
+      contentRating: string | null;
+      category: string;
+      broadAge: string | null;
+    };
+    competitivePosition: string | null;
+  };
+  compiledAt: string;
+  version: number;
 }
 
 // ---------------------------------------------------------------------------

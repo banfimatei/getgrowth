@@ -24,7 +24,7 @@ export async function GET(
 
   const { data, error } = await supabaseAdmin
     .from("audits")
-    .select("id, overall_score, category_scores, ai_powered, created_at")
+    .select("id, overall_score, category_scores, ai_powered, source, created_at")
     .eq("saved_app_id", id)
     .order("created_at", { ascending: false })
     .limit(20);

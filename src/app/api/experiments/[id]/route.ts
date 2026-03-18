@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { supabaseAdmin } from "@/lib/supabase";
+import { buildAndSaveProfile } from "@/lib/profile-compiler";
 import type { ExperimentStatus, ExperimentOutcome, TargetMetric } from "@/lib/supabase";
 
 /**
@@ -81,6 +82,21 @@ export async function PATCH(
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Rebuild app profile when an experiment is evaluated
+  if (status === "evaluated" && data?.connected_app_id) {
+    const { data: ca } = await supabaseAdmin
+      .from("connected_apps")
+      .select("saved_app_id")
+      .eq("id", data.connected_app_id)
+      .single();
+    if (ca?.saved_app_id) {
+      buildAndSaveProfile(ca.saved_app_id, userId).catch((e) =>
+        console.error("[experiments] Profile rebuild failed:", e)
+      );
+    }
+  }
+
   return NextResponse.json({ experiment: data });
 }
 

@@ -21,6 +21,7 @@ interface AuditRecord {
   id: string;
   overall_score: number;
   ai_powered: boolean;
+  source?: string;
   created_at: string;
 }
 
@@ -329,6 +330,14 @@ function DashboardContent() {
                 date: new Date(a.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
               }));
               const latestScore = app.audits[0]?.overall_score;
+              // Auto-audit indicator: find most recent auto audit
+              const lastAutoAudit = app.audits.find((a) => a.source === "auto_public");
+              const manualBeforeAuto = lastAutoAudit
+                ? app.audits.find((a) => a.source !== "auto" && new Date(a.created_at) < new Date(lastAutoAudit.created_at))
+                : null;
+              const autoScoreDelta = lastAutoAudit && manualBeforeAuto
+                ? lastAutoAudit.overall_score - manualBeforeAuto.overall_score
+                : null;
 
               return (
                 <div
@@ -351,6 +360,16 @@ function DashboardContent() {
                         <p className="text-sm font-semibold leading-tight" style={{ color: "var(--text-primary)" }}>{app.name}</p>
                         <p className="text-xs capitalize mt-0.5" style={{ color: "var(--text-muted)" }}>
                           {app.platform} · {app.audits.length} audit{app.audits.length === 1 ? "" : "s"}
+                          {lastAutoAudit && (
+                            <span style={{ color: "#10b981" }}>
+                              {" "}· auto-audited {new Date(lastAutoAudit.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                              {autoScoreDelta != null && autoScoreDelta !== 0 && (
+                                <span style={{ color: autoScoreDelta > 0 ? "#10b981" : "#ef4444" }}>
+                                  {" "}({autoScoreDelta > 0 ? "+" : ""}{autoScoreDelta})
+                                </span>
+                              )}
+                            </span>
+                          )}
                         </p>
                       </div>
                     </div>

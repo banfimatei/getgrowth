@@ -25,7 +25,7 @@ interface ActionPlanProps {
   onVisualize?: (section: "icon" | "screenshots", brief: string) => Promise<VisualConceptResult[] | string>;
   aiEnabled?: boolean;
   appName?: string;
-  onCheckout?: () => void;
+  platform?: string;
 }
 
 const priorityConfig = {
@@ -41,9 +41,18 @@ const effortConfig = {
   heavy: { label: "Significant effort", color: "var(--text-tertiary)" },
 };
 
-export default function ActionPlan({ actions, onDeepDive, deepDiveLoading, onVisualize, aiEnabled = false, appName, onCheckout }: ActionPlanProps) {
+export default function ActionPlan({ actions, onDeepDive, deepDiveLoading, onVisualize, aiEnabled = false, appName, platform }: ActionPlanProps) {
   const router = useRouter();
   const { isSignedIn } = useUser();
+  const [hasExperiments, setHasExperiments] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+    fetch("/api/experiments")
+      .then((r) => r.json())
+      .then((d) => setHasExperiments((d.experiments?.length ?? 0) > 0))
+      .catch(() => {});
+  }, [isSignedIn]);
 
   if (actions.length === 0) {
     return (
@@ -65,13 +74,13 @@ export default function ActionPlan({ actions, onDeepDive, deepDiveLoading, onVis
   return (
     <div className="space-y-4">
       {quickWins.length > 0 && (
-        <ActionGroup title="Quick Wins" subtitle="Can be done today" actions={quickWins} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} onVisualize={onVisualize} aiEnabled={aiEnabled} onCheckout={onCheckout} />
+        <ActionGroup title="Quick Wins" subtitle="Can be done today" actions={quickWins} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} onVisualize={onVisualize} aiEnabled={aiEnabled} hasExperiments={hasExperiments} appName={appName} platform={platform} />
       )}
       {mediumEffort.length > 0 && (
-        <ActionGroup title="This Sprint" subtitle="Medium effort, high impact" actions={mediumEffort} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} onVisualize={onVisualize} aiEnabled={aiEnabled} onCheckout={onCheckout} />
+        <ActionGroup title="This Sprint" subtitle="Medium effort, high impact" actions={mediumEffort} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} onVisualize={onVisualize} aiEnabled={aiEnabled} hasExperiments={hasExperiments} appName={appName} platform={platform} />
       )}
       {heavyEffort.length > 0 && (
-        <ActionGroup title="Roadmap" subtitle="Significant effort" actions={heavyEffort} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} onVisualize={onVisualize} aiEnabled={aiEnabled} onCheckout={onCheckout} />
+        <ActionGroup title="Roadmap" subtitle="Significant effort" actions={heavyEffort} onDeepDive={onDeepDive} deepDiveLoading={deepDiveLoading} onVisualize={onVisualize} aiEnabled={aiEnabled} hasExperiments={hasExperiments} appName={appName} platform={platform} />
       )}
 
       {/* Connect store nudge — shown to signed-in users to close the audit→experiment loop */}
@@ -104,15 +113,17 @@ export default function ActionPlan({ actions, onDeepDive, deepDiveLoading, onVis
   );
 }
 
-function ActionGroup({ title, subtitle, actions, onDeepDive, deepDiveLoading, onVisualize, aiEnabled, onCheckout }: {
+function ActionGroup({ title, subtitle, actions, onDeepDive, deepDiveLoading, onVisualize, aiEnabled, hasExperiments, appName, platform }: {
   title: string;
   subtitle: string;
   actions: ActionItem[];
   aiEnabled?: boolean;
+  hasExperiments?: boolean;
+  appName?: string;
+  platform?: string;
   onDeepDive?: (section: DeepDiveSection, actionId: string) => Promise<DeepDiveEnhancement | string | null>;
   deepDiveLoading?: string | null;
   onVisualize?: (section: "icon" | "screenshots", brief: string) => Promise<VisualConceptResult[] | string>;
-  onCheckout?: () => void;
 }) {
   return (
     <div>
@@ -122,20 +133,22 @@ function ActionGroup({ title, subtitle, actions, onDeepDive, deepDiveLoading, on
       </div>
       <div className="space-y-2">
         {actions.map((action) => (
-          <ActionCard key={action.id} action={action} onDeepDive={onDeepDive} isLoading={deepDiveLoading === action.id} onVisualize={onVisualize} aiEnabled={aiEnabled} onCheckout={onCheckout} />
+          <ActionCard key={action.id} action={action} onDeepDive={onDeepDive} isLoading={deepDiveLoading === action.id} onVisualize={onVisualize} aiEnabled={aiEnabled} hasExperiments={hasExperiments} appName={appName} platform={platform} />
         ))}
       </div>
     </div>
   );
 }
 
-function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled, onCheckout }: {
+function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled, hasExperiments, appName, platform }: {
   action: ActionItem;
   onDeepDive?: (section: DeepDiveSection, actionId: string) => Promise<DeepDiveEnhancement | string | null>;
   isLoading?: boolean;
   onVisualize?: (section: "icon" | "screenshots", brief: string) => Promise<VisualConceptResult[] | string>;
   aiEnabled?: boolean;
-  onCheckout?: () => void;
+  hasExperiments?: boolean;
+  appName?: string;
+  platform?: string;
 }) {
   const router = useRouter();
   const { isSignedIn } = useUser();
@@ -149,10 +162,10 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled, onC
   const pConfig = priorityConfig[action.priority];
   const eConfig = effortConfig[action.effort];
 
-  // Show deep-dive area only when AI is enabled (page-level CTA already handles the upgrade prompt)
+  // Show deep-dive area for any item that supports it — locked or unlocked
   const hasDeepDiveSection = !!action.deepDiveSection;
   const canDeepDive = hasDeepDiveSection && !!onDeepDive && !!aiEnabled;
-  const showDeepDive = hasDeepDiveSection && !!aiEnabled;
+  const showDeepDive = hasDeepDiveSection; // always show the row — locked if !aiEnabled
 
   const isEnhanced = !!enhanced;
   const activeBrief = enhanced?.brief || action.brief;
@@ -290,9 +303,9 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled, onC
           {showDeepDive && (
             <div className="pt-2 border-t" style={{ borderColor: "var(--border)" }}>
               {!aiEnabled ? (
-                /* No credits — go straight to checkout */
+                /* No credits — buy prompt */
                 <button
-                  onClick={(e) => { e.stopPropagation(); onCheckout?.(); }}
+                  onClick={(e) => { e.stopPropagation(); router.push("/pricing"); }}
                   className="flex items-center gap-1.5 text-xs font-medium py-1.5 px-3 rounded cursor-pointer transition-opacity hover:opacity-80"
                   style={{
                     backgroundColor: "rgba(30,27,75,0.07)",
@@ -329,7 +342,7 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled, onC
                     if (canDeepDive && onDeepDive && action.deepDiveSection) {
                       const result = await onDeepDive(action.deepDiveSection, action.id);
                       if (typeof result === "string" && result === "__ERROR__NEEDS_CREDITS") {
-                        onCheckout?.();
+                        router.push("/pricing");
                       } else if (typeof result === "string" && result.startsWith("__ERROR__")) {
                         setDeepDiveError(result.replace("__ERROR__", ""));
                       } else if (result && typeof result === "object") {
@@ -348,23 +361,6 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled, onC
                   {action.aiStatus === "reviewed" ? "Deep Dive" : "Enhance with AI"}
                 </button>
               )}
-            </div>
-          )}
-
-          {/* Start Experiment */}
-          {isSignedIn && (
-            <div className="pt-2 border-t" style={{ borderColor: "var(--border)" }}>
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowExperimentModal(true); }}
-                className="flex items-center gap-1.5 text-xs font-medium py-1.5 px-3 rounded cursor-pointer transition-opacity hover:opacity-80"
-                style={{
-                  backgroundColor: "rgba(16,185,129,0.07)",
-                  color: "#10b981",
-                  border: "1px solid rgba(16,185,129,0.3)",
-                }}
-              >
-                <span>⚗</span> Add to experiments
-              </button>
             </div>
           )}
 
@@ -407,7 +403,7 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled, onC
                           activeBrief,
                         );
                         if (typeof result === "string" && result === "__ERROR__NEEDS_CREDITS") {
-                          onCheckout?.();
+                          router.push("/pricing");
                         } else if (typeof result === "string" && result.startsWith("__ERROR__")) {
                           setVisualError(result.replace("__ERROR__", ""));
                         } else if (Array.isArray(result)) {
@@ -432,7 +428,7 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled, onC
             </div>
           )}
 
-          {/* Start Experiment button */}
+          {/* Single experiment button — label changes based on whether they have existing experiments */}
           {isSignedIn && (
             <div className="pt-2 border-t" style={{ borderColor: "var(--border)" }}>
               <button
@@ -441,11 +437,11 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled, onC
                 style={{
                   backgroundColor: "rgba(16,185,129,0.07)",
                   color: "#10b981",
-                  border: "1px dashed rgba(16,185,129,0.4)",
+                  border: hasExperiments ? "1px solid rgba(16,185,129,0.4)" : "1px dashed rgba(16,185,129,0.4)",
                 }}
               >
                 <span>⚗</span>
-                Start experiment
+                {hasExperiments ? "Add to experiments" : "Start experiment"}
               </button>
             </div>
           )}
@@ -453,7 +449,7 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled, onC
       )}
 
       {showExperimentModal && (
-        <StartExperimentModal action={action} onClose={() => setShowExperimentModal(false)} />
+        <StartExperimentModal action={action} onClose={() => setShowExperimentModal(false)} appName={appName} platform={platform} />
       )}
     </div>
   );
@@ -466,11 +462,22 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled, onC
 function StartExperimentModal({
   action,
   onClose,
+  appName,
+  platform,
 }: {
   action: ActionItem;
   onClose: () => void;
+  appName?: string;
+  platform?: string;
 }) {
   const router = useRouter();
+
+  function connectStoreUrl() {
+    const params = new URLSearchParams();
+    if (platform) params.set("platform", platform);
+    if (appName) params.set("appName", appName);
+    return `/dashboard/connect?${params.toString()}`;
+  }
   const [connectedAppId, setConnectedAppId] = useState("");
   const [hypothesis, setHypothesis] = useState("");
   const [saving, setSaving] = useState(false);
@@ -512,6 +519,9 @@ function StartExperimentModal({
     }
   }
 
+  const hasApps = !loadingApps && apps.length > 0;
+  const noApps  = !loadingApps && apps.length === 0;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -526,20 +536,43 @@ function StartExperimentModal({
           Start experiment
         </h3>
         <p className="text-xs mb-4" style={{ color: "var(--text-secondary)" }}>
-          Save this audit finding as an experiment to track its impact.
+          Save this finding as an experiment to track its impact over time.
         </p>
 
-        <div className="rounded-lg px-3 py-2 mb-4 text-xs" style={{ backgroundColor: "var(--bg-section)", color: "var(--text-secondary)" }}>
-          <strong style={{ color: "var(--text-primary)" }}>{action.title}</strong>
-          {action.brief && <p className="mt-1 line-clamp-2">{action.brief.slice(0, 120)}…</p>}
+        {/* Finding preview */}
+        <div
+          className="rounded-lg px-3 py-2.5 mb-4 text-xs leading-relaxed"
+          style={{ backgroundColor: "var(--bg-inset)", border: "1px solid var(--border)" }}
+        >
+          <p className="font-semibold text-xs mb-0.5" style={{ color: "var(--text-primary)" }}>{action.title}</p>
+          {action.brief && (
+            <p className="leading-snug line-clamp-2" style={{ color: "var(--text-secondary)" }}>
+              <RichText text={action.brief.replace(/\*\*/g, "").slice(0, 120)} />
+              {action.brief.length > 120 && "…"}
+            </p>
+          )}
         </div>
 
-        {loadingApps ? (
-          <div className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>Loading connected apps…</div>
-        ) : apps.length > 0 ? (
-          <div className="mb-3">
+        {/* Hypothesis */}
+        <div className="mb-4">
+          <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
+            Hypothesis <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(optional)</span>
+          </label>
+          <textarea
+            value={hypothesis}
+            onChange={(e) => setHypothesis(e.target.value)}
+            placeholder="If we change X, we expect Y because Z…"
+            rows={2}
+            className="w-full px-3 py-2 text-xs border rounded-lg resize-none"
+            style={{ backgroundColor: "var(--bg-page)", borderColor: "var(--border)", color: "var(--text-primary)" }}
+          />
+        </div>
+
+        {/* App selector — only if apps exist */}
+        {hasApps && (
+          <div className="mb-4">
             <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
-              Linked app (for metric tracking)
+              Link to app <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(for automatic metric tracking)</span>
             </label>
             <select
               value={connectedAppId}
@@ -547,29 +580,11 @@ function StartExperimentModal({
               className="w-full px-3 py-2 text-xs border rounded-lg"
               style={{ backgroundColor: "var(--bg-page)", borderColor: "var(--border)", color: "var(--text-primary)" }}
             >
-              <option value="">No app linked (manual tracking)</option>
+              <option value="">No app linked — track manually</option>
               {apps.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </div>
-        ) : (
-          <div className="mb-3 text-xs" style={{ color: "var(--text-muted)" }}>
-            No connected apps. <button onClick={() => router.push("/dashboard/connect")} className="underline" style={{ color: "var(--accent)" }}>Connect a store</button> to track metrics.
-          </div>
         )}
-
-        <div className="mb-4">
-          <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-primary)" }}>
-            Hypothesis (optional)
-          </label>
-          <textarea
-            value={hypothesis}
-            onChange={(e) => setHypothesis(e.target.value)}
-            placeholder="If we change X, we expect Y because Z…"
-            rows={2}
-            className="w-full px-3 py-2 text-xs border rounded-lg"
-            style={{ backgroundColor: "var(--bg-page)", borderColor: "var(--border)", color: "var(--text-primary)" }}
-          />
-        </div>
 
         {error && <p className="text-xs mb-3" style={{ color: "var(--fail-text)" }}>{error}</p>}
 
@@ -587,9 +602,23 @@ function StartExperimentModal({
             className="flex-1 py-2 text-sm font-medium rounded-xl disabled:opacity-60"
             style={{ backgroundColor: "var(--accent)", color: "#fff" }}
           >
-            {saving ? "Saving…" : "Add to experiments"}
+            {saving ? "Saving…" : "Save experiment"}
           </button>
         </div>
+
+        {/* Subtle "connect store" nudge — only shown if no apps, at the bottom */}
+        {noApps && (
+          <p className="text-center text-xs mt-3" style={{ color: "var(--text-muted)" }}>
+            Want automatic metric tracking?{" "}
+            <button
+              onClick={() => router.push(connectStoreUrl())}
+              className="underline"
+              style={{ color: "var(--accent)" }}
+            >
+              Connect a store
+            </button>
+          </p>
+        )}
       </div>
     </div>
   );

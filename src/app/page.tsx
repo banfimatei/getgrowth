@@ -88,6 +88,54 @@ function ExperimentBoardMock() {
   );
 }
 
+function KeywordIntelMock() {
+  const keywords = [
+    { word: "meditation timer", pop: 62, diff: 28, label: "Sweet Spot", color: "#10b981", icon: "\uD83C\uDFAF" },
+    { word: "focus app", pop: 45, diff: 51, label: "Good Target", color: "#10b981", icon: "\u2705" },
+    { word: "mindfulness", pop: 78, diff: 74, label: "Worth Competing", color: "#f59e0b", icon: "\u2694\uFE0F" },
+  ];
+  return (
+    <div className="mock-card p-3 mb-3">
+      <p className="text-[10px] font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>Keyword Intelligence</p>
+      <div className="space-y-2">
+        {keywords.map((kw) => (
+          <div key={kw.word} className="rounded-md px-2 py-1.5" style={{ backgroundColor: "var(--bg-inset)" }}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[9px] font-semibold" style={{ color: "var(--text-primary)" }}>
+                {kw.icon} &ldquo;{kw.word}&rdquo;
+              </span>
+              <span
+                className="text-[7px] font-bold px-1.5 py-0.5 rounded-full"
+                style={{ backgroundColor: `${kw.color}18`, color: kw.color }}
+              >
+                {kw.label}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div className="flex justify-between text-[7px] mb-0.5" style={{ color: "var(--text-tertiary)" }}>
+                  <span>Pop.</span><span>{kw.pop}</span>
+                </div>
+                <div className="w-full h-1 rounded-full" style={{ backgroundColor: "var(--border)" }}>
+                  <div className="h-full rounded-full" style={{ width: `${kw.pop}%`, backgroundColor: "#10b981" }} />
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between text-[7px] mb-0.5" style={{ color: "var(--text-tertiary)" }}>
+                  <span>Diff.</span><span>{kw.diff}</span>
+                </div>
+                <div className="w-full h-1 rounded-full" style={{ backgroundColor: "var(--border)" }}>
+                  <div className="h-full rounded-full" style={{ width: `${kw.diff}%`, backgroundColor: kw.diff <= 35 ? "#10b981" : kw.diff <= 55 ? "#f59e0b" : "#ef4444" }} />
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function MetricsChartMock() {
   const points = [32, 34, 31, 38, 45, 48, 52, 55, 49, 58, 62, 68, 72, 75];
   const max = Math.max(...points);
@@ -207,12 +255,12 @@ export default function LandingPage() {
                 Know which ASO changes actually grow your installs.
               </h1>
 
-              {/* Subheadline — 192 chars (max 200) */}
+              {/* Subheadline — max 200 chars */}
               <p
                 className="hero-animate hero-animate-delay-3 text-base leading-relaxed mb-8"
                 style={{ color: "var(--text-secondary)", maxWidth: 520 }}
               >
-                GetGrowth connects to App Store Connect and Google Play, runs an AI&#8209;powered ASO audit, and turns findings into a prioritized experiment backlog with automatic impact tracking.
+                AI&#8209;powered ASO audit with real keyword intelligence. See popularity, difficulty, and targeting advice &mdash; then track which changes move installs.
               </p>
 
               {/* CTAs */}
@@ -255,6 +303,7 @@ export default function LandingPage() {
                 }}
               >
                 <AuditSummaryMock />
+                <KeywordIntelMock />
                 <ExperimentBoardMock />
                 <MetricsChartMock />
               </div>
@@ -270,7 +319,7 @@ export default function LandingPage() {
                 }}
               >
                 <AuditSummaryMock />
-                <MetricsChartMock />
+                <KeywordIntelMock />
               </div>
             </div>
           </div>
@@ -291,7 +340,7 @@ export default function LandingPage() {
             {[
               {
                 step: "01", tag: "Diagnose", title: "Run an AI ASO audit",
-                body: "Paste your store URL. We audit title, keywords, description, screenshots, and reviews using ASO heuristics and AI.",
+                body: "Paste your store URL. We audit metadata, score keyword popularity and difficulty from real search data, and flag each as Sweet Spot, Hidden Gem, or Avoid.",
                 accent: "var(--accent)",
                 icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="2" /><path d="M15 15L21 21" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>,
               },
@@ -420,10 +469,10 @@ export default function LandingPage() {
                 <h3 className="text-sm font-semibold">ASO platforms</h3>
               </div>
               <p className="text-xs mb-3" style={{ color: "var(--text-secondary)" }}>
-                Great for deep keyword research and market intel.
+                Deep keyword databases and market intelligence dashboards.
               </p>
               <div className="rounded-md px-3 py-2 text-xs" style={{ backgroundColor: "var(--error-bg)", color: "var(--error-text)" }}>
-                Expensive, complex, require a full-time ASO specialist.
+                $500+/month, steep learning curves, require a dedicated ASO specialist.
               </div>
             </div>
 
@@ -454,9 +503,10 @@ export default function LandingPage() {
               </div>
               <ul className="space-y-2">
                 {[
-                  "AI audits distilled into clear experiments",
-                  "Automatic tracking via your App Store / Play data",
-                  "Speed and clarity, not a full-time ASO manager",
+                  "See keyword popularity, difficulty, and targeting advice",
+                  "Compare keyword opportunity across 30 countries",
+                  "Ship AI-generated experiments from every audit",
+                  "Track results with your App Store / Play data",
                   "Starts at \u20AC29 \u2014 no subscription lock-in",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2 text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -478,17 +528,17 @@ export default function LandingPage() {
       <section id="pricing" className="py-20 lg:py-28 relative grain-bg" style={{ backgroundColor: "var(--bg-section)" }}>
         <div className="relative z-10 max-w-4xl mx-auto px-5">
           <div ref={addRef} className="reveal text-center mb-10">
-            <h2 className="mb-3 font-display">Start with one audit, upgrade when experiments matter</h2>
+            <h2 className="mb-3 font-display">See what&rsquo;s worth targeting before you ship</h2>
             <p className="text-sm" style={{ color: "var(--text-secondary)", maxWidth: 460, margin: "0 auto" }}>
-              No subscription required. Pay per audit, connect your stores for free, track unlimited experiments.
+              Free keyword intelligence in every audit. Unlock full analysis, country scanning, and AI rewrites for a one-time fee.
             </p>
           </div>
 
           <div ref={addRef} className="reveal grid grid-cols-1 sm:grid-cols-3 gap-5 max-w-3xl mx-auto">
             {[
-              { name: "Free audit", price: "\u20AC0", desc: "Rule-based audit with scoring, action plan, and category breakdown.", cta: "Run free audit", href: "/audit", highlight: false },
-              { name: "Full AI audit", price: "\u20AC29", desc: "AI analysis, deep-dive rewrites, visual concepts, and PDF export.", cta: "Buy 1 credit", href: "/pricing", highlight: true },
-              { name: "5 Audits", price: "\u20AC99", desc: "Audit your apps + competitors. Credits never expire. Best for agencies.", cta: "View pricing", href: "/pricing", highlight: false },
+              { name: "Free audit", price: "\u20AC0", desc: "Scoring, action plan, category breakdown, and keyword intelligence for up to 10 keywords.", cta: "Run free audit", href: "/audit", highlight: false },
+              { name: "Full AI audit", price: "\u20AC29", desc: "Deep AI analysis, full keyword strategy, Country Opportunity Finder (30 markets), download estimates, experiments, and PDF export.", cta: "Buy 1 credit", href: "/pricing", highlight: true },
+              { name: "5 Audits", price: "\u20AC99", desc: "Full AI audits for your apps + competitors. Credits never expire. Best for agencies and studios with multiple titles.", cta: "View pricing", href: "/pricing", highlight: false },
             ].map((p) => (
               <div
                 key={p.name}
@@ -566,6 +616,8 @@ export default function LandingPage() {
               { q: "What does a credit unlock?", a: "One credit = one full AI audit for one app. This includes deep-dive analysis on every section, rewrite suggestions, visual concepts, and PDF export. Re-running the same app costs nothing." },
               { q: "Is this just another AI wrapper?", a: "No. GetGrowth combines battle-tested ASO heuristics with AI analysis, then connects directly to your store data so you can measure impact. It's an experiment operating system, not a chatbot." },
               { q: "What data do you pull from my store account?", a: "Impressions, page views, installs, conversion rates, crash/ANR rates, and reviews. We never modify your store listings or access financial data." },
+              { q: "Where does keyword intelligence data come from?", a: "We analyze real App Store search results using Apple\u2019s public iTunes Search API \u2014 the same data source professional ASO tools use. We score popularity (6 signals), difficulty (7 weighted factors), and estimate downloads based on search volume and tap-through rates. No third-party data subscriptions." },
+              { q: "What is the Country Opportunity Finder?", a: "It scans 30 App Store markets for each keyword and ranks them by opportunity score \u2014 so you can find countries where your keyword is popular but competition is weak. Available with the full AI audit." },
               { q: "Do credits expire?", a: "No. Credits never expire. Use them whenever you're ready." },
               { q: "Can I use GetGrowth without connecting a store?", a: "Absolutely. The audit works by scraping public store data. Connecting your store adds real metrics and experiment tracking on top." },
             ].map((item) => (
