@@ -2166,76 +2166,25 @@ function AuditContent() {
               </div>
             )}
 
-            {/* Upsell: inline guest checkout */}
-            {!report.aiEnabled && (
-              <div
-                className="border rounded-lg p-5 mb-6 fade-in"
-                style={{ backgroundColor: "rgba(30,27,75,0.04)", borderColor: "rgba(30,27,75,0.15)" }}
-              >
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold mb-1" style={{ color: "var(--accent)" }}>
-                      Unlock the full AI audit
-                    </p>
-                    <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                      Deep analysis across all sections, AI-written rewrites for title, description &amp; keywords, visual concepts, experiment suggestions, and PDF export. No signup required.
-                    </p>
-                  </div>
-                  <button
-                    onClick={isSignedIn && (report.creditsRemaining ?? 0) > 0
-                      ? async () => {
-                          setUnlockLoading(true);
-                          setAutoDeepDiveResults({});
-                          setSuggestedExperiments([]);
-                          try {
-                            const id = report.app.storeId || "";
-                            if (!id) throw new Error("App ID missing — please run the audit again.");
-                            const p = report.app.platform as "ios" | "android";
-                            const auditParams = new URLSearchParams({ id, platform: p, country });
-                            const auditResp = await fetch(`/api/audit?${auditParams}`);
-                            if (!auditResp.ok) {
-                              const errData = await auditResp.json().catch(() => null);
-                              throw new Error(errData?.error || "Audit failed");
-                            }
-                            const auditData = await auditResp.json();
-                            setReport(auditData);
-                            setUnlockLoading(false);
-                            await runAutoDeepDives(auditData, p);
-                          } catch (e) {
-                            setError(e instanceof Error ? e.message : "Failed to unlock. Please try again.");
-                            setUnlockLoading(false);
-                          }
-                        }
-                      : handleGuestCheckout
-                    }
-                    disabled={unlockLoading}
-                    className="px-5 py-2.5 rounded-lg font-semibold text-sm shrink-0 transition-all hover:brightness-110 pulse-cta disabled:opacity-50"
-                    style={{ backgroundColor: "var(--accent)", color: "#fff" }}
-                  >
-                    {unlockLoading ? "Processing\u2026" : isSignedIn && (report.creditsRemaining ?? 0) > 0 ? "Use 1 credit" : "Unlock full audit \u2014 \u20AC29"}
-                  </button>
-                </div>
-              </div>
-            )}
 
-            {/* AI Status Banner */}
-            {report.aiPowered && !report.aiScreenshots && (
+            {/* AI Status Banners — only shown to paid users when AI partially/fully failed */}
+            {report.aiEnabled && report.aiPowered && !report.aiScreenshots && (
               <div
                 className="border rounded-lg p-4 mb-6 fade-in fade-in-delay-2"
                 style={{ backgroundColor: "rgba(234, 179, 8, 0.08)", borderColor: "rgba(234, 179, 8, 0.3)" }}
               >
                 <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                  <strong style={{ color: "rgb(234, 179, 8)" }}>AI Vision Unavailable</strong> ? Screenshot and icon analysis fell back to rule-based mode. This usually means images couldn&apos;t be downloaded or the visual AI call timed out. Use the &quot;Enhance with AI&quot; button on screenshot items to retry per-item analysis.
+                  <strong style={{ color: "rgb(234, 179, 8)" }}>AI Vision Unavailable</strong> — Screenshot and icon analysis fell back to rule-based mode. This usually means images couldn&apos;t be downloaded or the visual AI call timed out. Use the &quot;Enhance with AI&quot; button on screenshot items to retry per-item analysis.
                 </p>
               </div>
             )}
-            {!report.aiPowered && (
+            {report.aiEnabled && !report.aiPowered && (
               <div
                 className="border rounded-lg p-4 mb-6 fade-in fade-in-delay-2"
                 style={{ backgroundColor: "rgba(239, 68, 68, 0.08)", borderColor: "rgba(239, 68, 68, 0.3)" }}
               >
                 <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                  <strong style={{ color: "rgb(239, 68, 68)" }}>AI Analysis Unavailable</strong> ? The audit used rule-based analysis only. AI-powered recommendations were not generated. Use the &quot;Enhance with AI&quot; buttons to get AI analysis per item.
+                  <strong style={{ color: "rgb(239, 68, 68)" }}>AI Analysis Unavailable</strong> — The audit used rule-based analysis only. AI-powered recommendations were not generated. Use the &quot;Enhance with AI&quot; buttons to get AI analysis per item.
                 </p>
               </div>
             )}
