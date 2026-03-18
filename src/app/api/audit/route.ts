@@ -113,12 +113,17 @@ export async function GET(request: NextRequest) {
     const hasTextAI   = !!(aiAnalysis?.title?.suggestions?.length);
     const hasVisualAI = !!(aiAnalysis?.screenshots?.perScreenshot?.length);
 
+    // Strip nonsense keywords that slipped through (URL fragments, single letters, etc.)
+    const cleanKeywordResults = keywordResults.filter(
+      (k) => !NOISE_WORDS.has(k.keyword.toLowerCase()) && k.keyword.length >= 3,
+    );
+
     // Gate keyword intelligence: free users get partial view (no download/tier details)
     const keywordIntelligence: (KeywordAnalysis | KeywordAnalysisFree)[] = aiEnabled
-      ? keywordResults
-      : keywordResults.map(toFreeView);
+      ? cleanKeywordResults
+      : cleanKeywordResults.map(toFreeView);
 
-    // Action plan uses the same gated view so free users don't see paid-only details
+    // Action plan uses gated view — free users don't see paid-only details
     const actionPlan = generateActionPlan(appData, categories, overallScore, aiAnalysis ?? undefined, keywordIntelligence.length > 0 ? keywordIntelligence : undefined);
 
     return NextResponse.json({
