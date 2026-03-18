@@ -327,9 +327,9 @@ export interface AppProfileContext {
 // ---------------------------------------------------------------------------
 
 export const CREDIT_PACKS: Record<string, { credits: number; label: string; price: number }> = {
-  ...(process.env.STRIPE_PRICE_STARTER   ? { [process.env.STRIPE_PRICE_STARTER]:   { credits: 1, label: "1 Audit",   price: 29 } } : {}),
-  ...(process.env.STRIPE_PRICE_GROWTH    ? { [process.env.STRIPE_PRICE_GROWTH]:    { credits: 2, label: "2 Audits",  price: 49 } } : {}),
-  ...(process.env.STRIPE_PRICE_PORTFOLIO ? { [process.env.STRIPE_PRICE_PORTFOLIO]: { credits: 5, label: "5 Audits",  price: 99 } } : {}),
+  ...(process.env.STRIPE_PRICE_STARTER   ? { [process.env.STRIPE_PRICE_STARTER.trim()]:   { credits: 1, label: "1 Audit",   price: 29 } } : {}),
+  ...(process.env.STRIPE_PRICE_GROWTH    ? { [process.env.STRIPE_PRICE_GROWTH.trim()]:    { credits: 2, label: "2 Audits",  price: 49 } } : {}),
+  ...(process.env.STRIPE_PRICE_PORTFOLIO ? { [process.env.STRIPE_PRICE_PORTFOLIO.trim()]: { credits: 5, label: "5 Audits",  price: 99 } } : {}),
 };
 
 export function creditsForPriceId(priceId: string): number | null {

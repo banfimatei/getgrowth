@@ -22,8 +22,8 @@ export async function GET() {
   }
 
   try {
-    const stripe = new Stripe(key);
-    const price = await stripe.prices.retrieve(starterPrice ?? "");
+    const stripe = new Stripe(key.trim());
+    const price = await stripe.prices.retrieve((starterPrice ?? "").trim());
     diagnosis.stripeApiOk = true;
     diagnosis.priceFound = true;
     diagnosis.priceActive = price.active;

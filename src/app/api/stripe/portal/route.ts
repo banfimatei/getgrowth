@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import Stripe from "stripe";
 import { supabaseAdmin } from "@/lib/supabase";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const stripe = new Stripe((process.env.STRIPE_SECRET_KEY ?? "").trim());
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://getgrowth.eu";
 
 // Opens the Stripe Customer Portal for receipts and payment history

@@ -3,7 +3,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import Stripe from "stripe";
 import { supabaseAdmin, CREDIT_PACKS } from "@/lib/supabase";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const stripe = new Stripe((process.env.STRIPE_SECRET_KEY ?? "").trim());
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://getgrowth.eu";
 
 export async function POST(request: NextRequest) {

@@ -3,10 +3,10 @@ import { auth } from "@clerk/nextjs/server";
 import Stripe from "stripe";
 import { CREDIT_PACKS } from "@/lib/supabase";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const stripe = new Stripe((process.env.STRIPE_SECRET_KEY ?? "").trim());
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://getgrowth.eu";
 
-const STARTER_PRICE_ID = process.env.STRIPE_PRICE_STARTER ?? "";
+const STARTER_PRICE_ID = (process.env.STRIPE_PRICE_STARTER ?? "").trim();
 
 export async function POST(request: NextRequest) {
   const { appId, platform, country, priceId } = await request.json();

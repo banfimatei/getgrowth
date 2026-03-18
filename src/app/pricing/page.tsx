@@ -55,9 +55,9 @@ const PACKS = [
 ];
 
 const PRICE_IDS: Record<string, string | undefined> = {
-  "1 Audit":  process.env.NEXT_PUBLIC_STRIPE_PRICE_STARTER,
-  "2 Audits": process.env.NEXT_PUBLIC_STRIPE_PRICE_GROWTH,
-  "5 Audits": process.env.NEXT_PUBLIC_STRIPE_PRICE_PORTFOLIO,
+  "1 Audit":  process.env.NEXT_PUBLIC_STRIPE_PRICE_STARTER?.trim(),
+  "2 Audits": process.env.NEXT_PUBLIC_STRIPE_PRICE_GROWTH?.trim(),
+  "5 Audits": process.env.NEXT_PUBLIC_STRIPE_PRICE_PORTFOLIO?.trim(),
 };
 
 export default function PricingPage() {

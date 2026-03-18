@@ -3,7 +3,7 @@ import Stripe from "stripe";
 import { supabaseAdmin, creditsForPriceId } from "@/lib/supabase";
 import { addCredits, createAiUnlock } from "@/lib/tier-guard";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const stripe = new Stripe((process.env.STRIPE_SECRET_KEY ?? "").trim());
 
 export async function POST(request: NextRequest) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
