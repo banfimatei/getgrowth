@@ -764,11 +764,12 @@ function keywordOpportunities(data: AppData, kwIntel?: KeywordAnalysis[]): Actio
     (k) => k.targetingAdvice.label === "Sweet Spot" || k.targetingAdvice.label === "Hidden Gem",
   );
   const avoidList = kwIntel.filter((k) => k.targetingAdvice.label === "Avoid");
-  const unranked = kwIntel.filter((k) => k.appRank === null && k.opportunity > 20);
+  const URL_NOISE = new Set(["http", "https", "www", "com", "net", "org", "html", "php", "url", "href", "visit", "click", "here", "link"]);
+  const unranked = kwIntel.filter((k) => k.appRank === null && k.opportunity > 20 && !URL_NOISE.has(k.keyword.toLowerCase()));
 
   if (sweetSpots.length === 0 && avoidList.length === 0) return [];
 
-  let b = `**Keyword Intelligence Analysis** (based on real App Store search data):\n\n`;
+  let b = `**Keyword Intelligence Analysis**\n\n`;
 
   if (sweetSpots.length > 0) {
     b += `**High-opportunity keywords to prioritize:**\n`;

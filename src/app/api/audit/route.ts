@@ -15,12 +15,16 @@ import {
 export const maxDuration = 120;
 
 const NOISE_WORDS = new Set([
+  // Common English stop words
   "the", "and", "for", "with", "your", "you", "from", "that", "this",
   "app", "our", "will", "can", "has", "have", "are", "was", "been",
   "not", "all", "but", "its", "also", "more", "most", "very", "just",
   "any", "each", "than", "them", "into", "over", "about", "now", "new",
   "get", "use", "one", "two", "like", "way", "even", "make", "take",
   "free", "download", "best", "great",
+  // URL / protocol fragments — appear when descriptions contain links
+  "http", "https", "www", "com", "net", "org", "edu", "gov", "html",
+  "php", "utm", "href", "url", "visit", "click", "here", "link",
 ]);
 
 function extractAuditKeywords(title: string, subtitle?: string, description?: string): string[] {
