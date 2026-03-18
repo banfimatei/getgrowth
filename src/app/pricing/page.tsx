@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useUser, useSignIn } from "@clerk/nextjs";
+import { useUser, useSignIn, useClerk } from "@clerk/nextjs";
 import { Suspense } from "react";
 
 const AUDIT_PACKS = [
@@ -58,7 +58,8 @@ const ADVISORY_FEATURES = [
 
 function PricingContent() {
   const { isSignedIn } = useUser();
-  const { signIn, setActive } = useSignIn();
+  const { signIn } = useSignIn();
+  const { setActive } = useClerk();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [selectedQty, setSelectedQty] = useState<1 | 2 | 5>(1);
