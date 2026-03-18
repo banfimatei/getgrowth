@@ -11,6 +11,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/audit((?!/deep-dive|/visualize|/export-pdf).*)",
   "/api/audit/activate",
   "/api/stripe/guest-checkout",
+  "/api/stripe/ping",
   "/api/compare(.*)",
   "/api/webhooks/(.*)",
 ]);
