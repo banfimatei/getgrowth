@@ -948,6 +948,7 @@ function AuditContent() {
   const [leadSubmitting, setLeadSubmitting] = useState(false);
   const [leadSaved, setLeadSaved] = useState(false);
   const [leadToken, setLeadToken] = useState<string | null>(null);
+  const [leadError, setLeadError] = useState<string | null>(null);
   const actionPlanSentinelRef = useRef<HTMLDivElement | null>(null);
 
   const handleTrackAuditKeyword = async (keyword: string) => {
@@ -1040,9 +1041,12 @@ function AuditContent() {
       if (res.ok) {
         setLeadSaved(true);
         setLeadToken(data.token);
+        setLeadError(null);
+      } else {
+        setLeadError(data.error || "Could not save your audit. Please try again.");
       }
     } catch {
-      // silently fail — don't block the user
+      setLeadError("Network error. Please try again.");
     } finally {
       setLeadSubmitting(false);
     }
@@ -2312,9 +2316,14 @@ function AuditContent() {
                         {leadSubmitting ? "Saving…" : "Save & get notified"}
                       </button>
                     </form>
-                    <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
-                      No spam. Just a heads-up when your score changes.
-                    </p>
+                    {leadError && (
+                      <p className="text-xs mt-2" style={{ color: "#ef4444" }}>{leadError}</p>
+                    )}
+                    {!leadError && (
+                      <p className="text-xs mt-2" style={{ color: "var(--text-muted)" }}>
+                        No spam. Just a heads-up when your score changes.
+                      </p>
+                    )}
                   </>
                 )}
               </div>
