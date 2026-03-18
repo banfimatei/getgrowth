@@ -6,7 +6,7 @@ import { addCredits, createAiUnlock } from "@/lib/tier-guard";
 
 export const maxDuration = 30;
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const stripe = new Stripe((process.env.STRIPE_SECRET_KEY ?? "").trim());
 
 const CORE_DEEP_DIVE_SECTIONS = ["title", "keywords", "description", "screenshots", "icon"];
 
