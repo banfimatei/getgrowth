@@ -63,10 +63,19 @@ function DashboardContent() {
       const aData = await aRes.json();
       const caData = caRes.ok ? await caRes.json() : { apps: [] };
 
-      setCredits(uData.audit_credits ?? 0);
+      const fetchedCredits = uData.audit_credits ?? 0;
+      setCredits(fetchedCredits);
       setUnlocks(uData.unlocks ?? []);
       setPurchases(uData.purchases ?? []);
       setConnectedApps(caData.apps ?? []);
+
+      // Self-heal: if user has 0 credits, silently check Stripe for unclaimed payments
+      if (fetchedCredits === 0) {
+        fetch("/api/stripe/reconcile", { method: "POST" })
+          .then((r) => r.json())
+          .then((d) => { if (d.credited > 0) loadData(); })
+          .catch(() => {});
+      }
 
       const rawApps: DbSavedApp[] = aData.apps ?? [];
 
