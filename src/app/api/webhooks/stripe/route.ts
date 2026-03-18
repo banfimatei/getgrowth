@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
+import { clerkClient } from "@clerk/nextjs/server";
 import { supabaseAdmin, creditsForPriceId } from "@/lib/supabase";
 import { addCredits, createAiUnlock } from "@/lib/tier-guard";
 
 const stripe = new Stripe((process.env.STRIPE_SECRET_KEY ?? "").trim());
 
 export async function POST(request: NextRequest) {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  const secret = (process.env.STRIPE_WEBHOOK_SECRET ?? "").trim();
   if (!secret) {
     return NextResponse.json({ error: "Webhook secret not configured" }, { status: 500 });
   }
@@ -39,23 +40,48 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ received: true });
       }
 
-      // Resolve user: prefer metadata clerk_user_id, then lookup by email
+      const email = session.customer_details?.email;
+
+      // Resolve user: prefer metadata clerk_user_id, then find/create by email
       let clerkUserId = session.metadata?.clerk_user_id;
 
-      if (!clerkUserId) {
-        const email = session.customer_details?.email;
-        if (email) {
-          const { data: dbUser } = await supabaseAdmin
-            .from("users")
-            .select("id")
-            .eq("email", email)
-            .single();
-          clerkUserId = dbUser?.id;
+      if (!clerkUserId && email) {
+        // Look up in our DB first
+        const { data: dbUser } = await supabaseAdmin
+          .from("users")
+          .select("id")
+          .eq("email", email)
+          .single();
+        clerkUserId = dbUser?.id;
+
+        // If not in DB, check Clerk directly (user may exist but not have a DB row yet)
+        if (!clerkUserId) {
+          const clerk = await clerkClient();
+          const existing = await clerk.users.getUserList({ emailAddress: [email], limit: 1 });
+          if (existing.data.length > 0) {
+            clerkUserId = existing.data[0].id;
+          } else {
+            // Create a new Clerk account for this email
+            const newUser = await clerk.users.createUser({
+              emailAddress: [email],
+              skipPasswordRequirement: true,
+            });
+            clerkUserId = newUser.id;
+            console.log(`[webhook] Created new Clerk user ${clerkUserId} for ${email}`);
+          }
+        }
+
+        // Ensure DB row exists
+        if (clerkUserId) {
+          await supabaseAdmin.from("users").upsert(
+            { id: clerkUserId, email, updated_at: new Date().toISOString() },
+            { onConflict: "id", ignoreDuplicates: false }
+          );
         }
       }
 
       if (!clerkUserId) {
-        console.warn(`[webhook] No user found for session ${session.id} — will be reconciled on next login`);
+        console.warn(`[webhook] No user could be resolved for session ${session.id}`);
         return NextResponse.json({ received: true });
       }
 
@@ -69,7 +95,6 @@ export async function POST(request: NextRequest) {
       if (credits > 0) {
         await addCredits(clerkUserId, credits);
 
-        // If this was a guest checkout with app metadata, create the unlock
         const appId = session.metadata?.appId;
         const platform = session.metadata?.platform;
         if (appId && platform) {
@@ -84,7 +109,7 @@ export async function POST(request: NextRequest) {
           currency:          session.currency ?? "eur",
         });
 
-        console.log(`[webhook] Added ${credits} credits to user ${clerkUserId} (session ${session.id})`);
+        console.log(`[webhook] Added ${credits} credits to user ${clerkUserId} / ${email} (session ${session.id})`);
       }
     }
   } catch (err) {
