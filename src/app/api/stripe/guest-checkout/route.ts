@@ -51,6 +51,14 @@ export async function POST(request: NextRequest) {
     sessionParams.customer_creation = "always";
   }
 
-  const session = await stripe.checkout.sessions.create(sessionParams);
+  let session: Stripe.Checkout.Session;
+  try {
+    session = await stripe.checkout.sessions.create(sessionParams);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[stripe/guest-checkout] Stripe error:", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+
   return NextResponse.json({ url: session.url });
 }

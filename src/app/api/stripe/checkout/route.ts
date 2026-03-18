@@ -47,18 +47,25 @@ export async function POST(request: NextRequest) {
   }
 
   // One-time payment (not subscription)
-  const session = await stripe.checkout.sessions.create({
-    customer:   customerId,
-    mode:       "payment",
-    line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${APP_URL}/dashboard?purchased=1`,
-    cancel_url:  `${APP_URL}/pricing`,
-    metadata: {
-      clerk_user_id: userId,
-      credits:       String(pack.credits),
-    },
-    allow_promotion_codes: true,
-  });
+  let session: Stripe.Checkout.Session;
+  try {
+    session = await stripe.checkout.sessions.create({
+      customer:   customerId,
+      mode:       "payment",
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${APP_URL}/dashboard?purchased=1`,
+      cancel_url:  `${APP_URL}/pricing`,
+      metadata: {
+        clerk_user_id: userId,
+        credits:       String(pack.credits),
+      },
+      allow_promotion_codes: true,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[stripe/checkout] Stripe error:", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 
   return NextResponse.json({ url: session.url });
 }
