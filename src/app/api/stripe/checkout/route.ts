@@ -4,7 +4,7 @@ import Stripe from "stripe";
 import { supabaseAdmin, CREDIT_PACKS } from "@/lib/supabase";
 
 const stripe = new Stripe((process.env.STRIPE_SECRET_KEY ?? "").trim());
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://getgrowth.eu";
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://getgrowth.eu").trim();
 
 export async function POST(request: NextRequest) {
   const { userId } = await auth();
