@@ -680,6 +680,7 @@ function capLabel(label: string, ceiling: string): string {
 function tierHighlights(
   tierSize: number, n: number, minReviews: number, weakestApp: string,
   median: number, weak: number, fresh: number, titleOpt: number,
+  avgRating?: number,
 ): string[] {
   const hl: string[] = [];
   if (n < tierSize) {
@@ -687,18 +688,19 @@ function tierHighlights(
     hl.push(`Only ${n} app${n !== 1 ? "s" : ""} rank here — ${open} open spot${open !== 1 ? "s" : ""}.`);
     return hl;
   }
-  if (minReviews < 100) hl.push(`The easiest app to beat has just ${minReviews.toLocaleString()} reviews.`);
-  else if (minReviews < 1_000) hl.push(`You need ~${minReviews.toLocaleString()}+ reviews to compete (weakest: ${weakestApp}).`);
-  else if (minReviews < 10_000) hl.push(`You need ~${minReviews.toLocaleString()}+ reviews to break in.`);
-  else hl.push(`Requires ~${minReviews.toLocaleString()}+ reviews — established market.`);
 
-  if (weak > 0) hl.push(`${weak} of ${n} apps have under 1K reviews — beatable.`);
-  else hl.push("Every app here has 1K+ reviews — no easy targets.");
-
-  if (fresh > 0) hl.push(`${fresh} app${fresh !== 1 ? "s" : ""} broke in within the last year.`);
-  if (titleOpt === 0) hl.push("No app uses this exact keyword in its title — ASO opportunity!");
-  else if (titleOpt < Math.floor(n / 2)) hl.push(`Only ${titleOpt} of ${n} apps use this keyword in their title.`);
+  if (titleOpt === 0) hl.push("No app uses this keyword in its title — strong ASO opportunity.");
+  else if (titleOpt < Math.floor(n / 2)) hl.push(`Only ${titleOpt} of ${n} apps target this keyword in their title — room for optimization.`);
   else hl.push(`${titleOpt} of ${n} apps already target this keyword in their title.`);
+
+  const ratingStr = avgRating && avgRating > 0 ? `, ${avgRating.toFixed(1)}★ avg` : "";
+  if (median >= 10_000) hl.push(`High-authority tier — median ${median.toLocaleString()} reviews${ratingStr}.`);
+  else if (median >= 1_000) hl.push(`Moderate authority — median ${median.toLocaleString()} reviews${ratingStr}.`);
+  else hl.push(`Low-authority tier — median ${median.toLocaleString()} reviews${ratingStr}.`);
+
+  if (weak > 0) hl.push(`${weak} of ${n} apps have low authority (<1K reviews) — realistic displacement targets.`);
+
+  if (fresh > 0) hl.push(`${fresh} app${fresh !== 1 ? "s" : ""} entered this tier within the last year — market is accessible.`);
 
   return hl;
 }
@@ -772,6 +774,10 @@ function computeRankingTiers(
       }
     }
 
+    const tierAvgRating = tierApps.filter(c => c.rating > 0).length > 0
+      ? tierApps.reduce((s, c) => s + (c.rating > 0 ? c.rating : 0), 0) / tierApps.filter(c => c.rating > 0).length
+      : 0;
+
     tiers[tierName] = {
       tierScore,
       label: scoreToLabel(tierScore),
@@ -782,7 +788,7 @@ function computeRankingTiers(
       freshCount,
       titleKeywordCount: raw.titleMatchCount,
       totalApps: n,
-      highlights: tierHighlights(tierSize, n, minRev, barrierApp, medianRev, weakCount, freshCount, raw.titleMatchCount),
+      highlights: tierHighlights(tierSize, n, minRev, barrierApp, medianRev, weakCount, freshCount, raw.titleMatchCount, Math.round(tierAvgRating * 10) / 10),
     };
   }
 

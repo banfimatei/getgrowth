@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { fetchAppStoreData, fetchGooglePlayData } from "@/lib/store-scraper";
 import { runAudit, calculateOverallScore } from "@/lib/aso-rules";
 import { generateActionPlan } from "@/lib/action-plan";
-import { analyzeWithAI } from "@/lib/ai-analyzer";
+import { analyzeWithAI, type AIAnalysis } from "@/lib/ai-analyzer";
 import { getDbUser, hasAiUnlock, consumeCredit } from "@/lib/tier-guard";
 import {
   analyzeKeywords,
@@ -15,16 +15,27 @@ import {
 export const maxDuration = 120;
 
 const NOISE_WORDS = new Set([
-  // Common English stop words
   "the", "and", "for", "with", "your", "you", "from", "that", "this",
   "app", "our", "will", "can", "has", "have", "are", "was", "been",
   "not", "all", "but", "its", "also", "more", "most", "very", "just",
   "any", "each", "than", "them", "into", "over", "about", "now", "new",
   "get", "use", "one", "two", "like", "way", "even", "make", "take",
   "free", "download", "best", "great",
-  // URL / protocol fragments — appear when descriptions contain links
   "http", "https", "www", "com", "net", "org", "edu", "gov", "html",
   "php", "utm", "href", "url", "visit", "click", "here", "link",
+  "account", "settings", "help", "support", "privacy", "terms",
+  "contact", "login", "password", "email", "sign", "manage",
+  "service", "services", "information", "available", "access",
+  "content", "experience", "features", "feature", "using", "through",
+  "device", "devices", "users", "option", "options", "data", "system",
+  "time", "need", "want", "able", "please", "thanks", "thank",
+  "enjoy", "love", "amazing", "awesome", "first", "world",
+  "only", "every", "much", "many", "really", "still", "well",
+  "find", "keep", "start", "right", "open", "high", "part",
+]);
+
+const QUALITY_LABELS = new Set([
+  "Sweet Spot", "Good Target", "Hidden Gem", "Worth Competing", "Decent Option",
 ]);
 
 function extractAuditKeywords(title: string, subtitle?: string, description?: string): string[] {
@@ -54,6 +65,56 @@ function extractAuditKeywords(title: string, subtitle?: string, description?: st
   }
 
   return result.slice(0, 10);
+}
+
+function buildSmartKeywordList(
+  aiAnalysis: AIAnalysis | null,
+  title: string,
+  subtitle?: string,
+  description?: string,
+): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  const add = (kw: string) => {
+    const clean = kw.toLowerCase().trim();
+    if (clean.length >= 3 && !NOISE_WORDS.has(clean) && !seen.has(clean)) {
+      seen.add(clean);
+      result.push(clean);
+    }
+  };
+
+  if (aiAnalysis?.keywordField?.suggestedKeywords) {
+    for (const kw of aiAnalysis.keywordField.suggestedKeywords) add(kw);
+  }
+
+  if (aiAnalysis?.description?.keywordGaps) {
+    for (const kw of aiAnalysis.description.keywordGaps) add(kw);
+  }
+
+  const pairs = aiAnalysis?.titleSubtitlePairs?.pairs
+    ?? aiAnalysis?.titleShortDescPairs?.pairs;
+  if (pairs?.length) {
+    for (const pair of pairs) {
+      for (const kw of pair.keywordsCovered) add(kw);
+    }
+  }
+
+  if (result.length < 8) {
+    const extracted = extractAuditKeywords(title, subtitle, description);
+    for (const kw of extracted) add(kw);
+  }
+
+  return result.slice(0, 15);
+}
+
+function genreRelevance(kw: KeywordAnalysis, appCategory: string): number {
+  if (!kw.competitors?.length || !appCategory) return 1;
+  const catLower = appCategory.toLowerCase();
+  const matching = kw.competitors.filter(c =>
+    c.genre.toLowerCase() === catLower
+  ).length;
+  return matching / kw.competitors.length;
 }
 
 export async function GET(request: NextRequest) {
@@ -96,31 +157,56 @@ export async function GET(request: NextRequest) {
       ? await fetchAppStoreData(appId, country)
       : await fetchGooglePlayData(appId, country);
 
-    // Extract keywords for keyword intelligence (iOS only)
-    const keywords = platform === "ios"
-      ? extractAuditKeywords(appData.title, appData.subtitle, appData.description)
-      : [];
-
     const trackId = platform === "ios" ? parseInt(appId, 10) : undefined;
+    let categories;
+    let aiAnalysis: AIAnalysis | null = null;
+    let keywordResults: KeywordAnalysis[] = [];
 
-    // Run audit, AI analysis, and keyword intelligence in parallel
-    const [categories, aiAnalysis, keywordResults] = await Promise.all([
-      Promise.resolve(runAudit(appData)),
-      aiEnabled ? analyzeWithAI(appData) : Promise.resolve(null),
-      keywords.length > 0
-        ? analyzeKeywords(keywords, country, trackId || undefined, 5)
-        : Promise.resolve([] as KeywordAnalysis[]),
-    ]);
+    if (aiEnabled && platform === "ios") {
+      // Paid audit: run audit + AI in parallel, then use AI context for smart keyword sourcing
+      const [cats, ai] = await Promise.all([
+        Promise.resolve(runAudit(appData)),
+        analyzeWithAI(appData),
+      ]);
+      categories = cats;
+      aiAnalysis = ai;
+
+      const smartKeywords = buildSmartKeywordList(
+        aiAnalysis, appData.title, appData.subtitle, appData.description,
+      );
+      if (smartKeywords.length > 0) {
+        keywordResults = await analyzeKeywords(smartKeywords, country, trackId || undefined, 5);
+      }
+    } else {
+      // Free audit: extract keywords from metadata and run everything in parallel
+      const keywords = platform === "ios"
+        ? extractAuditKeywords(appData.title, appData.subtitle, appData.description)
+        : [];
+
+      const [cats, ai, kwResults] = await Promise.all([
+        Promise.resolve(runAudit(appData)),
+        aiEnabled ? analyzeWithAI(appData) : Promise.resolve(null),
+        keywords.length > 0
+          ? analyzeKeywords(keywords, country, trackId || undefined, 5)
+          : Promise.resolve([] as KeywordAnalysis[]),
+      ]);
+      categories = cats;
+      aiAnalysis = ai;
+      keywordResults = kwResults;
+    }
 
     const overallScore = calculateOverallScore(categories);
 
     const hasTextAI   = !!(aiAnalysis?.title?.suggestions?.length);
     const hasVisualAI = !!(aiAnalysis?.screenshots?.perScreenshot?.length);
 
-    // Strip nonsense keywords that slipped through (URL fragments, single letters, etc.)
-    const cleanKeywordResults = keywordResults.filter(
-      (k) => !NOISE_WORDS.has(k.keyword.toLowerCase()) && k.keyword.length >= 3,
-    );
+    // Filter: noise words, genre relevance (20% threshold), quality gate
+    const cleanKeywordResults = keywordResults
+      .filter((k) => !NOISE_WORDS.has(k.keyword.toLowerCase()) && k.keyword.length >= 3)
+      .filter((k) => genreRelevance(k, appData.category) >= 0.20)
+      .filter((k) => QUALITY_LABELS.has(k.targetingAdvice.label))
+      .sort((a, b) => b.opportunity - a.opportunity)
+      .slice(0, 10);
 
     // Gate keyword intelligence: free users get partial view (no download/tier details)
     const keywordIntelligence: (KeywordAnalysis | KeywordAnalysisFree)[] = aiEnabled
