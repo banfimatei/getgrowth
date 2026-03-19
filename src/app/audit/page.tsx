@@ -1099,7 +1099,7 @@ function AuditContent() {
             body: JSON.stringify({
               appData: auditData.appData,
               section,
-              storeId: auditData.app?.url || auditData.appData?.url,
+              storeId: auditData.app?.storeId || auditData.app?.url || auditData.appData?.url,
               ...(uid ? { activatedUserId: uid } : {}),
             }),
           });
@@ -1240,7 +1240,7 @@ function AuditContent() {
       const resp = await fetch("/api/audit/deep-dive", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appData: report.appData, section, storeId: report.app.url || report.appData?.url, ...(uid ? { activatedUserId: uid } : {}) }),
+        body: JSON.stringify({ appData: report.appData, section, storeId: report.app.storeId || report.app.url || report.appData?.url, ...(uid ? { activatedUserId: uid } : {}) }),
       });
       if (!resp.ok) {
         const errData = await resp.json().catch(() => null);
@@ -1263,7 +1263,7 @@ function AuditContent() {
       const resp = await fetch("/api/audit/visualize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appData: report.appData, section, brief, storeId: report.app.url || report.appData?.url, ...(uid ? { activatedUserId: uid } : {}) }),
+        body: JSON.stringify({ appData: report.appData, section, brief, storeId: report.app.storeId || report.app.url || report.appData?.url, ...(uid ? { activatedUserId: uid } : {}) }),
       });
       if (!resp.ok) {
         const errData = await resp.json().catch(() => null);
@@ -1806,10 +1806,10 @@ function AuditContent() {
               </svg>
             </div>
             <h2 className="text-xl mb-2" style={{ color: "var(--text-primary)" }}>
-              {unlockLoading ? "Payment verified \u2014 running full AI audit" : "Running ASO Audit"}
+              {unlockLoading ? "Payment verified \u2014 running full AI audit" : isSignedIn ? "Loading your ASO audit" : "Running ASO Audit"}
             </h2>
             <p className="text-sm loading-ellipsis" style={{ color: "var(--text-secondary)" }}>
-              {unlockLoading ? "Setting up your account and analyzing with AI" : "Fetching store data and analyzing metadata"}
+              {unlockLoading ? "Setting up your account and analyzing with AI" : "Fetching live store data and analyzing metadata"}
             </p>
           </div>
         )}

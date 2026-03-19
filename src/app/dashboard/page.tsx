@@ -305,24 +305,41 @@ function DashboardContent() {
               const matchingApp = apps.find(a => a.store_id === u.store_id && a.platform === u.platform);
               const displayName = u.app_name || matchingApp?.name || u.store_id;
               const iconUrl = u.app_icon_url || null;
+              const itunesFallback = u.platform === "ios"
+                ? `https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/placeholder/100x100bb.jpg`
+                : null;
               return (
                 <button
                   key={`${u.store_id}-${u.platform}`}
                   onClick={() => router.push(`/audit?id=${u.store_id}&platform=${u.platform}`)}
-                  className="rounded-xl border p-3 text-left transition-opacity hover:opacity-80"
+                  className="rounded-xl border p-4 text-left transition-all hover:shadow-md"
                   style={{ borderColor: "var(--border)", backgroundColor: "var(--bg-card)" }}
                 >
-                  <div className="flex items-center gap-2 mb-1">
-                    {iconUrl ? (
-                      <img src={iconUrl} alt="" className="w-6 h-6 rounded-md" />
-                    ) : (
-                      <span>{u.platform === "ios" ? "🍎" : "🤖"}</span>
-                    )}
-                    <p className="text-xs font-medium truncate" style={{ color: "var(--text-primary)" }}>{displayName}</p>
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0" style={{ backgroundColor: "rgba(30,27,75,0.06)" }}>
+                      {iconUrl ? (
+                        <img
+                          src={iconUrl}
+                          alt={displayName}
+                          className="w-10 h-10 object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                      ) : (
+                        <div className="w-10 h-10 flex items-center justify-center text-lg">
+                          {u.platform === "ios" ? "🍎" : "🤖"}
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{displayName}</p>
+                      <p className="text-xs capitalize" style={{ color: "var(--text-muted)" }}>
+                        {u.platform} · unlocked {new Date(u.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                      </p>
+                    </div>
+                    <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(16,185,129,0.1)", color: "#10b981" }}>
+                      AI
+                    </span>
                   </div>
-                  <p className="text-xs capitalize" style={{ color: "var(--text-muted)" }}>
-                    {u.platform} · unlocked {new Date(u.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                  </p>
                 </button>
               );
             })}

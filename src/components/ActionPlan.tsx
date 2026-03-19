@@ -342,7 +342,7 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled, has
                     if (canDeepDive && onDeepDive && action.deepDiveSection) {
                       const result = await onDeepDive(action.deepDiveSection, action.id);
                       if (typeof result === "string" && result === "__ERROR__NEEDS_CREDITS") {
-                        router.push("/pricing");
+                        setDeepDiveError("This feature requires a paid audit. If you already purchased, try refreshing the page.");
                       } else if (typeof result === "string" && result.startsWith("__ERROR__")) {
                         setDeepDiveError(result.replace("__ERROR__", ""));
                       } else if (result && typeof result === "object") {
@@ -403,7 +403,7 @@ function ActionCard({ action, onDeepDive, isLoading, onVisualize, aiEnabled, has
                           activeBrief,
                         );
                         if (typeof result === "string" && result === "__ERROR__NEEDS_CREDITS") {
-                          router.push("/pricing");
+                          setVisualError("This feature requires a paid audit. If you already purchased, try refreshing the page.");
                         } else if (typeof result === "string" && result.startsWith("__ERROR__")) {
                           setVisualError(result.replace("__ERROR__", ""));
                         } else if (Array.isArray(result)) {
