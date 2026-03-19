@@ -17,6 +17,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });
     }
 
+    // #region agent log
+    fetch('http://127.0.0.1:7545/ingest/dd4ba4f6-7884-4467-a639-03d0e318b30b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfcd9d'},body:JSON.stringify({sessionId:'cfcd9d',location:'activate/route.ts:entry',message:'activate called',data:{sessionId},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
+
     // 1. Retrieve and verify Stripe session
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ["customer"],
@@ -110,6 +114,10 @@ export async function POST(request: NextRequest) {
     if (appId) {
       await createAiUnlock(clerkUserId, appId, platform);
     }
+
+    // #region agent log
+    fetch('http://127.0.0.1:7545/ingest/dd4ba4f6-7884-4467-a639-03d0e318b30b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfcd9d'},body:JSON.stringify({sessionId:'cfcd9d',location:'activate/route.ts:credited',message:'credits added + unlock created',data:{clerkUserId,credits,appId,platform,email},timestamp:Date.now(),hypothesisId:'H5'})}).catch(()=>{});
+    // #endregion
 
     // 6. Log purchase
     await supabaseAdmin.from("purchases").insert({

@@ -70,6 +70,10 @@ export async function GET(request: NextRequest) {
   let creditsRemaining = 0;
   let justUnlocked = false;
 
+  // #region agent log
+  fetch('http://127.0.0.1:7545/ingest/dd4ba4f6-7884-4467-a639-03d0e318b30b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfcd9d'},body:JSON.stringify({sessionId:'cfcd9d',location:'audit/route.ts:auth',message:'audit auth check',data:{userId:userId||null,appId,platform},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+  // #endregion
+
   if (userId) {
     const dbUser = await getDbUser(userId);
     creditsRemaining = dbUser?.audit_credits ?? 0;
@@ -85,6 +89,10 @@ export async function GET(request: NextRequest) {
         creditsRemaining = Math.max(0, creditsRemaining - 1);
       }
     }
+
+    // #region agent log
+    fetch('http://127.0.0.1:7545/ingest/dd4ba4f6-7884-4467-a639-03d0e318b30b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfcd9d'},body:JSON.stringify({sessionId:'cfcd9d',location:'audit/route.ts:resolved',message:'audit tier resolved',data:{userId,aiEnabled,creditsRemaining,alreadyUnlocked,justUnlocked},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+    // #endregion
   }
 
   try {

@@ -15,6 +15,9 @@ const VALID_SECTIONS: DeepDiveSection[] = [
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
+    // #region agent log
+    fetch('http://127.0.0.1:7545/ingest/dd4ba4f6-7884-4467-a639-03d0e318b30b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfcd9d'},body:JSON.stringify({sessionId:'cfcd9d',location:'deep-dive/route.ts:auth',message:'deep-dive auth check',data:{userId:userId||null},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
+    // #endregion
     if (!userId) {
       return NextResponse.json(
         { error: "Sign in required", needsCredits: true },
