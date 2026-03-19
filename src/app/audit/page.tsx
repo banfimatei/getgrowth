@@ -942,6 +942,7 @@ function AuditContent() {
   // Keyword tracking state (for signed-in paid users)
   const [trackedKws, setTrackedKws] = useState<Set<string>>(new Set());
   const [trackingKw, setTrackingKw] = useState<string | null>(null);
+  const [kwExpanded, setKwExpanded] = useState(false);
 
   // Lead capture state
   const [leadCaptureVisible, setLeadCaptureVisible] = useState(false);
@@ -1905,11 +1906,49 @@ function AuditContent() {
 
             {/* Keyword Intelligence (iOS only) */}
             {report.keywordIntelligence && report.keywordIntelligence.length > 0 && report.app.platform === "ios" && (
-              <div className="mb-8 fade-in fade-in-delay-1">
-                <h3 className="text-lg mb-3 font-display" style={{ color: "var(--text-primary)" }}>
-                  Keyword Intelligence
-                </h3>
+              <div
+                className="mb-8 fade-in fade-in-delay-1 border rounded-lg overflow-hidden transition-colors"
+                style={{ backgroundColor: "var(--bg-card)", borderColor: "var(--border)" }}
+              >
+                <button
+                  onClick={() => setKwExpanded(!kwExpanded)}
+                  className="w-full text-left p-5 flex items-center gap-4 transition-colors"
+                  style={{ backgroundColor: kwExpanded ? "var(--bg-card-hover)" : "transparent" }}
+                  aria-expanded={kwExpanded}
+                  aria-controls="keyword-intelligence-panel"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-1">
+                      <h3 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
+                        Keyword Intelligence
+                      </h3>
+                    </div>
+                    <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                      {report.keywordIntelligence.length} keyword{report.keywordIntelligence.length !== 1 ? "s" : ""} analyzed — strongest opportunities for your app
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="flex gap-1.5 text-xs font-mono tabular-nums">
+                      <span style={{ color: "var(--pass-text)" }}>
+                        {report.keywordIntelligence.filter(k => k.targetingAdvice.label === "Sweet Spot" || k.targetingAdvice.label === "Hidden Gem").length} gems
+                      </span>
+                    </div>
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      aria-hidden="true"
+                      className="transition-transform"
+                      style={{ transform: kwExpanded ? "rotate(180deg)" : "rotate(0deg)" }}
+                    >
+                      <path d="M4 6L8 10L12 6" stroke="var(--text-tertiary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                </button>
 
+                {kwExpanded && (
+                <div id="keyword-intelligence-panel" className="border-t px-5 pb-5 pt-4" style={{ borderColor: "var(--border)" }}>
                 <div className="space-y-3">
                   {report.keywordIntelligence.map((kw) => {
                     const isPaid = report.aiEnabled;
@@ -2143,6 +2182,8 @@ function AuditContent() {
                       ))}
                     </div>
                   </div>
+                )}
+                </div>
                 )}
               </div>
             )}
