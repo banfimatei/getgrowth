@@ -1180,7 +1180,7 @@ function AuditContent() {
 
       // Re-run audit (now AI-enabled) — pass userId since Clerk session may not have propagated yet
       const auditParams = new URLSearchParams({ id: appId, platform: appPlatform, country: appCountry });
-      if (activation?.userId) auditParams.set("activatedUserId", activation.userId);
+      if (activatedUserIdRef.current) auditParams.set("activatedUserId", activatedUserIdRef.current);
       const auditResp = await fetch(`/api/audit?${auditParams}`);
       if (!auditResp.ok) throw new Error("Audit failed");
 
