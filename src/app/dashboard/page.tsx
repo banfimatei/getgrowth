@@ -162,7 +162,7 @@ function DashboardContent() {
             <span className="font-semibold" style={{ color: credits > 0 ? "#10b981" : "var(--text-muted)" }}>
               {credits} audit credit{credits === 1 ? "" : "s"}
             </span>
-            {" · "}{unlocks.length} full audit{unlocks.length === 1 ? "" : "s"}
+            {unlocks.length > 0 && <>{" · "}{unlocks.length} full audit{unlocks.length === 1 ? "" : "s"}</>}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -294,61 +294,77 @@ function DashboardContent() {
         </div>
       )}
 
-      {/* Full Audits */}
-      {unlocks.length > 0 && (
-        <div className="mb-6">
+      {/* Your Apps — merged from unlocks + saved apps */}
+      {(apps.length > 0 || unlocks.length > 0) && (() => {
+        const unlockSet = new Set(unlocks.map(u => `${u.store_id}::${u.platform}`));
+        const appsNotUnlocked = apps.filter(a => !unlockSet.has(`${a.store_id}::${a.platform}`));
+        const hasAny = unlocks.length > 0 || appsNotUnlocked.length > 0;
+        if (!hasAny) return null;
+        return (
+          <>
           <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-            Full Audits
+            Your Apps
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            {unlocks.map((u) => {
-              const matchingApp = apps.find(a => a.store_id === u.store_id && a.platform === u.platform);
-              const displayName = u.app_name || matchingApp?.name || u.store_id;
-              const iconUrl = u.app_icon_url || null;
-              return (
-                <button
-                  key={`${u.store_id}-${u.platform}`}
-                  onClick={() => router.push(`/audit?id=${u.store_id}&platform=${u.platform}`)}
-                  className="rounded-xl border p-4 text-left transition-all hover:shadow-md"
-                  style={{ borderColor: "var(--border)", backgroundColor: "var(--bg-card)" }}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0" style={{ backgroundColor: "rgba(30,27,75,0.06)" }}>
-                      {iconUrl ? (
-                        <img
-                          src={iconUrl}
-                          alt={displayName}
-                          className="w-10 h-10 rounded-xl object-cover"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                        />
-                      ) : (
-                        <div className="w-10 h-10 flex items-center justify-center text-lg">
-                          {u.platform === "ios" ? "🍎" : "🤖"}
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{displayName}</p>
-                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                        {u.platform === "ios" ? "iOS" : "Android"} · Audited {new Date(u.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                      </p>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
-      {/* Saved apps with audits */}
-      {apps.length > 0 && (
-        <>
-          <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-            Saved apps
-          </h2>
+          {/* Unlocked (full audit) apps */}
+          {unlocks.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+              {unlocks.map((u) => {
+                const matchingApp = apps.find(a => a.store_id === u.store_id && a.platform === u.platform);
+                const displayName = u.app_name || matchingApp?.name || u.store_id;
+                const iconUrl = u.app_icon_url || matchingApp?.icon_url || null;
+                const latestScore = matchingApp?.audits?.[0]?.overall_score;
+                return (
+                  <button
+                    key={`unlock-${u.store_id}-${u.platform}`}
+                    onClick={() => router.push(`/audit?id=${u.store_id}&platform=${u.platform}`)}
+                    className="rounded-2xl border p-5 text-left transition-all hover:shadow-md w-full"
+                    style={{ borderColor: "var(--border)", backgroundColor: "var(--bg-card)" }}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0" style={{ backgroundColor: "rgba(30,27,75,0.06)" }}>
+                          {iconUrl ? (
+                            <img
+                              src={iconUrl}
+                              alt={displayName}
+                              className="w-10 h-10 rounded-xl object-cover"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                            />
+                          ) : (
+                            <div className="w-10 h-10 flex items-center justify-center text-lg">
+                              {u.platform === "ios" ? "🍎" : "🤖"}
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold truncate leading-tight" style={{ color: "var(--text-primary)" }}>{displayName}</p>
+                          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                            {u.platform === "ios" ? "iOS" : "Android"} · Audited {new Date(u.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {latestScore !== undefined && (
+                          <span className="text-xl font-bold tabular-nums" style={{ color: latestScore >= 75 ? "#10b981" : latestScore >= 55 ? "#f59e0b" : "#ef4444" }}>
+                            {latestScore}
+                          </span>
+                        )}
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: "rgba(30,27,75,0.08)", color: "var(--accent)" }}>
+                          Full
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Saved apps without unlock */}
+          {appsNotUnlocked.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
-            {apps.map((app) => {
+            {appsNotUnlocked.map((app) => {
               const chartData = [...app.audits].reverse().map((a, i) => ({
                 index: i + 1,
                 score: a.overall_score,
@@ -445,8 +461,10 @@ function DashboardContent() {
               );
             })}
           </div>
-        </>
-      )}
+          )}
+          </>
+        );
+      })()}
 
       {/* CTA for empty state */}
       {apps.length === 0 && unlocks.length === 0 && (
