@@ -57,12 +57,14 @@ export async function hasAiUnlock(
 export async function createAiUnlock(
   userId: string,
   storeId: string,
-  platform: string
+  platform: string,
+  appName?: string,
+  appIconUrl?: string,
 ): Promise<void> {
   await supabaseAdmin
     .from("ai_unlocks")
     .upsert(
-      { user_id: userId, store_id: storeId, platform },
+      { user_id: userId, store_id: storeId, platform, app_name: appName ?? null, app_icon_url: appIconUrl ?? null },
       { onConflict: "user_id,store_id,platform" }
     );
 }
@@ -74,17 +76,16 @@ export async function createAiUnlock(
 export async function consumeCredit(
   userId: string,
   storeId: string,
-  platform: string
+  platform: string,
+  appName?: string,
+  appIconUrl?: string,
 ): Promise<boolean> {
-  // Check current credits
   const user = await getDbUser(userId);
   if (!user || user.audit_credits < 1) return false;
 
-  // Decrement atomically
   const { error } = await supabaseAdmin.rpc("decrement_credit", { uid: userId });
   if (error) {
     console.error("consumeCredit RPC error:", error);
-    // Fallback: manual decrement
     const { error: updateErr } = await supabaseAdmin
       .from("users")
       .update({ audit_credits: Math.max(0, user.audit_credits - 1) })
@@ -93,7 +94,7 @@ export async function consumeCredit(
     if (updateErr) return false;
   }
 
-  await createAiUnlock(userId, storeId, platform);
+  await createAiUnlock(userId, storeId, platform, appName, appIconUrl);
   return true;
 }
 

@@ -21,10 +21,7 @@ export async function POST(request: NextRequest) {
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(body, signature, secret);
-  } catch (sigErr) {
-    // #region agent log
-    fetch('http://127.0.0.1:7545/ingest/dd4ba4f6-7884-4467-a639-03d0e318b30b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfcd9d'},body:JSON.stringify({sessionId:'cfcd9d',location:'webhook/route.ts:sig-fail',message:'webhook sig verification failed',data:{error:sigErr instanceof Error?sigErr.message:String(sigErr)},timestamp:Date.now(),hypothesisId:'H5'})}).catch(()=>{});
-    // #endregion
+  } catch {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 

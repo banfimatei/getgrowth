@@ -60,10 +60,6 @@ export async function POST() {
 
     if (credits <= 0) continue;
 
-    // #region agent log
-    fetch('http://127.0.0.1:7545/ingest/dd4ba4f6-7884-4467-a639-03d0e318b30b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfcd9d'},body:JSON.stringify({sessionId:'cfcd9d',location:'reconcile/route.ts:crediting',message:'reconcile adding credits',data:{userId,credits,stripeSessionId:session.id},timestamp:Date.now(),hypothesisId:'H5'})}).catch(()=>{});
-    // #endregion
-
     await addCredits(userId, credits);
 
     const appId = session.metadata?.appId;

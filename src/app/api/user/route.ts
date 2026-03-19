@@ -24,7 +24,7 @@ export async function GET() {
   // Also fetch their unlocked apps
   const { data: unlocks } = await supabaseAdmin
     .from("ai_unlocks")
-    .select("store_id, platform, created_at")
+    .select("store_id, platform, app_name, app_icon_url, created_at")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 

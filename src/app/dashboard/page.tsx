@@ -303,7 +303,8 @@ function DashboardContent() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             {unlocks.map((u) => {
               const matchingApp = apps.find(a => a.store_id === u.store_id && a.platform === u.platform);
-              const displayName = matchingApp?.name ?? u.store_id;
+              const displayName = u.app_name || matchingApp?.name || u.store_id;
+              const iconUrl = u.app_icon_url || null;
               return (
                 <button
                   key={`${u.store_id}-${u.platform}`}
@@ -312,7 +313,11 @@ function DashboardContent() {
                   style={{ borderColor: "var(--border)", backgroundColor: "var(--bg-card)" }}
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    <span>{u.platform === "ios" ? "🍎" : "🤖"}</span>
+                    {iconUrl ? (
+                      <img src={iconUrl} alt="" className="w-6 h-6 rounded-md" />
+                    ) : (
+                      <span>{u.platform === "ios" ? "🍎" : "🤖"}</span>
+                    )}
                     <p className="text-xs font-medium truncate" style={{ color: "var(--text-primary)" }}>{displayName}</p>
                   </div>
                   <p className="text-xs capitalize" style={{ color: "var(--text-muted)" }}>

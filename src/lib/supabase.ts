@@ -29,6 +29,8 @@ export interface DbAiUnlock {
   user_id: string;
   store_id: string;
   platform: "ios" | "android";
+  app_name: string | null;
+  app_icon_url: string | null;
   created_at: string;
 }
 

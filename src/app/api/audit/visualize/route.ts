@@ -8,21 +8,23 @@ export const maxDuration = 120;
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth();
+    const body = await request.json();
+    const { appData, section, brief, storeId, activatedUserId } = body as {
+      appData: AppData;
+      section: "icon" | "screenshots";
+      brief: string;
+      storeId?: string;
+      activatedUserId?: string;
+    };
+
+    const { userId: authUserId } = await auth();
+    const userId = authUserId || activatedUserId || null;
     if (!userId) {
       return NextResponse.json(
         { error: "Sign in required", needsCredits: true },
         { status: 401 }
       );
     }
-
-    const body = await request.json();
-    const { appData, section, brief, storeId } = body as {
-      appData: AppData;
-      section: "icon" | "screenshots";
-      brief: string;
-      storeId?: string;
-    };
 
     if (!appData || !section || !brief) {
       return NextResponse.json({ error: "Missing appData, section, or brief" }, { status: 400 });

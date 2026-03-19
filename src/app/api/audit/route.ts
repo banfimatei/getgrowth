@@ -65,14 +65,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Missing id or platform parameter" }, { status: 400 });
   }
 
-  const { userId } = await auth();
+  const { userId: authUserId } = await auth();
+  // Post-payment flow: activate passes userId as header since Clerk session may not propagate yet
+  const activatedUserId = request.nextUrl.searchParams.get("activatedUserId");
+  const userId = authUserId || activatedUserId || null;
+
   let aiEnabled = false;
   let creditsRemaining = 0;
   let justUnlocked = false;
-
-  // #region agent log
-  fetch('http://127.0.0.1:7545/ingest/dd4ba4f6-7884-4467-a639-03d0e318b30b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfcd9d'},body:JSON.stringify({sessionId:'cfcd9d',location:'audit/route.ts:auth',message:'audit auth check',data:{userId:userId||null,appId,platform},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
-  // #endregion
 
   if (userId) {
     const dbUser = await getDbUser(userId);
@@ -89,10 +89,6 @@ export async function GET(request: NextRequest) {
         creditsRemaining = Math.max(0, creditsRemaining - 1);
       }
     }
-
-    // #region agent log
-    fetch('http://127.0.0.1:7545/ingest/dd4ba4f6-7884-4467-a639-03d0e318b30b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfcd9d'},body:JSON.stringify({sessionId:'cfcd9d',location:'audit/route.ts:resolved',message:'audit tier resolved',data:{userId,aiEnabled,creditsRemaining,alreadyUnlocked,justUnlocked},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
   }
 
   try {

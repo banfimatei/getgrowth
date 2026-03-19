@@ -14,23 +14,23 @@ const VALID_SECTIONS: DeepDiveSection[] = [
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await auth();
-    // #region agent log
-    fetch('http://127.0.0.1:7545/ingest/dd4ba4f6-7884-4467-a639-03d0e318b30b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfcd9d'},body:JSON.stringify({sessionId:'cfcd9d',location:'deep-dive/route.ts:auth',message:'deep-dive auth check',data:{userId:userId||null},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
-    // #endregion
+    const body = await request.json();
+    const { appData, section, storeId, activatedUserId } = body as {
+      appData: AppData;
+      section: DeepDiveSection;
+      storeId?: string;
+      activatedUserId?: string;
+    };
+
+    const { userId: authUserId } = await auth();
+    const userId = authUserId || activatedUserId || null;
+
     if (!userId) {
       return NextResponse.json(
         { error: "Sign in required", needsCredits: true },
         { status: 401 }
       );
     }
-
-    const body = await request.json();
-    const { appData, section, storeId } = body as {
-      appData: AppData;
-      section: DeepDiveSection;
-      storeId?: string;
-    };
 
     if (!appData || !section) {
       return NextResponse.json({ error: "Missing appData or section" }, { status: 400 });
@@ -42,7 +42,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check AI unlock for this app
     const resolvedStoreId = storeId || appData.url || appData.title;
     const unlocked = await hasAiUnlock(userId, resolvedStoreId, appData.platform);
     if (!unlocked) {

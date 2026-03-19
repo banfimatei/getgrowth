@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
 import Stripe from "stripe";
 import { supabaseAdmin } from "@/lib/supabase";
-import { addCredits, createAiUnlock } from "@/lib/tier-guard";
+import { addCredits, consumeCredit } from "@/lib/tier-guard";
 
 export const maxDuration = 30;
 
@@ -17,11 +17,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });
     }
 
-    // #region agent log
-    fetch('http://127.0.0.1:7545/ingest/dd4ba4f6-7884-4467-a639-03d0e318b30b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfcd9d'},body:JSON.stringify({sessionId:'cfcd9d',location:'activate/route.ts:entry',message:'activate called',data:{sessionId},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
-
-    // 1. Retrieve and verify Stripe session
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ["customer"],
     });
@@ -39,15 +34,16 @@ export async function POST(request: NextRequest) {
     const platform = session.metadata?.platform || "ios";
     const country = session.metadata?.country || "us";
     const credits = parseInt(session.metadata?.credits ?? "1", 10);
+    const appName = session.metadata?.appName;
+    const appIconUrl = session.metadata?.appIconUrl;
 
-    // 2. Check if already processed (idempotent)
+    // Idempotency: skip if already processed
     const { count: purchaseCount } = await supabaseAdmin
       .from("purchases")
       .select("*", { count: "exact", head: true })
       .eq("stripe_session_id", sessionId);
 
     if ((purchaseCount ?? 0) > 0) {
-      // Already processed — find the user and return sign-in token
       const { data: purchase } = await supabaseAdmin
         .from("purchases")
         .select("user_id")
@@ -73,15 +69,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 3. Find or create Clerk user
+    // Find or create Clerk user
     const clerk = await clerkClient();
     let clerkUserId: string;
 
-    // Check if metadata has a clerk_user_id (signed-in user went through guest checkout)
     if (session.metadata?.clerk_user_id) {
       clerkUserId = session.metadata.clerk_user_id;
     } else {
-      // Search by email
       const existingUsers = await clerk.users.getUserList({
         emailAddress: [email],
         limit: 1,
@@ -98,28 +92,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 4. Ensure Supabase user row
+    // Ensure Supabase user row
     await supabaseAdmin.from("users").upsert(
-      {
-        id: clerkUserId,
-        email,
-        updated_at: new Date().toISOString(),
-      },
+      { id: clerkUserId, email, updated_at: new Date().toISOString() },
       { onConflict: "id", ignoreDuplicates: false }
     );
 
-    // 5. Add credits + create AI unlock for this specific app
+    // Add credits from purchase
     await addCredits(clerkUserId, credits);
 
+    // Immediately consume 1 credit to unlock the purchased app
     if (appId) {
-      await createAiUnlock(clerkUserId, appId, platform);
+      await consumeCredit(clerkUserId, appId, platform, appName, appIconUrl);
     }
 
-    // #region agent log
-    fetch('http://127.0.0.1:7545/ingest/dd4ba4f6-7884-4467-a639-03d0e318b30b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfcd9d'},body:JSON.stringify({sessionId:'cfcd9d',location:'activate/route.ts:credited',message:'credits added + unlock created',data:{clerkUserId,credits,appId,platform,email},timestamp:Date.now(),hypothesisId:'H5'})}).catch(()=>{});
-    // #endregion
-
-    // 6. Log purchase
+    // Log purchase
     await supabaseAdmin.from("purchases").insert({
       user_id: clerkUserId,
       stripe_session_id: sessionId,
@@ -128,7 +115,7 @@ export async function POST(request: NextRequest) {
       currency: session.currency ?? "eur",
     });
 
-    // 7. Link Stripe customer to user
+    // Link Stripe customer to user
     const stripeCustomerId = typeof session.customer === "string"
       ? session.customer
       : session.customer?.id;
@@ -140,16 +127,15 @@ export async function POST(request: NextRequest) {
         .eq("id", clerkUserId);
     }
 
-    // 8. Generate sign-in token
+    // Generate sign-in token
     const signInToken = await clerk.signInTokens.createSignInToken({
       userId: clerkUserId,
       expiresInSeconds: 300,
     });
 
-    // 9. Determine deep-dive sections (core 5 always included)
     const deepDiveSections = [...CORE_DEEP_DIVE_SECTIONS];
 
-    console.log(`[activate] Created account for ${email}, unlocked ${appId}/${platform}, ${credits} credits`);
+    console.log(`[activate] ${email}: +${credits} credits, consumed 1 for ${appId}/${platform}`);
 
     return NextResponse.json({
       signInToken: signInToken.token,

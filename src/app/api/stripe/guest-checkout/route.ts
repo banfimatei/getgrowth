@@ -9,7 +9,7 @@ const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://getgrowth.eu").trim
 const STARTER_PRICE_ID = (process.env.STRIPE_PRICE_STARTER ?? "").trim();
 
 export async function POST(request: NextRequest) {
-  const { appId, platform, country, priceId } = await request.json();
+  const { appId, platform, country, priceId, appName, appIconUrl } = await request.json();
 
   const resolvedPriceId = priceId || STARTER_PRICE_ID;
   if (!resolvedPriceId) {
@@ -42,6 +42,8 @@ export async function POST(request: NextRequest) {
       country: country || "us",
       credits: String(pack.credits),
       ...(userId ? { clerk_user_id: userId } : {}),
+      ...(appName ? { appName: String(appName).slice(0, 500) } : {}),
+      ...(appIconUrl ? { appIconUrl: String(appIconUrl).slice(0, 500) } : {}),
     },
     allow_promotion_codes: true,
   };

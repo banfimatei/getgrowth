@@ -937,6 +937,7 @@ function AuditContent() {
   const [suggestedExperiments, setSuggestedExperiments] = useState<SuggestedExperiment[]>([]);
   const [postPaymentEmail, setPostPaymentEmail] = useState<string | null>(null);
   const activationAttempted = useRef(false);
+  const activatedUserIdRef = useRef<string | null>(null);
 
   // Keyword tracking state (for signed-in paid users)
   const [trackedKws, setTrackedKws] = useState<Set<string>>(new Set());
@@ -1087,6 +1088,7 @@ function AuditContent() {
 
     const rawResults: Record<string, Record<string, unknown>> = {};
     let doneCount = 0;
+    const uid = activatedUserIdRef.current;
 
     await Promise.allSettled(
       allSections.map(async (section) => {
@@ -1098,6 +1100,7 @@ function AuditContent() {
               appData: auditData.appData,
               section,
               storeId: auditData.app?.url || auditData.appData?.url,
+              ...(uid ? { activatedUserId: uid } : {}),
             }),
           });
           if (resp.ok) {
@@ -1156,6 +1159,7 @@ function AuditContent() {
         const activation = await activateResp.json();
         extraSections = activation.deepDiveSections || [];
         setPostPaymentEmail(activation.userId ? "your email" : null);
+        if (activation.userId) activatedUserIdRef.current = activation.userId;
 
         // Auto-sign in with Clerk ticket
         if (activation.signInToken && signIn && setActive) {
@@ -1174,8 +1178,9 @@ function AuditContent() {
         }
       }
 
-      // Re-run audit (now AI-enabled)
+      // Re-run audit (now AI-enabled) — pass userId since Clerk session may not have propagated yet
       const auditParams = new URLSearchParams({ id: appId, platform: appPlatform, country: appCountry });
+      if (activation?.userId) auditParams.set("activatedUserId", activation.userId);
       const auditResp = await fetch(`/api/audit?${auditParams}`);
       if (!auditResp.ok) throw new Error("Audit failed");
 
@@ -1210,6 +1215,8 @@ function AuditContent() {
           appId: storeId,
           platform: appPlatform,
           country,
+          appName: report.app.title,
+          appIconUrl: report.app.icon,
         }),
       });
       if (!resp.ok) {
@@ -1229,10 +1236,11 @@ function AuditContent() {
     if (!report?.appData) return null;
     setDeepDiveLoading(actionId);
     try {
+      const uid = activatedUserIdRef.current;
       const resp = await fetch("/api/audit/deep-dive", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appData: report.appData, section, storeId: report.app.url || report.appData?.url }),
+        body: JSON.stringify({ appData: report.appData, section, storeId: report.app.url || report.appData?.url, ...(uid ? { activatedUserId: uid } : {}) }),
       });
       if (!resp.ok) {
         const errData = await resp.json().catch(() => null);
@@ -1251,10 +1259,11 @@ function AuditContent() {
   const handleVisualize = useCallback(async (section: "icon" | "screenshots", brief: string): Promise<VisualConceptResult[] | string> => {
     if (!report?.appData) return "__ERROR__No app data available";
     try {
+      const uid = activatedUserIdRef.current;
       const resp = await fetch("/api/audit/visualize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appData: report.appData, section, brief, storeId: report.app.url || report.appData?.url }),
+        body: JSON.stringify({ appData: report.appData, section, brief, storeId: report.app.url || report.appData?.url, ...(uid ? { activatedUserId: uid } : {}) }),
       });
       if (!resp.ok) {
         const errData = await resp.json().catch(() => null);
