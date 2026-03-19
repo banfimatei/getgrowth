@@ -162,7 +162,7 @@ function DashboardContent() {
             <span className="font-semibold" style={{ color: credits > 0 ? "#10b981" : "var(--text-muted)" }}>
               {credits} audit credit{credits === 1 ? "" : "s"}
             </span>
-            {" · "}{unlocks.length} app{unlocks.length === 1 ? "" : "s"} unlocked
+            {" · "}{unlocks.length} full audit{unlocks.length === 1 ? "" : "s"}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -294,20 +294,17 @@ function DashboardContent() {
         </div>
       )}
 
-      {/* Unlocked apps (AI audit) */}
+      {/* Full Audits */}
       {unlocks.length > 0 && (
         <div className="mb-6">
           <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-            Unlocked apps (full AI audit)
+            Full Audits
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             {unlocks.map((u) => {
               const matchingApp = apps.find(a => a.store_id === u.store_id && a.platform === u.platform);
               const displayName = u.app_name || matchingApp?.name || u.store_id;
               const iconUrl = u.app_icon_url || null;
-              const itunesFallback = u.platform === "ios"
-                ? `https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/placeholder/100x100bb.jpg`
-                : null;
               return (
                 <button
                   key={`${u.store_id}-${u.platform}`}
@@ -321,7 +318,7 @@ function DashboardContent() {
                         <img
                           src={iconUrl}
                           alt={displayName}
-                          className="w-10 h-10 object-cover"
+                          className="w-10 h-10 rounded-xl object-cover"
                           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                         />
                       ) : (
@@ -332,13 +329,10 @@ function DashboardContent() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{displayName}</p>
-                      <p className="text-xs capitalize" style={{ color: "var(--text-muted)" }}>
-                        {u.platform} · unlocked {new Date(u.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        {u.platform === "ios" ? "iOS" : "Android"} · Audited {new Date(u.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                       </p>
                     </div>
-                    <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(16,185,129,0.1)", color: "#10b981" }}>
-                      AI
-                    </span>
                   </div>
                 </button>
               );

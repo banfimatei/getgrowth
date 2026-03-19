@@ -1809,7 +1809,7 @@ function AuditContent() {
               {unlockLoading ? "Payment verified \u2014 running full AI audit" : isSignedIn ? "Loading your ASO audit" : "Running ASO Audit"}
             </h2>
             <p className="text-sm loading-ellipsis" style={{ color: "var(--text-secondary)" }}>
-              {unlockLoading ? "Setting up your account and analyzing with AI" : "Fetching live store data and analyzing metadata"}
+              {unlockLoading ? "Setting up your account and analyzing with AI" : isSignedIn ? "Pulling the latest store data for your audit" : "Fetching store data and analyzing metadata"}
             </p>
           </div>
         )}
